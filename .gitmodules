@@ -13,3 +13,6 @@
 [submodule "caciocavallo17"]
 	path = caciocavallo17
 	url = https://github.com/SKonstruct/caciocavallo17.git
+[submodule "launcher/bootstrap"]
+	path = launcher/bootstrap
+	url = https://github.com/SKonstruct/skapsule-bootstrap.git

@@ -2,3 +2,5 @@ out/
 
 # Initial development references - See README.md
 refs/
+.vscode/settings.json
+.DS_Store
