@@ -194,15 +194,9 @@ class TouchControlOverlay @JvmOverloads constructor(
         val enabled = layoutData.controlsEnabled
         for (view in controlViews) {
             if (inEditMode) {
-                view.visibility = View.VISIBLE
-                view.alpha = if (view.node.visible) {
-                    maxOf(layoutData.globalOpacity, EDIT_MODE_MIN_OPACITY)
-                } else {
-                    EDIT_HIDDEN_OPACITY
-                }
+                applyEditModeAppearance(view)
             } else {
-                view.visibility = if (enabled && view.node.visible) View.VISIBLE else View.GONE
-                view.alpha = layoutData.globalOpacity
+                applyPlayModeAppearance(view, enabled)
             }
         }
 
@@ -213,6 +207,20 @@ class TouchControlOverlay @JvmOverloads constructor(
 
         // Notify Activity if there's a listener to update static buttons (Keyboard, Gear)
         opacityChangeListener?.invoke(layoutData.globalOpacity)
+    }
+
+    private fun applyEditModeAppearance(view: BaseTouchControl) {
+        view.visibility = View.VISIBLE
+        view.alpha = if (view.node.visible) {
+            maxOf(layoutData.globalOpacity, EDIT_MODE_MIN_OPACITY)
+        } else {
+            EDIT_HIDDEN_OPACITY
+        }
+    }
+
+    private fun applyPlayModeAppearance(view: BaseTouchControl, enabled: Boolean) {
+        view.visibility = if (enabled && view.node.visible) View.VISIBLE else View.GONE
+        view.alpha = layoutData.globalOpacity
     }
 
     var opacityChangeListener: ((Float) -> Unit)? = null
