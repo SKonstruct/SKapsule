@@ -4,7 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-LWJGL_SRC="${LWJGL_SRC:-$REPO_ROOT/lwjgl3}"
+LWJGL_SRC="${LWJGL_SRC:-$REPO_ROOT/external/lwjgl3}"
 OUT_DIR="${OUT_DIR:-$REPO_ROOT/out/lwjgl3}"
 
 ARCH="${LWJGL_BUILD_ARCH:-arm64}"
@@ -28,10 +28,15 @@ if [[ -z "${ANDROID_NDK_HOME:-}" ]]; then
 fi
 [[ -d "${ANDROID_NDK_HOME:-}" ]] || { echo "ERROR: set ANDROID_NDK_HOME" >&2; exit 1; }
 
+if [[ -z "${JAVA8_HOME:-}" ]]; then
+    export JAVA8_HOME="$(jenv prefix zulu64-1.8.0.492 2>/dev/null || jenv prefix 1.8 2>/dev/null || echo "")"
+fi
+
 if [[ -z "${JAVA8_HOME:-}" || ! -f "${JAVA8_HOME:-}/jre/lib/rt.jar" ]]; then
     echo "ERROR: JAVA8_HOME must point at a JDK 8 install (with jre/lib/rt.jar)." >&2
     echo "       LWJGL's release target boot-classpaths against rt.jar to build" >&2
     echo "       the Java 8 layer of its multi-release jars." >&2
+    echo "       You can run ./scripts/setup-mac.sh to set this up automatically." >&2
     exit 1
 fi
 

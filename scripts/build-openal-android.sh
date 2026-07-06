@@ -4,7 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-OPENAL_SRC="${OPENAL_SRC:-$REPO_ROOT/openal-soft}"
+OPENAL_SRC="${OPENAL_SRC:-$REPO_ROOT/external/openal-soft}"
 OUT_DIR="${OUT_DIR:-$REPO_ROOT/out/openal}"
 BUILD_ROOT="${BUILD_ROOT:-$REPO_ROOT/out/openal/build}"
 
@@ -30,7 +30,7 @@ ANDROID_PLATFORM="${ANDROID_PLATFORM:-android-21}"
 BUILD_TYPE="${BUILD_TYPE:-Release}"
 
 GENERATOR=("Unix Makefiles")
-JOBS_FLAG="-j$(nproc)"
+JOBS_FLAG="-j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)"
 if command -v ninja >/dev/null 2>&1; then
     GENERATOR=(Ninja)
     JOBS_FLAG=""
@@ -87,7 +87,11 @@ for ABI in "${ABIS[@]}"; do
 
     cp -v "$SRC_SO" "$OUT_LIB_DIR/libopenal.so"
 
-    STRIP="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip"
+    NDK_HOST_OS="linux-x86_64"
+    if [[ "$(uname)" == "Darwin" ]]; then
+        NDK_HOST_OS="darwin-x86_64"
+    fi
+    STRIP="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/$NDK_HOST_OS/bin/llvm-strip"
     if [[ -x "$STRIP" ]]; then
         "$STRIP" --strip-unneeded "$OUT_LIB_DIR/libopenal.so"
     fi

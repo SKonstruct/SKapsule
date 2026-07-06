@@ -16,7 +16,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-CACIO_SRC="${CACIO_SRC:-$REPO_ROOT/caciocavallo17}"
+CACIO_SRC="${CACIO_SRC:-$REPO_ROOT/external/caciocavallo17}"
 OUT_DIR="${OUT_DIR:-$REPO_ROOT/out/cacio}"
 CACIO_VERSION="1.18-SNAPSHOT"
 
@@ -27,6 +27,9 @@ CACIO_VERSION="1.18-SNAPSHOT"
 }
 
 # Pick the build JDK: CACIO_JAVA_HOME > JAVA_HOME > whatever 'mvn' defaults to.
+if [[ -z "${JAVA_HOME:-}" ]]; then
+    export JAVA_HOME="$(jenv prefix zulu64-25.0.3 2>/dev/null || jenv prefix 25 2>/dev/null || echo "")"
+fi
 if [[ -n "${CACIO_JAVA_HOME:-}" ]]; then
     export JAVA_HOME="$CACIO_JAVA_HOME"
 fi

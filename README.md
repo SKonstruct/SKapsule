@@ -157,11 +157,11 @@ launcher/          Android app (Kotlin) + bootstrap (Java) — the buildable pro
   app/             the Android application module
   bootstrap/       SkBootstrap / HeadlessGetdown / GLFW shim, staged into the APK
 scripts/           build-*-android.sh per native component + stage-launcher-assets.sh
-gl4es/             submodule — GL → GLES translation
-openal-soft/       submodule — audio
-lwjgl3/            submodule — LWJGL Android build
-caciocavallo17/    submodule — headless AWT
-frenchpress/       submodule — Steam login
+external/gl4es/             submodule — GL → GLES translation
+external/openal-soft/       submodule — audio
+external/lwjgl3/            submodule — LWJGL Android build
+external/caciocavallo17/    submodule — headless AWT
+external/frenchpress/       submodule — Steam login
 out/               native build outputs (generated, gitignored)
 .github/workflows/ from-source CI + release automation
 ```

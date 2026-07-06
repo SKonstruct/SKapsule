@@ -1,17 +1,17 @@
 [submodule "frenchpress"]
-	path = frenchpress
+	path = external/frenchpress
 	url = https://github.com/SKonstruct/frenchpress.git
 [submodule "openal-soft"]
-	path = openal-soft
+	path = external/openal-soft
 	url = https://github.com/SKonstruct/openal-soft.git
 [submodule "lwjgl3"]
-	path = lwjgl3
+	path = external/lwjgl3
 	url = https://github.com/SKonstruct/lwjgl3.git
 [submodule "gl4es"]
-	path = gl4es
+	path = external/gl4es
 	url = https://github.com/SKonstruct/gl4es.git
 [submodule "caciocavallo17"]
-	path = caciocavallo17
+	path = external/caciocavallo17
 	url = https://github.com/SKonstruct/caciocavallo17.git
 [submodule "launcher/bootstrap"]
 	path = launcher/bootstrap

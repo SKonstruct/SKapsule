@@ -15,7 +15,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-FRENCHPRESS_SRC="${FRENCHPRESS_SRC:-$REPO_ROOT/frenchpress}"
+FRENCHPRESS_SRC="${FRENCHPRESS_SRC:-$REPO_ROOT/external/frenchpress}"
 OUT_DIR="${OUT_DIR:-$REPO_ROOT/out/frenchpress}"
 FRENCHPRESS_VERSION="0.1-SNAPSHOT"
 

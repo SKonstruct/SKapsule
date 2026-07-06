@@ -1,0 +1,64 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build All Native Components",
+            "type": "shell",
+            "command": "export JAVA_HOME=$(jenv prefix zulu64-25.0.3 || jenv prefix 25) && export JAVA8_HOME=$(jenv prefix 1.8) && export CACIO_JAVA_HOME=$JAVA_HOME && export FRENCHPRESS_JAVA_HOME=$JAVA_HOME && ./scripts/build-gl4es-android.sh && ./scripts/build-openal-android.sh && ./scripts/build-lwjgl3-android.sh && ./scripts/build-cacio-android.sh && ./scripts/build-frenchpress-android.sh",
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "Stage Launcher Assets",
+            "type": "shell",
+            "command": "./scripts/stage-launcher-assets.sh",
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "Assemble Debug APK",
+            "type": "shell",
+            "command": "export JAVA_HOME=$(jenv prefix zulu64-25.0.3 || jenv prefix 25) && cd launcher && ./gradlew :app:assembleDebug",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Assemble Release APK",
+            "type": "shell",
+            "command": "export JAVA_HOME=$(jenv prefix zulu64-25.0.3 || jenv prefix 25) && cd launcher && ./gradlew :app:assembleRelease",
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "Build All (Natives + Assets + APK)",
+            "type": "shell",
+            "command": "export JAVA_HOME=$(jenv prefix zulu64-25.0.3 || jenv prefix 25) && export JAVA8_HOME=$(jenv prefix 1.8) && export CACIO_JAVA_HOME=$JAVA_HOME && export FRENCHPRESS_JAVA_HOME=$JAVA_HOME && ./scripts/build-gl4es-android.sh && ./scripts/build-openal-android.sh && ./scripts/build-lwjgl3-android.sh && ./scripts/build-cacio-android.sh && ./scripts/build-frenchpress-android.sh && ./scripts/stage-launcher-assets.sh && cd launcher && ./gradlew :app:assembleDebug",
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "Install Debug APK",
+            "type": "shell",
+            "command": "export JAVA_HOME=$(jenv prefix zulu64-25.0.3 || jenv prefix 25) && cd launcher && ./gradlew :app:installDebug",
+            "group": "test",
+            "problemMatcher": []
+        },
+        {
+            "label": "Install and Run App",
+            "type": "shell",
+            "command": "export JAVA_HOME=$(jenv prefix zulu64-25.0.3 || jenv prefix 25) && cd launcher && ./gradlew :app:installDebug && adb shell am start -n com.skarm.launcher/com.skarm.launcher.LauncherActivity",
+            "group": "test",
+            "problemMatcher": []
+        },
+        {
+            "label": "Prepare Android Debug Session",
+            "type": "shell",
+            "command": "./scripts/prepare-debug.sh",
+            "group": "test",
+            "problemMatcher": []
+        }
+    ]
+}

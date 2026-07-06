@@ -99,16 +99,40 @@ jobs:
             echo "No KEYSTORE_BASE64 secret set; APK will be UNSIGNED."
           fi
 
+      - name: Determine Version Name
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" =~ ^refs/tags/v[0-9]+ ]]; then
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+          else
+            VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+            VERSION="${VERSION#v}"
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "SK_VERSION_NAME=$VERSION" >> "$GITHUB_ENV"
+
       - name: Assemble release APK
         working-directory: launcher
         env:
           JAVA_HOME: ${{ env.JAVA_HOME_25_X64 }}   # Gradle 9 runs on JDK 25
           SK_VERSION_CODE: ${{ github.run_number }} # monotonic; bumps versionCode per CI build
+          SK_VERSION_NAME: ${{ env.SK_VERSION_NAME }}
           SK_KEYSTORE_FILE: ${{ steps.keystore.outputs.file }}
           SK_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           SK_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           SK_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew :app:assembleRelease
+
+      - name: Rename APKs
+        run: |
+          cd launcher/app/build/outputs/apk/release
+          if [ -f "app-release.apk" ]; then
+            mv app-release.apk skapsule-v${{ steps.version.outputs.VERSION }}.apk
+          fi
+          if [ -f "app-release-unsigned.apk" ]; then
+            mv app-release-unsigned.apk skapsule-v${{ steps.version.outputs.VERSION }}-unsigned.apk
+          fi
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
@@ -125,6 +149,6 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v') && steps.keystore.outputs.file != ''
         uses: softprops/action-gh-release@v2
         with:
-          files: launcher/app/build/outputs/apk/release/app-release.apk
+          files: launcher/app/build/outputs/apk/release/skapsule-v${{ steps.version.outputs.VERSION }}.apk
           generate_release_notes: true
           fail_on_unmatched_files: true

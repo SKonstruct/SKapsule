@@ -5,7 +5,7 @@ set -euo pipefail
 # --- paths --------------------------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-GL4ES_SRC="${GL4ES_SRC:-$REPO_ROOT/gl4es}"
+GL4ES_SRC="${GL4ES_SRC:-$REPO_ROOT/external/gl4es}"
 OUT_DIR="${OUT_DIR:-$REPO_ROOT/out/gl4es}"
 BUILD_ROOT="${BUILD_ROOT:-$REPO_ROOT/out/gl4es/build}"
 
@@ -39,7 +39,7 @@ if [[ "$GL4ES_DEBUG" == "1" ]]; then
 fi
 
 GENERATOR=("Unix Makefiles")
-JOBS_FLAG="-j$(nproc)"
+JOBS_FLAG="-j$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)"
 if command -v ninja >/dev/null 2>&1; then
     GENERATOR=(Ninja)
     JOBS_FLAG=""
@@ -75,7 +75,7 @@ for ABI in "${ABIS[@]}"; do
         -DUSE_ANDROID_LOG=ON \
         -DGBM=OFF \
         -DCMAKE_PROJECT_gl4es_INCLUDE="$SCRIPT_DIR/gl4es-overrides.cmake" \
-        "${EXTRA_CMAKE_C_FLAGS[@]}"
+        ${EXTRA_CMAKE_C_FLAGS[@]+"${EXTRA_CMAKE_C_FLAGS[@]}"}
 
     echo "=== building $ABI ==="
     cmake --build "$BUILD_DIR" --config "$BUILD_TYPE" -- $JOBS_FLAG

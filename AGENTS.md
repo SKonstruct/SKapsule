@@ -31,8 +31,8 @@ Don't blind-edit. Before claiming a change works, build the affected component:
   (or `assembleRelease`). Use JDK 25 as `JAVA_HOME`. A successful compile is the
   minimum bar; for behavior changes, also run the relevant unit tests
   (`./gradlew :app:testDebugUnitTest`).
-- **Native submodules (`gl4es/`, `openal-soft/`, `lwjgl3/`, `caciocavallo17/`,
-  `frenchpress/`):** rebuild via the matching script in `scripts/`. Each script
+- **Native submodules (`external/gl4es/`, `external/openal-soft/`, `external/lwjgl3/`, `external/caciocavallo17/`,
+  `external/frenchpress/`):** rebuild via the matching script in `scripts/`. Each script
   expects specific JDKs in its environment — see
   [README §Building from source](README.md#building-from-source-developers) for the
   full matrix. In particular, `build-lwjgl3-android.sh` needs both `JAVA_HOME` →

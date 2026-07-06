@@ -4,3 +4,4 @@ out/
 refs/
 .vscode/settings.json
 .DS_Store
+/build
