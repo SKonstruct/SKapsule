@@ -9,6 +9,15 @@
             "port": 5005,
             "preLaunchTask": "Prepare Android Debug Session",
             "timeout": 30000
+        },
+        {
+            "name": "Debug Game Process",
+            "type": "java",
+            "request": "attach",
+            "hostName": "localhost",
+            "port": 5006,
+            "preLaunchTask": "Prepare Game Debug Session",
+            "timeout": 30000
         }
     ]
 }

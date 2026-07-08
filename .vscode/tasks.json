@@ -58,6 +58,19 @@
             "type": "shell",
             "command": "./scripts/prepare-debug.sh",
             "group": "test",
+            "isBackground": true,
+            "problemMatcher": "$tsc-watch",
+            "presentation": {
+                "reveal": "always",
+                "focus": true,
+                "panel": "dedicated"
+            }
+        },
+        {
+            "label": "Prepare Game Debug Session",
+            "type": "shell",
+            "command": "./scripts/prepare-debug.sh --game",
+            "group": "test",
             "problemMatcher": []
         }
     ]
