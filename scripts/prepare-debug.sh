@@ -20,12 +20,16 @@ fi
 
 if [[ "${1:-}" == "--game" ]]; then
     echo "=== Preparing Game Process Debug Session ==="
-    # :game is spawned internally (LauncherActivity -> startActivity(GameActivity)),
-    # not via `am start`, so there's no -D flag to pause it. set-debug-app -w arms
-    # wait-for-debugger on the *next* process this package spawns; the launcher
-    # itself must already be running (start it via the other debug config, or by
-    # hand) since that's the UI you tap Play in.
-    "$ADB" shell am set-debug-app -w com.skarm.launcher
+    # Debuggable builds expose a JDWP socket on every process regardless of
+    # wait-for-debugger state, so no arming call is needed here — just find the
+    # already-running :game process and forward its port. (Do NOT call
+    # `am set-debug-app`: it kills any already-running process of the package
+    # to rearm the debug flag for the next launch, which would kill the very
+    # :game process this is trying to attach to. Confirmed live: pidof went
+    # from a real PID to empty immediately after that call.) Because nothing
+    # pauses :game at boot, this attaches to it already running — fine for
+    # breakpoints in gameplay code, but you'll miss anything that already ran
+    # before you started this task.
     echo "Resolving game process (:game) PID..."
     PID=""
     for i in {1..30}; do
@@ -39,16 +43,12 @@ if [[ "${1:-}" == "--game" ]]; then
 
     if [[ -z "$PID" ]]; then
         echo "ERROR: Failed to retrieve game process PID." >&2
-        "$ADB" shell am clear-debug-app
         exit 1
     fi
 
     echo "Game process PID is: $PID"
     echo "Setting up adb JDWP port forwarding (tcp:5006 -> jdwp:$PID)..."
     "$ADB" forward tcp:5006 jdwp:"$PID"
-    # Only this one spawn should pause; clear now so a later ordinary (non-debug)
-    # launch of the app doesn't hang waiting for a debugger that isn't coming.
-    "$ADB" shell am clear-debug-app
     echo "=== Game Debug Setup Completed Successfully ==="
     exit 0
 fi
