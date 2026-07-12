@@ -423,17 +423,25 @@ static void preload_dir(const char *dir, int max_passes) {
     closedir(d);
 
     bool loaded[64] = { false };
+    int remaining[64];
+    for (int i = 0; i < n; i++) remaining[i] = i;
+    int rem_count = n;
+
     for (int pass = 0; pass < max_passes; pass++) {
         int progress = 0;
-        for (int i = 0; i < n; i++) {
-            if (loaded[i]) continue;
+        int next_rem_count = 0;
+        for (int r = 0; r < rem_count; r++) {
+            int i = remaining[r];
             char path[1500];
             snprintf(path, sizeof path, "%s/%s", dir, files[i]);
             if (dlopen(path, RTLD_NOW | RTLD_GLOBAL)) {
                 loaded[i] = true;
                 progress++;
+            } else {
+                remaining[next_rem_count++] = i;
             }
         }
+        rem_count = next_rem_count;
         if (!progress) break;
     }
     int loaded_count = 0;
