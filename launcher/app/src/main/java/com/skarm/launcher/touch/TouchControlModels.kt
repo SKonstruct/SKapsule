@@ -2,9 +2,9 @@ package com.skarm.launcher.touch
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.annotation.Keep
+import com.google.gson.Gson
 import com.skarm.launcher.GameActivity
-import org.json.JSONArray
-import org.json.JSONObject
 
 enum class ControlType {
     BUTTON,
@@ -12,6 +12,7 @@ enum class ControlType {
     JOYSTICK_RIGHT
 }
 
+@Keep
 data class ControlNode(
     val id: String,
     val type: ControlType,
@@ -27,6 +28,7 @@ data class ControlNode(
     val label: String = ""
 )
 
+@Keep
 data class TouchLayoutData(
     var globalOpacity: Float = 0.5f,
     var controlsEnabled: Boolean = true,
@@ -37,6 +39,8 @@ object TouchControlManager {
     private const val PREFS_NAME = "touch_controls_prefs"
     private const val KEY_LAYOUT_DATA = "layout_data"
     
+    private val gson = Gson()
+
     // Axis codes for triggers, mapped to GameActivity constants
     const val AXIS_LTRIGGER = 4
     const val AXIS_RTRIGGER = 5
@@ -67,30 +71,7 @@ object TouchControlManager {
         }
         
         return try {
-            val json = JSONObject(jsonStr)
-            val layout = TouchLayoutData(
-                globalOpacity = json.optDouble("globalOpacity", 0.5).toFloat(),
-                controlsEnabled = json.optBoolean("controlsEnabled", true)
-            )
-            
-            val nodesArray = json.getJSONArray("nodes")
-            for (i in 0 until nodesArray.length()) {
-                val nodeObj = nodesArray.getJSONObject(i)
-                val type = ControlType.valueOf(nodeObj.getString("type"))
-                layout.nodes.add(ControlNode(
-                    id = nodeObj.getString("id"),
-                    type = type,
-                    xPercent = nodeObj.getDouble("xPercent").toFloat(),
-                    yPercent = nodeObj.getDouble("yPercent").toFloat(),
-                    scale = nodeObj.optDouble("scale", 1.0).toFloat(),
-                    visible = nodeObj.optBoolean("visible", true),
-                    buttonCode = nodeObj.optInt("buttonCode", -1),
-                    isAxisTrigger = nodeObj.optBoolean("isAxisTrigger", false),
-                    isToggle = nodeObj.optBoolean("isToggle", false),
-                    label = nodeObj.optString("label", "")
-                ))
-            }
-            layout
+            gson.fromJson(jsonStr, TouchLayoutData::class.java) ?: createDefaultLayout()
         } catch (e: Exception) {
             e.printStackTrace()
             createDefaultLayout()
@@ -98,32 +79,11 @@ object TouchControlManager {
     }
 
     fun saveLayout(context: Context, layout: TouchLayoutData) {
-        val json = JSONObject().apply {
-            put("globalOpacity", layout.globalOpacity.toDouble())
-            put("controlsEnabled", layout.controlsEnabled)
-            
-            val nodesArray = JSONArray()
-            for (node in layout.nodes) {
-                val nodeObj = JSONObject().apply {
-                    put("id", node.id)
-                    put("type", node.type.name)
-                    put("xPercent", node.xPercent.toDouble())
-                    put("yPercent", node.yPercent.toDouble())
-                    put("scale", node.scale.toDouble())
-                    put("visible", node.visible)
-                    put("buttonCode", node.buttonCode)
-                    put("isAxisTrigger", node.isAxisTrigger)
-                    put("isToggle", node.isToggle)
-                    put("label", node.label)
-                }
-                nodesArray.put(nodeObj)
-            }
-            put("nodes", nodesArray)
-        }
+        val jsonStr = gson.toJson(layout)
         
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
-            .putString(KEY_LAYOUT_DATA, json.toString())
+            .putString(KEY_LAYOUT_DATA, jsonStr)
             .apply()
     }
 

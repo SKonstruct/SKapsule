@@ -146,6 +146,7 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("org.apache.commons:commons-compress:1.27.1")
     implementation("org.tukaani:xz:1.9")
+    implementation("com.google.code.gson:gson:2.10.1")
 }
 
 val stageBootstrapJar by tasks.registering(Copy::class) {
