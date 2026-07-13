@@ -28,7 +28,7 @@ class FolderProvider : DocumentsProvider() {
         row.add(Root.COLUMN_SUMMARY, "SKapsule game files folder")
         row.add(
             Root.COLUMN_FLAGS,
-            Root.FLAG_SUPPORTS_CREATE or Root.FLAG_SUPPORTS_IS_CHILD
+            Root.FLAG_SUPPORTS_CREATE or Root.FLAG_SUPPORTS_IS_CHILD,
         )
         row.add(Root.COLUMN_TITLE, "SKapsule")
         row.add(Root.COLUMN_MIME_TYPES, "*/*")
@@ -46,7 +46,7 @@ class FolderProvider : DocumentsProvider() {
     override fun queryChildDocuments(
         parentDocumentId: String,
         projection: Array<out String>?,
-        sortOrder: String?
+        sortOrder: String?,
     ): Cursor {
         val result = MatrixCursor(projection ?: DEFAULT_DOCUMENT_PROJECTION)
         val parent = getFileForDocId(parentDocumentId)
@@ -60,7 +60,7 @@ class FolderProvider : DocumentsProvider() {
     override fun openDocument(
         documentId: String,
         mode: String,
-        signal: CancellationSignal?
+        signal: CancellationSignal?,
     ): ParcelFileDescriptor {
         val file = getFileForDocId(documentId)
         val accessMode = ParcelFileDescriptor.parseMode(mode)
@@ -70,7 +70,7 @@ class FolderProvider : DocumentsProvider() {
     override fun createDocument(
         parentDocumentId: String,
         mimeType: String,
-        displayName: String
+        displayName: String,
     ): String {
         val parent = getFileForDocId(parentDocumentId)
         val newFile = File(parent, displayName)
@@ -153,7 +153,7 @@ class FolderProvider : DocumentsProvider() {
             Root.COLUMN_TITLE,
             Root.COLUMN_SUMMARY,
             Root.COLUMN_DOCUMENT_ID,
-            Root.COLUMN_AVAILABLE_BYTES
+            Root.COLUMN_AVAILABLE_BYTES,
         )
 
         private val DEFAULT_DOCUMENT_PROJECTION = arrayOf(
@@ -162,7 +162,7 @@ class FolderProvider : DocumentsProvider() {
             Document.COLUMN_DISPLAY_NAME,
             Document.COLUMN_LAST_MODIFIED,
             Document.COLUMN_FLAGS,
-            Document.COLUMN_SIZE
+            Document.COLUMN_SIZE,
         )
     }
 }

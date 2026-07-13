@@ -47,11 +47,11 @@ object HudPalette {
     // Shared neutral palette for the in-game HUD (top bar, touch controls,
     // editor popup). Picked to feel like overlay chrome rather than themed UI:
     // dark, semi-transparent, no dynamic-color tint.
-    const val SURFACE: Int = 0xB3000000.toInt()        // popup panel
-    const val BUTTON_IDLE: Int = 0x99202020.toInt()    // touch button idle
+    const val SURFACE: Int = 0xB3000000.toInt() // popup panel
+    const val BUTTON_IDLE: Int = 0x99202020.toInt() // touch button idle
     const val BUTTON_PRESSED: Int = 0xCC606060.toInt() // touch button pressed/toggled
-    const val JOY_BG: Int = 0x66202020.toInt()         // joystick base (more transparent)
-    const val JOY_KNOB: Int = 0xCC808080.toInt()       // joystick knob
+    const val JOY_BG: Int = 0x66202020.toInt() // joystick base (more transparent)
+    const val JOY_KNOB: Int = 0xCC808080.toInt() // joystick knob
 }
 
 class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(context, node) {
@@ -77,7 +77,7 @@ class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(
     private var tapStartTime = 0L
     private var lastTapTime = 0L
     private var isHoldingAttack = false
-    
+
     // Holding previous aim direction briefly on release
     private var releaseAimTask: Runnable? = null
     private var lastReportedX = 0f
@@ -107,10 +107,10 @@ class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(
         val radius = min(width, height) / 2f
         val centerX = width / 2f
         val centerY = height / 2f
-        
+
         canvas.drawCircle(centerX, centerY, radius, bgPaint)
         canvas.drawCircle(knobX, knobY, radius * 0.4f, knobPaint)
-        
+
         super.onDraw(canvas)
     }
 
@@ -126,13 +126,13 @@ class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(
                     val radius = min(width, height) / 2f
                     val dx = x - width / 2f
                     val dy = y - height / 2f
-                    
+
                     if (sqrt((dx * dx + dy * dy).toDouble()) <= radius) {
                         isDragging = true
                         pointerId = event.getPointerId(pointerIndex)
-                        
+
                         releaseAimTask?.let { removeCallbacks(it) }
-                        
+
                         if (node.type == ControlType.JOYSTICK_RIGHT) {
                             val now = System.currentTimeMillis()
                             if (now - lastTapTime < 250) {
@@ -141,7 +141,7 @@ class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(
                             }
                             tapStartTime = now
                         }
-                        
+
                         updateKnob(x, y)
                     }
                 }
@@ -159,7 +159,7 @@ class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(
                     isDragging = false
                     pointerId = -1
                     resetKnob()
-                    
+
                     if (node.type == ControlType.JOYSTICK_RIGHT) {
                         if (isHoldingAttack) {
                             isHoldingAttack = false
@@ -200,7 +200,7 @@ class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(
 
         val normX = (knobX - centerX) / maxDist
         val normY = (knobY - centerY) / maxDist
-        
+
         // If holding attack, report the tap direction even before the finger moves far
         reportAxis(normX, normY)
         invalidate()
@@ -212,7 +212,6 @@ class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(
         NativeBridge.onGamepadAxis(axisX, x)
         NativeBridge.onGamepadAxis(axisY, y)
     }
-
 }
 
 class TouchButtonView(context: Context, node: ControlNode) : BaseTouchControl(context, node) {
@@ -220,7 +219,7 @@ class TouchButtonView(context: Context, node: ControlNode) : BaseTouchControl(co
         color = HudPalette.BUTTON_IDLE
         style = Paint.Style.FILL
     }
-    
+
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         textAlign = Paint.Align.CENTER
@@ -236,20 +235,20 @@ class TouchButtonView(context: Context, node: ControlNode) : BaseTouchControl(co
         val centerX = width / 2f
         val centerY = height / 2f
         val size = min(width, height).toFloat()
-        
+
         buttonRect.set(
             centerX - size / 2f,
             centerY - size / 2f,
             centerX + size / 2f,
-            centerY + size / 2f
+            centerY + size / 2f,
         )
-        
+
         bgPaint.color = if (isPressedState || isToggledOn) HudPalette.BUTTON_PRESSED else HudPalette.BUTTON_IDLE
-        
+
         // Use a rounded square instead of a circle
         val cornerRadius = size * 0.25f
         canvas.drawRoundRect(buttonRect, cornerRadius, cornerRadius, bgPaint)
-        
+
         // Draw label — scale text with button size, then shrink-to-fit so
         // multi-character labels ("Dodge", "Strafe") don't run past the edge
         // on small screens. Inner width is the button minus rounded-corner
@@ -267,13 +266,13 @@ class TouchButtonView(context: Context, node: ControlNode) : BaseTouchControl(co
             val baseline = centerY - (metrics.ascent + metrics.descent) / 2
             canvas.drawText(node.label, centerX, baseline, textPaint)
         }
-        
+
         super.onDraw(canvas)
     }
 
     override fun handleGameTouch(event: MotionEvent): Boolean {
         val action = event.actionMasked
-        
+
         when (action) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
                 isPressedState = true

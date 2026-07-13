@@ -16,17 +16,16 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.FileProvider
 import androidx.core.view.GravityCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
 import com.skarm.launcher.databinding.ActivityLauncherBinding
-import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * Launcher home screen. Two paths to Spiral Knights:
@@ -47,14 +46,15 @@ class LauncherActivity : AppCompatActivity() {
     // CreateDocument picker (no storage permission needed; DocumentsUI does the
     // write). Result is the user-chosen content:// URI, or null if cancelled.
     private val saveLog = registerForActivityResult(
-        ActivityResultContracts.CreateDocument("text/plain")
+        ActivityResultContracts.CreateDocument("text/plain"),
     ) { uri ->
         val src = pendingSave.also { pendingSave = null }
         if (uri == null || src == null) return@registerForActivityResult
         val ok = LogExporter.copyToUri(this, src, uri)
         Toast.makeText(
-            this, if (ok) R.string.save_logs_saved else R.string.save_logs_failed,
-            Toast.LENGTH_SHORT
+            this,
+            if (ok) R.string.save_logs_saved else R.string.save_logs_failed,
+            Toast.LENGTH_SHORT,
         ).show()
     }
 
@@ -95,7 +95,7 @@ class LauncherActivity : AppCompatActivity() {
                 originalPaddingLeft + leftInset,
                 originalPaddingTop + topInset,
                 originalPaddingRight + rightInset,
-                originalPaddingBottom + bottomInset
+                originalPaddingBottom + bottomInset,
             )
             insets
         }
@@ -203,7 +203,7 @@ class LauncherActivity : AppCompatActivity() {
     }
 
     private fun openFolder() {
-        val authority = "${packageName}.documents"
+        val authority = "$packageName.documents"
         try {
             // Build root URI to open directly in Files app
             val rootUri = android.provider.DocumentsContract.buildRootUri(authority, filesDir.absolutePath)
@@ -283,9 +283,9 @@ class LauncherActivity : AppCompatActivity() {
                     val report: (String) -> Unit = { msg ->
                         runOnUiThread { binding.setupStatus.text = msg }
                     }
-                    if (!jreReady)        JreInstaller.install(this@LauncherActivity, report)
-                    if (!lwjglReady)      LwjglInstaller.install(this@LauncherActivity, report)
-                    if (!skBootstrapped)  SkInstaller.bootstrap(this@LauncherActivity, report)
+                    if (!jreReady) JreInstaller.install(this@LauncherActivity, report)
+                    if (!lwjglReady) LwjglInstaller.install(this@LauncherActivity, report)
+                    if (!skBootstrapped) SkInstaller.bootstrap(this@LauncherActivity, report)
                 }
                 binding.setupGroup.visibility = View.GONE
                 setButtonsEnabled(true)
@@ -347,13 +347,15 @@ class LauncherActivity : AppCompatActivity() {
     }
 
     private fun launchGame(mode: LoginMode, steamUser: String = "", steamPass: String = "") {
-        startActivity(Intent(this, GameActivity::class.java).apply {
-            putExtra(EXTRA_LOGIN_MODE, mode.name)
-            if (steamUser.isNotEmpty()) {
-                putExtra(EXTRA_STEAM_USER, steamUser)
-                putExtra(EXTRA_STEAM_PASS, steamPass)
-            }
-        })
+        startActivity(
+            Intent(this, GameActivity::class.java).apply {
+                putExtra(EXTRA_LOGIN_MODE, mode.name)
+                if (steamUser.isNotEmpty()) {
+                    putExtra(EXTRA_STEAM_USER, steamUser)
+                    putExtra(EXTRA_STEAM_PASS, steamPass)
+                }
+            },
+        )
     }
 
     private fun fetchPlayerCount() {
@@ -396,7 +398,7 @@ class LauncherActivity : AppCompatActivity() {
             progressTintList = ColorStateList.valueOf(Color.parseColor("#ab4a81"))
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
+                LinearLayout.LayoutParams.WRAP_CONTENT,
             ).apply {
                 topMargin = (resources.displayMetrics.density * 12).toInt()
             }
@@ -429,7 +431,7 @@ class LauncherActivity : AppCompatActivity() {
                 Toast.makeText(
                     this@LauncherActivity,
                     "Download complete: ${stats.downloaded} downloaded, ${stats.skipped} skipped, ${stats.deleted} deleted",
-                    Toast.LENGTH_LONG
+                    Toast.LENGTH_LONG,
                 ).show()
             } catch (e: Exception) {
                 dialog.dismiss()
@@ -459,7 +461,7 @@ class LauncherActivity : AppCompatActivity() {
             progressTintList = ColorStateList.valueOf(Color.parseColor("#ab4a81"))
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
+                LinearLayout.LayoutParams.WRAP_CONTENT,
             ).apply {
                 topMargin = (resources.displayMetrics.density * 12).toInt()
             }

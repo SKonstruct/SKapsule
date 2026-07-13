@@ -93,7 +93,9 @@ object NativeBridge {
     @Volatile
     private var bootListener: BootListener? = null
 
-    fun setBootListener(listener: BootListener?) { bootListener = listener }
+    fun setBootListener(listener: BootListener?) {
+        bootListener = listener
+    }
 
     /** Native -> a human-readable boot-phase status (getdown %, "Waiting for Steam…"). */
     @JvmStatic
@@ -152,8 +154,10 @@ object NativeBridge {
     interface CredentialListener {
         /** Ask for a Steam Guard authenticator (TOTP) code. */
         fun onPromptDeviceCode(prevWrong: Boolean)
+
         /** Ask for a Steam Guard email code sent to [email]. */
         fun onPromptEmailCode(email: String, prevWrong: Boolean)
+
         /** The auth attempt ended (success/fail/timeout); tear down any open dialog. */
         fun onPromptDismiss()
     }
@@ -161,7 +165,9 @@ object NativeBridge {
     @Volatile
     private var credentialListener: CredentialListener? = null
 
-    fun setCredentialListener(listener: CredentialListener?) { credentialListener = listener }
+    fun setCredentialListener(listener: CredentialListener?) {
+        credentialListener = listener
+    }
 
     // Single-slot rendezvous between the blocked login thread (taker) and the UI
     // thread (offerer). SynchronousQueue means a late submission with no waiter
@@ -199,5 +205,7 @@ object NativeBridge {
      * UI thread -> hand the user's entered code (or "" to fall through/cancel)
      * to the parked login thread. No-ops if nothing is waiting.
      */
-    fun submitCode(code: String) { codeExchange.offer(code) }
+    fun submitCode(code: String) {
+        codeExchange.offer(code)
+    }
 }

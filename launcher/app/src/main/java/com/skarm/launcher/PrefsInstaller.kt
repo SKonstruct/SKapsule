@@ -47,8 +47,11 @@ object PrefsInstaller {
         try {
             prefsXml.parentFile?.mkdirs()
             prefsXml.writeText(DEFAULT_PROJECTX_PREFS)
-            Log.i(TAG, "Seeded default projectx prefs (compatibility_mode, render_quality=LOW, " +
-                "cull_transients_prod, anonymous_logon=false)")
+            Log.i(
+                TAG,
+                "Seeded default projectx prefs (compatibility_mode, render_quality=LOW, " +
+                    "cull_transients_prod, anonymous_logon=false)",
+            )
         } catch (t: Throwable) {
             Log.w(TAG, "Failed to seed default projectx prefs", t)
         }

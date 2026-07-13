@@ -1,0 +1,39 @@
+root = true
+
+# Global defaults
+[*]
+indent_style = space
+indent_size = 4
+end_of_line = lf
+charset = utf-8
+trim_trailing_whitespace = true
+insert_final_newline = true
+max_line_length = off
+
+# Frenchpress project formatting rules (uses 2 spaces)
+[external/frenchpress/**]
+indent_size = 2
+
+# JSON, YAML, and Markdown files
+[*.{json,yml,yaml,md}]
+indent_size = 2
+
+# Markdown line wrap rules
+[*.md]
+trim_trailing_whitespace = false
+
+# Kotlin specific ktlint overrides
+[*.{kt,kts}]
+ktlint_standard_max-line-length = disabled
+ktlint_standard_value-argument-comment = disabled
+disabled_rules = value-argument-comment, max-line-length, if-else-wrapping, no-consecutive-comments, value-parameter-comment
+ktlint_disabled_rules = value-argument-comment, max-line-length, standard:value-argument-comment, standard:max-line-length, if-else-wrapping, standard:if-else-wrapping, no-consecutive-comments, standard:no-consecutive-comments, value-parameter-comment, standard:value-parameter-comment
+ktlint_standard_if-else-wrapping = disabled
+ktlint_standard_no-consecutive-comments = disabled
+ktlint_standard_value-parameter-comment = disabled
+ktlint_standard_argument-list-wrapping = disabled
+ktlint_standard_parameter-list-wrapping = disabled
+ktlint_standard_property-wrapping = disabled
+ktlint_standard_class-signature-wrapping = disabled
+ktlint_standard_function-signature-wrapping = disabled
+ktlint_standard_statement-wrapping = disabled

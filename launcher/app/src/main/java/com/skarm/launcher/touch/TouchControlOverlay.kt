@@ -7,7 +7,6 @@ import android.util.AttributeSet
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
-import android.view.ViewGroup
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -17,7 +16,9 @@ import android.widget.TextView
 import com.skarm.launcher.NativeBridge
 
 class TouchControlOverlay @JvmOverloads constructor(
-    context: Context, attrs: AttributeSet? = null, defStyleAttr: Int = 0
+    context: Context,
+    attrs: AttributeSet? = null,
+    defStyleAttr: Int = 0,
 ) : FrameLayout(context, attrs, defStyleAttr) {
 
     private var layoutData: TouchLayoutData = TouchControlManager.loadLayout(context)
@@ -57,9 +58,12 @@ class TouchControlOverlay @JvmOverloads constructor(
             // vertical LinearLayout to fill the full width).
             val panelWidth = (320 * resources.displayMetrics.density).toInt()
             layoutParams = LayoutParams(panelWidth, LayoutParams.WRAP_CONTENT, Gravity.CENTER)
-            
+
             // Global Settings
-            val globalTitle = TextView(context).apply { text = "Global Settings"; setTextColor(Color.WHITE) }
+            val globalTitle = TextView(context).apply {
+                text = "Global Settings"
+                setTextColor(Color.WHITE)
+            }
             addView(globalTitle)
 
             val enableSwitch = Switch(context).apply {
@@ -74,7 +78,10 @@ class TouchControlOverlay @JvmOverloads constructor(
             }
             addView(enableSwitch)
 
-            val opacityLabel = TextView(context).apply { text = "Opacity"; setTextColor(Color.WHITE) }
+            val opacityLabel = TextView(context).apply {
+                text = "Opacity"
+                setTextColor(Color.WHITE)
+            }
             addView(opacityLabel)
             val opacitySlider = SeekBar(context).apply {
                 max = 100
@@ -100,15 +107,17 @@ class TouchControlOverlay @JvmOverloads constructor(
             addView(resetButton)
 
             // Separator
-            addView(View(context).apply {
-                setBackgroundColor(0x66FFFFFF.toInt())
-                layoutParams = LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, 2).apply {
-                    setMargins(0, 16, 0, 16)
-                }
-            })
+            addView(
+                View(context).apply {
+                    setBackgroundColor(0x66FFFFFF.toInt())
+                    layoutParams = LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, 2).apply {
+                        setMargins(0, 16, 0, 16)
+                    }
+                },
+            )
 
             // Node Settings (Hidden by default)
-            val nodeTitle = TextView(context).apply { 
+            val nodeTitle = TextView(context).apply {
                 text = "Node Settings"
                 setTextColor(Color.WHITE)
                 tag = "nodeTitle"
@@ -132,7 +141,7 @@ class TouchControlOverlay @JvmOverloads constructor(
             addView(visibleSwitch)
             cachedVisibleSwitch = visibleSwitch
 
-            val scaleLabel = TextView(context).apply { 
+            val scaleLabel = TextView(context).apply {
                 text = "Scale"
                 setTextColor(Color.WHITE)
                 tag = "scaleLabel"
@@ -140,7 +149,7 @@ class TouchControlOverlay @JvmOverloads constructor(
             }
             addView(scaleLabel)
             cachedScaleLabel = scaleLabel
-            
+
             val scaleSlider = SeekBar(context).apply {
                 max = 200 // 0.5x to 2.5x
                 tag = "scaleSlider"
@@ -177,7 +186,7 @@ class TouchControlOverlay @JvmOverloads constructor(
             addView(view)
             controlViews.add(view)
         }
-        
+
         applyControlAppearance()
     }
 
@@ -227,7 +236,7 @@ class TouchControlOverlay @JvmOverloads constructor(
 
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         super.onLayout(changed, left, top, right, bottom)
-        
+
         val w = right - left
         val h = bottom - top
 
@@ -238,18 +247,18 @@ class TouchControlOverlay @JvmOverloads constructor(
         for (view in controlViews) {
             val node = view.node
             val size = (if (node.type == ControlType.BUTTON) baseBtnSize else baseJoySize) * node.scale
-            
+
             val cx = w * node.xPercent
             val cy = h * node.yPercent
-            
+
             val l = (cx - size / 2).toInt()
             val t = (cy - size / 2).toInt()
             val r = (cx + size / 2).toInt()
             val b = (cy + size / 2).toInt()
-            
+
             view.layout(l, t, r, b)
         }
-        
+
         // Ensure editor panel is brought to front and centered
         editorPanel.bringToFront()
     }
@@ -257,19 +266,19 @@ class TouchControlOverlay @JvmOverloads constructor(
     fun toggleEditMode() {
         inEditMode = !inEditMode
         editorPanel.visibility = if (inEditMode) View.VISIBLE else View.GONE
-        
+
         if (!inEditMode) {
             // Save layout when exiting edit mode
             TouchControlManager.saveLayout(context, layoutData)
             selectedView = null
         }
-        
+
         for (view in controlViews) {
             view.inEditMode = inEditMode
             view.isSelectedNode = false
             view.invalidate()
         }
-        
+
         applyControlAppearance()
         updateEditorPanel()
     }
@@ -350,14 +359,14 @@ class TouchControlOverlay @JvmOverloads constructor(
                 selectedView?.let { view ->
                     var newX = event.x + dX
                     var newY = event.y + dY
-                    
+
                     // Constrain to screen
                     newX = newX.coerceIn(0f, width.toFloat() - view.width)
                     newY = newY.coerceIn(0f, height.toFloat() - view.height)
-                    
+
                     view.x = newX
                     view.y = newY
-                    
+
                     // Update node percent
                     view.node.xPercent = (newX + view.width / 2f) / width
                     view.node.yPercent = (newY + view.height / 2f) / height
@@ -371,7 +380,7 @@ class TouchControlOverlay @JvmOverloads constructor(
         }
         return false
     }
-    
+
     private fun isPointInsideView(x: Float, y: Float, view: View): Boolean {
         return x >= view.left && x <= view.right && y >= view.top && y <= view.bottom
     }
@@ -379,12 +388,12 @@ class TouchControlOverlay @JvmOverloads constructor(
     private fun selectView(view: BaseTouchControl?) {
         selectedView?.isSelectedNode = false
         selectedView?.invalidate()
-        
+
         selectedView = view
-        
+
         selectedView?.isSelectedNode = true
         selectedView?.invalidate()
-        
+
         updateEditorPanel()
     }
 
@@ -398,10 +407,10 @@ class TouchControlOverlay @JvmOverloads constructor(
             val node = selectedView!!.node
             nodeTitle.visibility = View.VISIBLE
             nodeTitle.text = "Settings: ${node.label.ifEmpty { node.id }}"
-            
+
             visibleSwitch.visibility = View.VISIBLE
             visibleSwitch.isChecked = node.visible
-            
+
             scaleLabel.visibility = View.VISIBLE
             scaleSlider.visibility = View.VISIBLE
             scaleSlider.progress = ((node.scale - 0.5f) * 100).toInt()
@@ -421,6 +430,7 @@ class TouchControlOverlay @JvmOverloads constructor(
         // In edit mode, visible controls are shown at least this opaque so they're
         // easy to see and drag, even if the user's global opacity is very low.
         private const val EDIT_MODE_MIN_OPACITY = 0.85f
+
         // Hidden controls are shown faintly in edit mode so they can be re-enabled.
         private const val EDIT_HIDDEN_OPACITY = 0.3f
     }

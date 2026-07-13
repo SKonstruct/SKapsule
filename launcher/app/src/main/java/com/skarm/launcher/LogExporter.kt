@@ -30,7 +30,7 @@ object LogExporter {
     private const val LOG_SUBDIR = "logs"
     private const val MANUAL_PREFIX = "log"
     private const val CRASH_PREFIX = "crash"
-    private const val KEEP_FILES = 8          // prune older dumps beyond this
+    private const val KEEP_FILES = 8 // prune older dumps beyond this
     private const val LAUNCH_MARKER = ".launch_attempted"
 
     private val authority = { ctx: Context -> "${ctx.packageName}.fileprovider" }
@@ -57,7 +57,12 @@ object LogExporter {
         out.outputStream().use { sink -> process.inputStream.copyTo(sink) }
         process.waitFor()
         prune(context)
-        if (out.length() > 0L) out else { out.delete(); null }
+        if (out.length() > 0L) {
+            out
+        } else {
+            out.delete()
+            null
+        }
     } catch (t: Throwable) {
         Log.e(TAG, "logcat capture failed", t)
         null
@@ -74,7 +79,7 @@ object LogExporter {
         }
         context.startActivity(
             Intent.createChooser(send, context.getString(R.string.share_logs_chooser))
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
         )
     }
 

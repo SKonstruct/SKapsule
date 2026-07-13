@@ -66,7 +66,7 @@ object ModsApplier {
         "config/toy.dat", "config/toy.xml",
         "config/vfx.dat", "config/vfx.xml",
         "config/view.dat", "config/view.xml",
-        "config/weapon.dat", "config/weapon.xml"
+        "config/weapon.dat", "config/weapon.xml",
     )
 
     data class ApplyStats(
@@ -76,7 +76,7 @@ object ModsApplier {
         var modpacksApplied: Int = 0,
         var modsSkipped: Int = 0,
         var localeChangesApplied: Int = 0,
-        val warnings: MutableList<String> = mutableListOf()
+        val warnings: MutableList<String> = mutableListOf(),
     ) {
         fun getTotalModsApplied(): Int = resourceModsApplied + classModsApplied + modpacksApplied
     }
@@ -85,7 +85,7 @@ object ModsApplier {
         var name: String,
         var type: String? = null,
         var pxVersion: String? = null,
-        var locale: Map<String, Map<String, String>>? = null
+        var locale: Map<String, Map<String, String>>? = null,
     ) {
         fun isClassMod(): Boolean = "class".equals(type, ignoreCase = true)
         fun hasLocaleChanges(): Boolean = !locale.isNullOrEmpty()
@@ -93,7 +93,7 @@ object ModsApplier {
 
     suspend fun apply(
         gameHome: File,
-        onProgress: (status: String, current: Int, total: Int) -> Unit
+        onProgress: (status: String, current: Int, total: Int) -> Unit,
     ): ApplyStats = withContext(Dispatchers.IO) {
         val stats = ApplyStats()
         val rsrcDir = File(gameHome, "rsrc")
@@ -248,7 +248,7 @@ object ModsApplier {
                         val content = zis.bufferedReader().readText()
                         val json = JSONObject(content)
                         val modObj = if (json.has("mod")) json.getJSONObject("mod") else json
-                        
+
                         metadata.name = if (modObj.has("name")) modObj.getString("name") else modFile.name
                         metadata.type = if (modObj.has("type")) modObj.getString("type") else null
                         metadata.pxVersion = if (modObj.has("pxVersion")) modObj.getString("pxVersion") else null
@@ -392,7 +392,7 @@ object ModsApplier {
     private fun applyLocaleChanges(
         codeDir: File,
         localeChangesDir: File,
-        changes: Map<String, Map<String, String>>
+        changes: Map<String, Map<String, String>>,
     ) {
         val projectxConfig = File(codeDir, "projectx-config.jar")
         if (!projectxConfig.exists()) {

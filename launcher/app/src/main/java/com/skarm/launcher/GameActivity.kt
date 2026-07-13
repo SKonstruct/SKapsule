@@ -39,8 +39,11 @@ import kotlin.math.max
  * created on. Hosts SK via the embedded JRE 25; rendering is routed through
  * libgl4es.so. Single visible UI element is a small "Exit" button.
  */
-class GameActivity : AppCompatActivity(), SurfaceHolder.Callback,
-    NativeBridge.BootListener, NativeBridge.CredentialListener {
+class GameActivity :
+    AppCompatActivity(),
+    SurfaceHolder.Callback,
+    NativeBridge.BootListener,
+    NativeBridge.CredentialListener {
 
     private lateinit var binding: ActivityGameBinding
     private lateinit var surface: SurfaceView
@@ -81,7 +84,7 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback,
         setContentView(binding.root)
 
         surface = binding.gameSurface
-        
+
         // Handle "Avoid screen edges" to prevent display cutout / rounded corners overlap
         val launcherPrefs = getSharedPreferences("launcher_prefs", MODE_PRIVATE)
         val avoidEdges = launcherPrefs.getBoolean("avoid_screen_edges", false)
@@ -102,13 +105,13 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback,
                         val topRight = windowInsets.getRoundedCorner(android.view.RoundedCorner.POSITION_TOP_RIGHT)
                         val bottomLeft = windowInsets.getRoundedCorner(android.view.RoundedCorner.POSITION_BOTTOM_LEFT)
                         val bottomRight = windowInsets.getRoundedCorner(android.view.RoundedCorner.POSITION_BOTTOM_RIGHT)
-                        
+
                         // We use a small inset (e.g. radius / 3) to clear rounded corner overlap safely
                         val tl = (topLeft?.radius ?: 0) / 3
                         val tr = (topRight?.radius ?: 0) / 3
                         val bl = (bottomLeft?.radius ?: 0) / 3
                         val br = (bottomRight?.radius ?: 0) / 3
-                        
+
                         left = maxOf(left, maxOf(tl, bl))
                         top = maxOf(top, maxOf(tl, tr))
                         right = maxOf(right, maxOf(tr, br))
@@ -150,7 +153,7 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback,
 
         // Initially trigger the opacity listener to set the correct starting opacity
         binding.touchOverlay.opacityChangeListener?.invoke(
-            com.skarm.launcher.touch.TouchControlManager.loadLayout(this).globalOpacity
+            com.skarm.launcher.touch.TouchControlManager.loadLayout(this).globalOpacity,
         )
 
         // Make SK's News/wiki/forum links open the system browser. Done before
@@ -159,13 +162,16 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback,
 
         // Android Back must go through the exit-confirm dialog, not silently finish
         // the activity (which would strand the JVM + audio in the :game process).
-        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
-            override fun handleOnBackPressed() = confirmExit()
-        })
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() = confirmExit()
+            },
+        )
 
         loginMode = runCatching {
             LauncherActivity.LoginMode.valueOf(
-                intent.getStringExtra(LauncherActivity.EXTRA_LOGIN_MODE).orEmpty()
+                intent.getStringExtra(LauncherActivity.EXTRA_LOGIN_MODE).orEmpty(),
             )
         }.getOrDefault(LauncherActivity.LoginMode.Web)
         // Steam credentials, present only on a first Steam login (subsequent launches
@@ -212,7 +218,8 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback,
                 MotionEvent.ACTION_DOWN -> NativeBridge.onTouchEvent(TOUCH_DOWN, x, y)
                 MotionEvent.ACTION_MOVE -> NativeBridge.onTouchEvent(TOUCH_MOVE, x, y)
                 MotionEvent.ACTION_UP,
-                MotionEvent.ACTION_CANCEL -> NativeBridge.onTouchEvent(TOUCH_UP, x, y)
+                MotionEvent.ACTION_CANCEL,
+                -> NativeBridge.onTouchEvent(TOUCH_UP, x, y)
                 else -> return@setOnTouchListener false
             }
             true
@@ -243,8 +250,11 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback,
                 else -> -1
             }
             if (triggerAxis >= 0) {
-                if (event.action == KeyEvent.ACTION_DOWN) NativeBridge.onGamepadAxis(triggerAxis, 1f)
-                else if (event.action == KeyEvent.ACTION_UP) NativeBridge.onGamepadAxis(triggerAxis, -1f)
+                if (event.action == KeyEvent.ACTION_DOWN) {
+                    NativeBridge.onGamepadAxis(triggerAxis, 1f)
+                } else if (event.action == KeyEvent.ACTION_UP) {
+                    NativeBridge.onGamepadAxis(triggerAxis, -1f)
+                }
                 return true
             }
             val idx = gamepadButtonIndex(event.keyCode)
@@ -271,7 +281,10 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback,
     private fun handleKeyboard(event: KeyEvent): Boolean {
         // Don't double-handle gamepad/dpad sources (handled above).
         if (event.isFromSource(InputDevice.SOURCE_GAMEPAD) ||
-            event.isFromSource(InputDevice.SOURCE_DPAD)) return false
+            event.isFromSource(InputDevice.SOURCE_DPAD)
+        ) {
+            return false
+        }
 
         val glfwKey = glfwKeyCode(event.keyCode)
         val ch = event.unicodeChar
@@ -294,7 +307,8 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback,
 
     override fun onGenericMotionEvent(event: MotionEvent): Boolean {
         if (event.isFromSource(InputDevice.SOURCE_JOYSTICK) &&
-            event.action == MotionEvent.ACTION_MOVE) {
+            event.action == MotionEvent.ACTION_MOVE
+        ) {
             processJoystick(event)
             return true
         }
@@ -376,8 +390,10 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback,
         val link = File(dir, "xdg-open")
         // nativeLibraryDir path changes across app updates, so recreate the link.
         link.delete()
-        Os.symlink(File(applicationInfo.nativeLibraryDir, "libxdgopen.so").absolutePath,
-                   link.absolutePath)
+        Os.symlink(
+            File(applicationInfo.nativeLibraryDir, "libxdgopen.so").absolutePath,
+            link.absolutePath,
+        )
         startUrlServer()
         dir.absolutePath
     } catch (t: Throwable) {
@@ -396,7 +412,11 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback,
         urlServer = server
         Thread({
             while (true) {
-                val client = try { server.accept() } catch (e: IOException) { break }
+                val client = try {
+                    server.accept()
+                } catch (e: IOException) {
+                    break
+                }
                 try {
                     val url = client.inputStream.bufferedReader().readLine()?.trim().orEmpty()
                     if (url.isNotEmpty()) openUrl(url)
@@ -481,7 +501,7 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback,
             val frenchpressJar: String
             val credFile: String
             if (steam) {
-                FrenchpressInstaller.stage(this)  // re-stage so a rebuilt jar propagates
+                FrenchpressInstaller.stage(this) // re-stage so a rebuilt jar propagates
                 frenchpressJar = FrenchpressInstaller.jar(this).absolutePath
                 credFile = FrenchpressInstaller.credFile(this).absolutePath
             } else {
@@ -564,9 +584,9 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback,
             if (dismissing || binding.bootOverlay.visibility != View.VISIBLE) return@runOnUiThread
             dismissing = true
             binding.bootOverlay.animate()
-                               .translationX(-binding.bootOverlay.width.toFloat())
-                               .setDuration(resources.getInteger(android.R.integer.config_mediumAnimTime).toLong())
-                               .withEndAction{ binding.bootOverlay.visibility = View.GONE }
+                .translationX(-binding.bootOverlay.width.toFloat())
+                .setDuration(resources.getInteger(android.R.integer.config_mediumAnimTime).toLong())
+                .withEndAction { binding.bootOverlay.visibility = View.GONE }
         }
     }
 
@@ -583,8 +603,11 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback,
             showGuardDialog(
                 title = getString(R.string.steam_guard_title),
                 message = getString(
-                    if (prevWrong) R.string.steam_guard_device_retry
-                    else R.string.steam_guard_device_message
+                    if (prevWrong) {
+                        R.string.steam_guard_device_retry
+                    } else {
+                        R.string.steam_guard_device_message
+                    },
                 ),
                 numeric = true,
             )
@@ -597,10 +620,15 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback,
             showGuardDialog(
                 title = getString(R.string.steam_guard_title),
                 message = getString(
-                    if (prevWrong) R.string.steam_guard_email_retry
-                    else R.string.steam_guard_email_message, email
+                    if (prevWrong) {
+                        R.string.steam_guard_email_retry
+                    } else {
+                        R.string.steam_guard_email_message
+                    },
+                    email,
                 ),
-                numeric = false, // email codes are alphanumeric
+                // email codes are alphanumeric
+                numeric = false,
             )
         }
     }
@@ -740,9 +768,9 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback,
             KeyEvent.KEYCODE_ENTER -> 257
             KeyEvent.KEYCODE_NUMPAD_ENTER -> 257
             KeyEvent.KEYCODE_TAB -> 258
-            KeyEvent.KEYCODE_DEL -> 259          // GLFW_KEY_BACKSPACE
+            KeyEvent.KEYCODE_DEL -> 259 // GLFW_KEY_BACKSPACE
             KeyEvent.KEYCODE_INSERT -> 260
-            KeyEvent.KEYCODE_FORWARD_DEL -> 261  // GLFW_KEY_DELETE
+            KeyEvent.KEYCODE_FORWARD_DEL -> 261 // GLFW_KEY_DELETE
             KeyEvent.KEYCODE_DPAD_RIGHT -> 262
             KeyEvent.KEYCODE_DPAD_LEFT -> 263
             KeyEvent.KEYCODE_DPAD_DOWN -> 264

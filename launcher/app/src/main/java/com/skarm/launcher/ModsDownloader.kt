@@ -17,18 +17,18 @@ object ModsDownloader {
     data class SyncStats(
         var downloaded: Int = 0,
         var skipped: Int = 0,
-        var deleted: Int = 0
+        var deleted: Int = 0,
     )
 
     data class ModFile(
         val name: String,
         val downloadUrl: String,
-        val sha: String
+        val sha: String,
     )
 
     suspend fun sync(
         modsDir: File,
-        onProgress: (status: String, current: Int, total: Int) -> Unit
+        onProgress: (status: String, current: Int, total: Int) -> Unit,
     ): SyncStats = withContext(Dispatchers.IO) {
         val stats = SyncStats()
 
@@ -88,7 +88,7 @@ object ModsDownloader {
         conn.connectTimeout = 10_000
         conn.readTimeout = 10_000
         conn.setRequestProperty("User-Agent", "SKapsule-Launcher")
-        
+
         try {
             conn.connect()
             if (conn.responseCode != HttpURLConnection.HTTP_OK) {
@@ -117,7 +117,7 @@ object ModsDownloader {
         val conn = url.openConnection() as HttpURLConnection
         conn.connectTimeout = 15_000
         conn.readTimeout = 15_000
-        
+
         try {
             conn.connect()
             if (conn.responseCode != HttpURLConnection.HTTP_OK) {

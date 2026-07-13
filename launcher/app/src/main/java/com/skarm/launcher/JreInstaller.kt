@@ -111,7 +111,7 @@ object JreInstaller {
                 // Java doesn't ship symlink creation in stdlib without nio...
                 java.nio.file.Files.createSymbolicLink(
                     target.toPath(),
-                    java.nio.file.Paths.get(entry.linkName)
+                    java.nio.file.Paths.get(entry.linkName),
                 )
                 continue
             }

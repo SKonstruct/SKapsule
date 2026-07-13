@@ -1,44 +1,45 @@
 package com.skarm.launcher.touch
 
 import android.content.Context
-import android.content.SharedPreferences
 import androidx.annotation.Keep
 import com.google.gson.Gson
-import com.skarm.launcher.GameActivity
 
 enum class ControlType {
     BUTTON,
     JOYSTICK_LEFT,
-    JOYSTICK_RIGHT
+    JOYSTICK_RIGHT,
 }
 
 @Keep
 data class ControlNode(
     val id: String,
     val type: ControlType,
-    var xPercent: Float, // 0.0 to 1.0 (relative to screen width)
-    var yPercent: Float, // 0.0 to 1.0 (relative to screen height)
+    /** 0.0 to 1.0 (relative to screen width) */
+    var xPercent: Float,
+    /** 0.0 to 1.0 (relative to screen height) */
+    var yPercent: Float,
     var scale: Float = 1.0f,
     var visible: Boolean = true,
-    
-    // For Buttons
-    val buttonCode: Int = -1, // GameActivity.GP_BTN_* or axis for triggers
-    val isAxisTrigger: Boolean = false, // True if buttonCode represents an axis (like LTrig)
-    val isToggle: Boolean = false, // True for the Strafe button
-    val label: String = ""
+    /** GameActivity.GP_BTN_* or axis for triggers */
+    val buttonCode: Int = -1,
+    /** True if buttonCode represents an axis (like LTrig) */
+    val isAxisTrigger: Boolean = false,
+    /** True for the Strafe button */
+    val isToggle: Boolean = false,
+    val label: String = "",
 )
 
 @Keep
 data class TouchLayoutData(
     var globalOpacity: Float = 0.5f,
     var controlsEnabled: Boolean = true,
-    val nodes: MutableList<ControlNode> = mutableListOf()
+    val nodes: MutableList<ControlNode> = mutableListOf(),
 )
 
 object TouchControlManager {
     private const val PREFS_NAME = "touch_controls_prefs"
     private const val KEY_LAYOUT_DATA = "layout_data"
-    
+
     private val gson = Gson()
 
     // Axis codes for triggers, mapped to GameActivity constants
@@ -65,11 +66,11 @@ object TouchControlManager {
     fun loadLayout(context: Context): TouchLayoutData {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val jsonStr = prefs.getString(KEY_LAYOUT_DATA, null)
-        
+
         if (jsonStr.isNullOrEmpty()) {
             return createDefaultLayout()
         }
-        
+
         return try {
             gson.fromJson(jsonStr, TouchLayoutData::class.java) ?: createDefaultLayout()
         } catch (e: Exception) {
@@ -80,7 +81,7 @@ object TouchControlManager {
 
     fun saveLayout(context: Context, layout: TouchLayoutData) {
         val jsonStr = gson.toJson(layout)
-        
+
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit()
             .putString(KEY_LAYOUT_DATA, jsonStr)
@@ -89,10 +90,10 @@ object TouchControlManager {
 
     fun createDefaultLayout(): TouchLayoutData {
         val layout = TouchLayoutData()
-        
+
         // Left Joystick (Move)
         layout.nodes.add(ControlNode("joy_move", ControlType.JOYSTICK_LEFT, 0.15f, 0.7f))
-        
+
         // Right Joystick (Face) - Tap to Primary Attack handled in Joystick implementation
         layout.nodes.add(ControlNode("joy_face", ControlType.JOYSTICK_RIGHT, 0.85f, 0.7f))
 
@@ -126,7 +127,7 @@ object TouchControlManager {
         layout.nodes.add(ControlNode("btn_ab1", ControlType.BUTTON, centerStartX + gap * 0, bottomY, buttonCode = GP_BTN_A, label = "A1"))
         layout.nodes.add(ControlNode("btn_ab2", ControlType.BUTTON, centerStartX + gap * 1, bottomY, buttonCode = GP_BTN_B, label = "A2"))
         layout.nodes.add(ControlNode("btn_ab3", ControlType.BUTTON, centerStartX + gap * 2, bottomY, buttonCode = GP_BTN_X, label = "A3"))
-        
+
         layout.nodes.add(ControlNode("btn_item1", ControlType.BUTTON, centerStartX + gap * 3, bottomY, buttonCode = GP_BTN_DPAD_UP, label = "I1"))
         layout.nodes.add(ControlNode("btn_item2", ControlType.BUTTON, centerStartX + gap * 4, bottomY, buttonCode = GP_BTN_DPAD_RIGHT, label = "I2"))
         layout.nodes.add(ControlNode("btn_item3", ControlType.BUTTON, centerStartX + gap * 5, bottomY, buttonCode = GP_BTN_DPAD_DOWN, label = "I3"))

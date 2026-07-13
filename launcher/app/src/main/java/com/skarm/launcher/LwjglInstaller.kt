@@ -68,9 +68,15 @@ object LwjglInstaller {
             ZipInputStream(raw.buffered()).use { zip ->
                 while (true) {
                     val entry = zip.nextEntry ?: break
-                    if (entry.isDirectory) { zip.closeEntry(); continue }
+                    if (entry.isDirectory) {
+                        zip.closeEntry()
+                        continue
+                    }
                     val outName = nameFor(entry.name)
-                    if (outName == null) { zip.closeEntry(); continue }
+                    if (outName == null) {
+                        zip.closeEntry()
+                        continue
+                    }
 
                     val target = File(into, outName)
                     target.parentFile?.mkdirs()

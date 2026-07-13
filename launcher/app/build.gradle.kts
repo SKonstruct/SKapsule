@@ -18,8 +18,8 @@ fun signingSecret(propKey: String, envKey: String): String? =
 
 val ksStoreFile = signingSecret("storeFile", "SK_KEYSTORE_FILE")
 val ksStorePass = signingSecret("storePassword", "SK_KEYSTORE_PASSWORD")
-val ksKeyAlias  = signingSecret("keyAlias", "SK_KEY_ALIAS")
-val ksKeyPass   = signingSecret("keyPassword", "SK_KEY_PASSWORD")
+val ksKeyAlias = signingSecret("keyAlias", "SK_KEY_ALIAS")
+val ksKeyPass = signingSecret("keyPassword", "SK_KEY_PASSWORD")
 val hasReleaseSigning = ksStoreFile != null && ksStorePass != null &&
     ksKeyAlias != null && ksKeyPass != null
 
@@ -38,9 +38,11 @@ val skVersionName: String = System.getenv("SK_VERSION_NAME")
             commandLine("git", "describe", "--tags", "--abbrev=0")
             isIgnoreExitValue = true
         }
-        if (exec.result.get().exitValue == 0)
+        if (exec.result.get().exitValue == 0) {
             exec.standardOutput.asText.get().trim().removePrefix("v")
-        else null
+        } else {
+            null
+        }
     }.getOrNull()?.takeIf { it.isNotEmpty() }
     ?: "2.1.0"
 
@@ -95,7 +97,7 @@ android {
             if (hasReleaseSigning) signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                "proguard-rules.pro",
             )
         }
     }
