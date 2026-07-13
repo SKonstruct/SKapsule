@@ -35,4 +35,23 @@
     <string name="save_logs">Save logs</string>
     <string name="save_logs_saved">Log saved.</string>
     <string name="save_logs_failed">Couldn\'t save the log.</string>
+    <string name="launch">Launch</string>
+    <string name="mode_web">Web</string>
+    <string name="mode_steam">Steam</string>
+    <string name="sidebar_share_logs">Share Logs</string>
+    <string name="sidebar_save_logs">Save Logs</string>
+    <string name="sidebar_open_folder">Open Folder</string>
+    <string name="sidebar_github">GitHub</string>
+    <string name="sidebar_discord">Discord</string>
+    <string name="sidebar_logout">Logout</string>
+    <string name="logout_confirm_message">Sign out of Steam? Your saved session will be cleared.</string>
+    <string name="logout_confirm_yes">Sign out</string>
+    <string name="pref_avoid_edges">Avoid screen edges</string>
+    <string name="subtitle_android">Spiral Knights for Android</string>
+    <string name="sidebar_download_mods">Download Modpack</string>
+    <string name="sidebar_apply_mods">Apply Mods</string>
+    <string name="mod_sync_title">Downloading Mods</string>
+    <string name="mod_apply_title">Applying Mods</string>
+    <string name="mod_completed">Operation completed successfully.</string>
+    <string name="mod_failed">Operation failed: %1$s</string>
 </resources>

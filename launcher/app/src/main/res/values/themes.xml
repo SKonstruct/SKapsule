@@ -2,5 +2,24 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <style name="Theme.SKLauncher" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="27">shortEdges</item>
+        <item name="colorPrimary">#ab4a81</item>
+        <item name="colorSecondary">#ab4a81</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <!-- Dark backgrounds and text for a premium game launcher vibe -->
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+
+    <style name="ShapeAppearanceOverlay.LeftRounded" parent="">
+        <item name="cornerSizeTopLeft">24dp</item>
+        <item name="cornerSizeBottomLeft">24dp</item>
+        <item name="cornerSizeTopRight">0dp</item>
+        <item name="cornerSizeBottomRight">0dp</item>
+    </style>
+
+    <style name="ShapeAppearanceOverlay.RightRounded" parent="">
+        <item name="cornerSizeTopLeft">0dp</item>
+        <item name="cornerSizeBottomLeft">0dp</item>
+        <item name="cornerSizeTopRight">24dp</item>
+        <item name="cornerSizeBottomRight">24dp</item>
     </style>
 </resources>

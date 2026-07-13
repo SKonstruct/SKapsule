@@ -17,3 +17,4 @@ dependencyResolutionManagement {
 rootProject.name = "sk-launcher"
 include(":app")
 include(":bootstrap")
+project(":bootstrap").projectDir = file("../external/bootstrap")

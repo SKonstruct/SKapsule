@@ -4,4 +4,6 @@
          per-app (shared by the launcher and :game processes), so a log written by
          either is shareable through this provider, which runs in the main process. -->
     <cache-path name="logs" path="logs/" />
+    <!-- Allow access to the app's internal files folder (e.g. for open folder / sharing) -->
+    <files-path name="app_files" path="." />
 </paths>

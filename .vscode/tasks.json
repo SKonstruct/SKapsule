@@ -67,9 +67,9 @@
             }
         },
         {
-            "label": "Prepare Game Debug Session",
+            "label": "Start Android Emulator",
             "type": "shell",
-            "command": "./scripts/prepare-debug.sh --game",
+            "command": "./scripts/prepare-debug.sh --start-emulator",
             "group": "test",
             "problemMatcher": []
         }

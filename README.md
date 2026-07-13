@@ -2,7 +2,7 @@
 
 An unofficial Android (arm64) port of **Spiral Knights**.
 
-SKapsule runs the *real* Spiral Knights desktop client on your phone or tablet. It
+SKapsule runs the _real_ Spiral Knights desktop client on your phone or tablet. It
 ships a custom JRE and a set of native libraries, then boots the game's own Java VM
 on-device — the game code and assets are downloaded and patched from the official
 servers at runtime (via getdown), exactly like the desktop client. Nothing about the
@@ -39,7 +39,7 @@ Gameplay is **gamepad-first**. Experimental touch controls are in place, but sti
 
 ## Installing (players)
 
-1. Grab the latest signed `app-release.apk` from the
+1. Grab the latest signed `skapsule-vX.X.X.apk` from the
    [Releases](../../releases) page.
 2. Copy it to your arm64 Android device (Android 8.0 / API 26 or newer) and install,
    allowing installation from unknown sources if prompted.
@@ -54,29 +54,29 @@ Only `arm64-v8a` devices are supported (no 32-bit builds).
 
 ## Building from source (developers)
 
-The APK is a *full from-source* build: every native component is compiled from its
+The APK is a _full from-source_ build: every native component is compiled from its
 submodule, staged into the launcher, and then the Android app is assembled. CI does
 exactly this — see [`.github/workflows/build-apk.yml`](.github/workflows/build-apk.yml)
 for the canonical, reproducible recipe.
 
 ### Prerequisites
 
-| Tool | Version | Used for |
-|------|---------|----------|
-| Android SDK | compileSdk/targetSdk 35 | building the app |
-| Android NDK | `30.0.14904198` | native libs (Clang 20; NDK 27's Clang 18 miscompiles OpenAL's C++20 ranges) |
-| CMake | `3.22.1` | native build |
-| JDK 8 | | LWJGL's Java-8 multi-release layer |
-| JDK 25 | | caciocavallo + frenchpress (`--release 25`) |
-| ant, ninja, zip | | submodule build scripts |
+| Tool            | Version                 | Used for                                                                    |
+| --------------- | ----------------------- | --------------------------------------------------------------------------- |
+| Android SDK     | compileSdk/targetSdk 35 | building the app                                                            |
+| Android NDK     | `30.0.14904198`         | native libs (Clang 20; NDK 27's Clang 18 miscompiles OpenAL's C++20 ranges) |
+| CMake           | `3.22.1`                | native build                                                                |
+| JDK 8           |                         | LWJGL's Java-8 multi-release layer                                          |
+| JDK 25          |                         | caciocavallo + frenchpress (`--release 25`)                                 |
+| ant, ninja, zip |                         | submodule build scripts                                                     |
 
 Set `ANDROID_HOME`/`ANDROID_NDK_HOME` appropriately.
 
 ### 1. Clone with submodules
 
 ```bash
-git clone --recurse-submodules https://github.com/beebono/sk-arm64.git
-cd sk-arm64
+git clone --recurse-submodules https://github.com/SKonstruct/SKapsule.git
+cd SKapsule
 ```
 
 ### 2. Build the native components
@@ -105,15 +105,15 @@ JAVA_HOME=/path/to/jdk-25 ./gradlew :app:assembleRelease
 ```
 
 The output lands in `launcher/app/build/outputs/apk/release/`. Without signing
-configured (below) this is `app-release-unsigned.apk`.
+configured (below) this is `skapsule-vX.X.X-unsigned.apk`.
 
 ### Signing (optional)
 
 Release signing reads, in order, a gitignored `launcher/keystore.properties` then
 environment variables. With neither present, `assembleRelease` still succeeds and
-emits an *unsigned* APK. Provide `storeFile`/`storePassword`/`keyAlias`/`keyPassword`
+emits an _unsigned_ APK. Provide `storeFile`/`storePassword`/`keyAlias`/`keyPassword`
 (props) or `SK_KEYSTORE_FILE`/`SK_KEYSTORE_PASSWORD`/`SK_KEY_ALIAS`/`SK_KEY_PASSWORD`
-(env) to produce a signed `app-release.apk`. See `keystore.properties.template`.
+(env) to produce a signed `skapsule-vX.X.X.apk`. See `keystore.properties.template`.
 
 In CI, the keystore is supplied via the `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`,
 `KEY_ALIAS`, and `KEY_PASSWORD` repo secrets. A push of a `v*` tag with signing
@@ -137,15 +137,15 @@ SkBootstrap ─ runs HeadlessGetdown (validates/patches the game), then invokes
 The game is a standard desktop Java client, so the port supplies everything that
 client expects on a platform Android lacks:
 
-| Component | What it provides | Source |
-|-----------|------------------|--------|
-| **JRE 25** | the Java runtime the game runs on | bundled asset |
-| **gl4es** | translates the game's OpenGL calls to OpenGL ES | [`gl4es`](https://github.com/beebono/gl4es) submodule |
-| **openal-soft** | audio | [`openal-soft`](https://github.com/kcat/openal-soft) submodule |
-| **LWJGL 3.4.1** | windowing / GL / input bindings (Android-native build) | [`lwjgl3`](https://github.com/AngelAuraMC/lwjgl3) submodule |
-| **caciocavallo** | headless AWT bridge (the game uses AWT/Swing for some UI) | [`caciocavallo17`](https://github.com/AngelAuraMC/caciocavallo17) submodule |
-| **frenchpress** | Steam login (SteamKit-style auth) | [`frenchpress`](https://github.com/beebono/frenchpress) submodule |
-| **getdown** | downloads, verifies, and patches the game | bundled `getdown-pro.jar` |
+| Component        | What it provides                                          | Source                                                                     |
+| ---------------- | --------------------------------------------------------- | -------------------------------------------------------------------------- |
+| **JRE 25**       | the Java runtime the game runs on                         | bundled asset                                                              |
+| **gl4es**        | translates the game's OpenGL calls to OpenGL ES           | [`gl4es`](https://github.com/SKonstruct/gl4es) submodule                   |
+| **openal-soft**  | audio                                                     | [`openal-soft`](https://github.com/SKonstruct/openal-soft) submodule       |
+| **LWJGL 3.4.1**  | windowing / GL / input bindings (Android-native build)    | [`lwjgl3`](https://github.com/SKonstruct/lwjgl3) submodule                 |
+| **caciocavallo** | headless AWT bridge (the game uses AWT/Swing for some UI) | [`caciocavallo17`](https://github.com/SKonstruct/caciocavallo17) submodule |
+| **frenchpress**  | Steam login (SteamKit-style auth)                         | [`frenchpress`](https://github.com/SKonstruct/frenchpress) submodule       |
+| **getdown**      | downloads, verifies, and patches the game                 | bundled `getdown-pro.jar`                                                  |
 
 A small `bootstrap` Java module (`SkBootstrap`, `HeadlessGetdown`) and the launcher's
 Kotlin installers wire these together.
@@ -153,10 +153,10 @@ Kotlin installers wire these together.
 ### Repository layout
 
 ```
-launcher/          Android app (Kotlin) + bootstrap (Java) — the buildable project
+launcher/          Android app (Kotlin) — the buildable project
   app/             the Android application module
-  bootstrap/       SkBootstrap / HeadlessGetdown / GLFW shim, staged into the APK
 scripts/           build-*-android.sh per native component + stage-launcher-assets.sh
+external/bootstrap/       submodule — SkBootstrap / HeadlessGetdown / GLFW shim, staged into the APK
 external/gl4es/             submodule — GL → GLES translation
 external/openal-soft/       submodule — audio
 external/lwjgl3/            submodule — LWJGL Android build
@@ -171,7 +171,7 @@ out/               native build outputs (generated, gitignored)
 ## Known issues
 
 - **Character-shadow shader artifact.** Character shadows can render as a filled
-  quad. The shader *link* bug is fixed, but a visual artifact persists from another
+  quad. The shader _link_ bug is fixed, but a visual artifact persists from another
   cause. Workaround: set graphics quality to **Low**.
 - **Experimental maturity.** Lifecycle/resume, input, and login paths work but
   haven't been hardened across the full range of devices and Android versions.

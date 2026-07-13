@@ -1,98 +1,335 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout
+<androidx.drawerlayout.widget.DrawerLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/drawer_layout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="48dp">
+    android:background="@android:color/black"
+    tools:context=".LauncherActivity">
 
-    <TextView
-        android:id="@+id/title"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/app_name"
-        android:textAppearance="?attr/textAppearanceHeadline4"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintBottom_toTopOf="@id/buttonRow"
-        app:layout_constraintVertical_chainStyle="packed" />
+    <!-- Main Content Area -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:padding="32dp">
 
-    <LinearLayout
-        android:id="@+id/buttonRow"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginTop="32dp"
-        app:layout_constraintTop_toBottomOf="@id/title"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintBottom_toTopOf="@id/setupGroup">
+        <!-- Top Options/Gear Button -->
+        <ImageButton
+            android:id="@+id/btn_options"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Options"
+            android:src="@drawable/ic_settings"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:tint="#FFFFFF" />
 
+        <!-- Title & Subtitle Container -->
+        <LinearLayout
+            android:id="@+id/title_container"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:gravity="center_horizontal"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toTopOf="@id/mode_toggle_group"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintVertical_chainStyle="packed">
+
+            <TextView
+                android:id="@+id/title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="SKapsule"
+                android:textColor="#FFFFFF"
+                android:textSize="32sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/subtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/subtitle_android"
+                android:textColor="#A0A0A0"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <!-- Segmented Control (Pill-shaped slider equivalent) -->
+        <com.google.android.material.button.MaterialButtonToggleGroup
+            android:id="@+id/mode_toggle_group"
+            android:layout_width="240dp"
+            android:layout_height="48dp"
+            android:layout_marginTop="24dp"
+            app:singleSelection="true"
+            app:selectionRequired="true"
+            app:checkedButton="@id/btn_mode_web"
+            app:layout_constraintTop_toBottomOf="@id/title_container"
+            app:layout_constraintBottom_toTopOf="@id/btn_launch"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_mode_web"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:text="@string/mode_web"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                app:strokeColor="#333333"
+                app:strokeWidth="1dp"
+                app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.LeftRounded" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_mode_steam"
+                style="@style/Widget.Material3.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:text="@string/mode_steam"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                app:strokeColor="#333333"
+                app:strokeWidth="1dp"
+                app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.RightRounded" />
+
+        </com.google.android.material.button.MaterialButtonToggleGroup>
+
+        <!-- Launch Button -->
         <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_play_web"
+            android:id="@+id/btn_launch"
+            android:layout_width="240dp"
+            android:layout_height="52dp"
+            android:layout_marginTop="16dp"
+            android:text="@string/launch"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            app:backgroundTint="#ab4a81"
+            app:cornerRadius="26dp"
+            app:icon="@android:drawable/ic_media_play"
+            app:iconGravity="textStart"
+            app:iconTint="#FFFFFF"
+            app:layout_constraintTop_toBottomOf="@id/mode_toggle_group"
+            app:layout_constraintBottom_toTopOf="@id/setupGroup"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
+        <!-- Setup Status Group -->
+        <LinearLayout
+            android:id="@+id/setupGroup"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/play_web"
-            android:layout_marginEnd="16dp" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="24dp"
+            android:visibility="gone"
+            app:layout_constraintTop_toBottomOf="@id/btn_launch"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_play_steam"
-            android:layout_width="wrap_content"
+            <ProgressBar
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:indeterminate="true"
+                android:indeterminateTint="#ab4a81"
+                android:layout_marginEnd="12dp" />
+
+            <TextView
+                android:id="@+id/setupStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#FFFFFF"
+                android:text="@string/setup_starting" />
+        </LinearLayout>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!-- Sidebar / Navigation Drawer -->
+    <ScrollView
+        android:id="@+id/sidebar"
+        android:layout_width="280dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="end"
+        android:background="#141414"
+        android:clickable="true"
+        android:focusable="true">
+
+        <LinearLayout
+            android:id="@+id/sidebar_content_layout"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/play_steam" />
+            android:orientation="vertical"
+            android:padding="20dp">
 
-    </LinearLayout>
+            <!-- Sidebar Title -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Settings"
+                android:textColor="#FFFFFF"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:layout_marginBottom="24dp" />
 
-    <LinearLayout
-        android:id="@+id/setupGroup"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginTop="24dp"
-        android:visibility="gone"
-        app:layout_constraintTop_toBottomOf="@id/buttonRow"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent">
+            <!-- Share Logs Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/sidebar_btn_share_logs"
+                style="@style/Widget.Material3.Button.TextButton.Icon"
+                android:layout_width="match_parent"
+                android:layout_height="50dp"
+                android:gravity="start|center_vertical"
+                android:text="@string/sidebar_share_logs"
+                android:textColor="#FFFFFF"
+                app:icon="@drawable/ic_share"
+                app:iconTint="#FFFFFF"
+                app:iconSize="20dp"
+                app:iconPadding="12dp" />
 
-        <ProgressBar
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:indeterminate="true"
-            android:layout_marginEnd="12dp" />
+            <!-- Save Logs Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/sidebar_btn_save_logs"
+                style="@style/Widget.Material3.Button.TextButton.Icon"
+                android:layout_width="match_parent"
+                android:layout_height="50dp"
+                android:gravity="start|center_vertical"
+                android:text="@string/sidebar_save_logs"
+                android:textColor="#FFFFFF"
+                app:icon="@drawable/ic_save"
+                app:iconTint="#FFFFFF"
+                app:iconSize="20dp"
+                app:iconPadding="12dp" />
 
-        <TextView
-            android:id="@+id/setupStatus"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/setup_starting" />
+            <!-- Download Modpack Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/sidebar_btn_download_mods"
+                style="@style/Widget.Material3.Button.TextButton.Icon"
+                android:layout_width="match_parent"
+                android:layout_height="50dp"
+                android:gravity="start|center_vertical"
+                android:text="@string/sidebar_download_mods"
+                android:textColor="#FFFFFF"
+                app:icon="@drawable/ic_download"
+                app:iconTint="#FFFFFF"
+                app:iconSize="20dp"
+                app:iconPadding="12dp" />
 
-    </LinearLayout>
+            <!-- Apply Mods Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/sidebar_btn_apply_mods"
+                style="@style/Widget.Material3.Button.TextButton.Icon"
+                android:layout_width="match_parent"
+                android:layout_height="50dp"
+                android:gravity="start|center_vertical"
+                android:text="@string/sidebar_apply_mods"
+                android:textColor="#FFFFFF"
+                app:icon="@drawable/ic_build"
+                app:iconTint="#FFFFFF"
+                app:iconSize="20dp"
+                app:iconPadding="12dp" />
 
-    <!-- Disabled until a launch has actually been attempted (there's nothing
-         useful to capture before that). Enabled in LauncherActivity.onResume. -->
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btn_share_logs"
-        style="?attr/borderlessButtonStyle"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/share_logs"
-        android:enabled="false"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+            <!-- Open Folder Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/sidebar_btn_open_folder"
+                style="@style/Widget.Material3.Button.TextButton.Icon"
+                android:layout_width="match_parent"
+                android:layout_height="50dp"
+                android:gravity="start|center_vertical"
+                android:text="@string/sidebar_open_folder"
+                android:textColor="#FFFFFF"
+                app:icon="@drawable/ic_folder"
+                app:iconTint="#FFFFFF"
+                app:iconSize="20dp"
+                app:iconPadding="12dp" />
 
-    <!-- Guaranteed save-to-disk path (Storage Access Framework) for devices with
-         no useful share targets. Gated alongside btn_share_logs in onResume. -->
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/btn_save_logs"
-        style="?attr/borderlessButtonStyle"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/save_logs"
-        android:enabled="false"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
+            <!-- GitHub Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/sidebar_btn_github"
+                style="@style/Widget.Material3.Button.TextButton.Icon"
+                android:layout_width="match_parent"
+                android:layout_height="50dp"
+                android:gravity="start|center_vertical"
+                android:text="@string/sidebar_github"
+                android:textColor="#FFFFFF"
+                app:icon="@drawable/ic_github"
+                app:iconTint="#FFFFFF"
+                app:iconSize="20dp"
+                app:iconPadding="12dp" />
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+            <!-- Discord Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/sidebar_btn_discord"
+                style="@style/Widget.Material3.Button.TextButton.Icon"
+                android:layout_width="match_parent"
+                android:layout_height="50dp"
+                android:gravity="start|center_vertical"
+                android:text="@string/sidebar_discord"
+                android:textColor="#FFFFFF"
+                app:icon="@drawable/ic_discord"
+                app:iconTint="#FFFFFF"
+                app:iconSize="20dp"
+                app:iconPadding="12dp" />
+
+            <View
+                android:id="@+id/sidebar_divider_logout"
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#333333"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="8dp" />
+
+            <!-- Logout Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/sidebar_btn_logout"
+                style="@style/Widget.Material3.Button.TextButton.Icon"
+                android:layout_width="match_parent"
+                android:layout_height="50dp"
+                android:gravity="start|center_vertical"
+                android:text="@string/sidebar_logout"
+                android:textColor="#FF4D4D"
+                app:icon="@drawable/ic_logout"
+                app:iconTint="#FF4D4D"
+                app:iconSize="20dp"
+                app:iconPadding="12dp"
+                android:visibility="gone" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#333333"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="16dp" />
+
+            <!-- Avoid Screen Edges Option -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:padding="8dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/pref_avoid_edges"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp" />
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/switch_avoid_edges"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+        </LinearLayout>
+    </ScrollView>
+
+</androidx.drawerlayout.widget.DrawerLayout>

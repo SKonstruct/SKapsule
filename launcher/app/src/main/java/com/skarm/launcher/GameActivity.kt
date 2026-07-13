@@ -81,6 +81,48 @@ class GameActivity : AppCompatActivity(), SurfaceHolder.Callback,
         setContentView(binding.root)
 
         surface = binding.gameSurface
+        
+        // Handle "Avoid screen edges" to prevent display cutout / rounded corners overlap
+        val launcherPrefs = getSharedPreferences("launcher_prefs", MODE_PRIVATE)
+        val avoidEdges = launcherPrefs.getBoolean("avoid_screen_edges", false)
+        if (avoidEdges) {
+            ViewCompat.setOnApplyWindowInsetsListener(surface) { view, insets ->
+                val cutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
+                val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+                var left = maxOf(cutout.left, systemBars.left)
+                var top = maxOf(cutout.top, systemBars.top)
+                var right = maxOf(cutout.right, systemBars.right)
+                var bottom = maxOf(cutout.bottom, systemBars.bottom)
+
+                // API 31+: also account for rounded display corners
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                    val windowInsets = view.rootWindowInsets
+                    if (windowInsets != null) {
+                        val topLeft = windowInsets.getRoundedCorner(android.view.RoundedCorner.POSITION_TOP_LEFT)
+                        val topRight = windowInsets.getRoundedCorner(android.view.RoundedCorner.POSITION_TOP_RIGHT)
+                        val bottomLeft = windowInsets.getRoundedCorner(android.view.RoundedCorner.POSITION_BOTTOM_LEFT)
+                        val bottomRight = windowInsets.getRoundedCorner(android.view.RoundedCorner.POSITION_BOTTOM_RIGHT)
+                        
+                        // We use a small inset (e.g. radius / 3) to clear rounded corner overlap safely
+                        val tl = (topLeft?.radius ?: 0) / 3
+                        val tr = (topRight?.radius ?: 0) / 3
+                        val bl = (bottomLeft?.radius ?: 0) / 3
+                        val br = (bottomRight?.radius ?: 0) / 3
+                        
+                        left = maxOf(left, maxOf(tl, bl))
+                        top = maxOf(top, maxOf(tl, tr))
+                        right = maxOf(right, maxOf(tr, br))
+                        bottom = maxOf(bottom, maxOf(bl, br))
+                    }
+                }
+
+                val lp = view.layoutParams as android.widget.FrameLayout.LayoutParams
+                lp.setMargins(left, top, right, bottom)
+                view.layoutParams = lp
+                insets
+            }
+        }
+
         surface.holder.addCallback(this)
         wireTouchInput()
 

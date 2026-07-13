@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # prepare-debug.sh
-# Boots the pixel_9_pro emulator, deploys the debug build, launches the app,
+# Deploys the debug build, launches the app on the emulator,
 # and configures JDWP port-forwarding for debugger attachment.
 
 set -euo pipefail
@@ -18,38 +18,23 @@ if [[ ! -x "$EMULATOR" ]]; then
     EMULATOR="emulator"
 fi
 
-if [[ "${1:-}" == "--game" ]]; then
-    echo "=== Preparing Game Process Debug Session ==="
-    # Debuggable builds expose a JDWP socket on every process regardless of
-    # wait-for-debugger state, so no arming call is needed here — just find the
-    # already-running :game process and forward its port. (Do NOT call
-    # `am set-debug-app`: it kills any already-running process of the package
-    # to rearm the debug flag for the next launch, which would kill the very
-    # :game process this is trying to attach to. Confirmed live: pidof went
-    # from a real PID to empty immediately after that call.) Because nothing
-    # pauses :game at boot, this attaches to it already running — fine for
-    # breakpoints in gameplay code, but you'll miss anything that already ran
-    # before you started this task.
-    echo "Resolving game process (:game) PID..."
-    PID=""
-    for i in {1..30}; do
-        PID=$("$ADB" shell pidof com.skarm.launcher:game 2>/dev/null || echo "")
-        if [[ -n "$PID" ]]; then
-            break
-        fi
-        echo "Waiting for game process to start (make sure you pressed Play in the launcher)..."
-        sleep 1
-    done
-
-    if [[ -z "$PID" ]]; then
-        echo "ERROR: Failed to retrieve game process PID." >&2
-        exit 1
+if [[ "${1:-}" == "--start-emulator" ]]; then
+    echo "=== Starting Android Emulator ==="
+    if ! "$ADB" devices | grep -q "emulator"; then
+        echo "Starting Android Emulator: pixel_9_pro..."
+        screen -d -m "$EMULATOR" -avd pixel_9_pro -no-snapshot-load -netdelay none -netspeed full
+        
+        echo "Waiting for emulator to connect to adb..."
+        until "$ADB" devices | grep -q "emulator"; do
+            sleep 1
+        done
     fi
 
-    echo "Game process PID is: $PID"
-    echo "Setting up adb JDWP port forwarding (tcp:5006 -> jdwp:$PID)..."
-    "$ADB" forward tcp:5006 jdwp:"$PID"
-    echo "=== Game Debug Setup Completed Successfully ==="
+    echo "Waiting for emulator to finish booting..."
+    until "$ADB" shell getprop sys.boot_completed 2>/dev/null | grep -q "1"; do
+        sleep 2
+    done
+    echo "Emulator is booted and ready."
     exit 0
 fi
 
@@ -60,15 +45,11 @@ echo "File change detected. Starting incremental compilation..."
 
 echo "=== Preparing Android Debug Session ==="
 
-# 2. Check and Launch Emulator
+# 2. Check Emulator
 if ! "$ADB" devices | grep -q "emulator"; then
-    echo "Starting Android Emulator: pixel_9_pro..."
-    "$EMULATOR" -avd pixel_9_pro -netdelay none -netspeed full > /dev/null 2>&1 &
-    
-    echo "Waiting for emulator to connect to adb..."
-    until "$ADB" devices | grep -q "emulator"; do
-        sleep 1
-    done
+    echo "ERROR: No Android emulator is running or connected to adb." >&2
+    echo "Please start the emulator first using the 'Start Emulator' launch configuration or task." >&2
+    exit 1
 fi
 
 echo "Waiting for emulator to finish booting..."
@@ -78,7 +59,7 @@ done
 echo "Emulator is booted and ready."
 
 # Defensive: clear any wait-for-debugger flag left over from an aborted
-# "Debug Game Process" session, so this ordinary launch can't hang.
+# debug session, so this ordinary launch can't hang.
 "$ADB" shell am clear-debug-app
 
 # 3. Build & Install APK

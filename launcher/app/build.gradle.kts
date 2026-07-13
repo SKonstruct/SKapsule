@@ -42,7 +42,7 @@ val skVersionName: String = System.getenv("SK_VERSION_NAME")
             exec.standardOutput.asText.get().trim().removePrefix("v")
         else null
     }.getOrNull()?.takeIf { it.isNotEmpty() }
-    ?: "1.0.0"
+    ?: "2.1.0"
 
 android {
     namespace = "com.skarm.launcher"
@@ -155,3 +155,14 @@ val stageBootstrapJar by tasks.registering(Copy::class) {
     rename(".*", "sk-bootstrap.jar")
 }
 tasks.named("preBuild") { dependsOn(stageBootstrapJar) }
+
+androidComponents {
+    onVariants { variant ->
+        variant.outputs.forEach { output ->
+            if (variant.name == "release") {
+                val suffix = if (hasReleaseSigning) "" else "-unsigned"
+                output.outputFileName.set("skapsule-v$skVersionName$suffix.apk")
+            }
+        }
+    }
+}

@@ -1,17 +1,27 @@
 package com.skarm.launcher
 
 import android.content.Intent
+import android.content.res.ColorStateList
+import android.graphics.Color
+import android.net.Uri
 import android.os.Bundle
 import android.text.InputType
 import android.util.Log
 import android.view.View
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.ProgressBar
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
+import androidx.core.view.GravityCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.button.MaterialButton
 import com.skarm.launcher.databinding.ActivityLauncherBinding
 import java.io.File
 import kotlinx.coroutines.Dispatchers
@@ -53,10 +63,113 @@ class LauncherActivity : AppCompatActivity() {
         binding = ActivityLauncherBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        binding.btnPlayWeb.setOnClickListener { launchGame(LoginMode.Web) }
-        binding.btnPlaySteam.setOnClickListener { onPlaySteam() }
-        binding.btnShareLogs.setOnClickListener { LogExporter.captureAndShare(this) }
-        binding.btnSaveLogs.setOnClickListener { onSaveLogs() }
+        // Set title version dynamically
+        val ver = try {
+            packageManager.getPackageInfo(packageName, 0).versionName
+        } catch (e: Exception) {
+            "1.0.0"
+        }
+        binding.title.text = "SKapsule v$ver"
+
+        // Open options sidebar
+        binding.btnOptions.setOnClickListener {
+            binding.drawerLayout.openDrawer(GravityCompat.END)
+        }
+
+        // Adjust sidebar padding for safe area (camera cutout, status bar, navigation bar)
+        val originalPaddingTop = binding.sidebarContentLayout.paddingTop
+        val originalPaddingBottom = binding.sidebarContentLayout.paddingBottom
+        val originalPaddingLeft = binding.sidebarContentLayout.paddingLeft
+        val originalPaddingRight = binding.sidebarContentLayout.paddingRight
+
+        ViewCompat.setOnApplyWindowInsetsListener(binding.sidebarContentLayout) { view, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            val cutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
+
+            val topInset = maxOf(systemBars.top, cutout.top)
+            val leftInset = maxOf(systemBars.left, cutout.left)
+            val rightInset = maxOf(systemBars.right, cutout.right)
+            val bottomInset = maxOf(systemBars.bottom, cutout.bottom)
+
+            view.setPadding(
+                originalPaddingLeft + leftInset,
+                originalPaddingTop + topInset,
+                originalPaddingRight + rightInset,
+                originalPaddingBottom + bottomInset
+            )
+            insets
+        }
+
+        // Segmented control listener
+        binding.modeToggleGroup.addOnButtonCheckedListener { group, checkedId, isChecked ->
+            val button = group.findViewById<MaterialButton>(checkedId) ?: return@addOnButtonCheckedListener
+            if (isChecked) {
+                button.textSize = 15f
+                button.setTypeface(null, android.graphics.Typeface.BOLD)
+                button.setBackgroundColor(android.graphics.Color.parseColor("#ab4a81"))
+                button.setTextColor(android.graphics.Color.WHITE)
+                val mode = if (checkedId == R.id.btn_mode_steam) "Steam" else "Web"
+                getSharedPreferences("launcher_prefs", MODE_PRIVATE).edit().putString("login_mode", mode).apply()
+            } else {
+                button.textSize = 13f
+                button.setTypeface(null, android.graphics.Typeface.NORMAL)
+                button.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                button.setTextColor(android.graphics.Color.parseColor("#A0A0A0"))
+            }
+        }
+
+        // Restore saved selection
+        val savedMode = getSharedPreferences("launcher_prefs", MODE_PRIVATE).getString("login_mode", "Web")
+        if (savedMode == "Steam") {
+            binding.modeToggleGroup.check(R.id.btn_mode_steam)
+            binding.btnModeSteam.textSize = 15f
+            binding.btnModeSteam.setTypeface(null, android.graphics.Typeface.BOLD)
+            binding.btnModeSteam.setBackgroundColor(android.graphics.Color.parseColor("#ab4a81"))
+            binding.btnModeSteam.setTextColor(android.graphics.Color.WHITE)
+            binding.btnModeWeb.textSize = 13f
+            binding.btnModeWeb.setTypeface(null, android.graphics.Typeface.NORMAL)
+            binding.btnModeWeb.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+            binding.btnModeWeb.setTextColor(android.graphics.Color.parseColor("#A0A0A0"))
+        } else {
+            binding.modeToggleGroup.check(R.id.btn_mode_web)
+            binding.btnModeWeb.textSize = 15f
+            binding.btnModeWeb.setTypeface(null, android.graphics.Typeface.BOLD)
+            binding.btnModeWeb.setBackgroundColor(android.graphics.Color.parseColor("#ab4a81"))
+            binding.btnModeWeb.setTextColor(android.graphics.Color.WHITE)
+            binding.btnModeSteam.textSize = 13f
+            binding.btnModeSteam.setTypeface(null, android.graphics.Typeface.NORMAL)
+            binding.btnModeSteam.setBackgroundColor(android.graphics.Color.TRANSPARENT)
+            binding.btnModeSteam.setTextColor(android.graphics.Color.parseColor("#A0A0A0"))
+        }
+
+        // Launch Button click
+        binding.btnLaunch.setOnClickListener {
+            val checkedId = binding.modeToggleGroup.checkedButtonId
+            val mode = if (checkedId == R.id.btn_mode_steam) LoginMode.Steam else LoginMode.Web
+            if (mode == LoginMode.Steam) {
+                onPlaySteam()
+            } else {
+                launchGame(LoginMode.Web)
+            }
+        }
+
+        // Sidebar click listeners
+        binding.sidebarBtnShareLogs.setOnClickListener { LogExporter.captureAndShare(this) }
+        binding.sidebarBtnSaveLogs.setOnClickListener { onSaveLogs() }
+        binding.sidebarBtnDownloadMods.setOnClickListener { downloadMods() }
+        binding.sidebarBtnApplyMods.setOnClickListener { applyMods() }
+        binding.sidebarBtnOpenFolder.setOnClickListener { openFolder() }
+        binding.sidebarBtnGithub.setOnClickListener { openUrl("https://github.com/SKonstruct/SKapsule") }
+        binding.sidebarBtnDiscord.setOnClickListener { openUrl("https://dankware.alwaysdata.net/discord") }
+        binding.sidebarBtnLogout.setOnClickListener { onLogout() }
+
+        // Avoid screen edges switch
+        val avoidEdgesSwitch = binding.switchAvoidEdges
+        val launcherPrefs = getSharedPreferences("launcher_prefs", MODE_PRIVATE)
+        avoidEdgesSwitch.isChecked = launcherPrefs.getBoolean("avoid_screen_edges", false)
+        avoidEdgesSwitch.setOnCheckedChangeListener { _, isChecked ->
+            launcherPrefs.edit().putBoolean("avoid_screen_edges", isChecked).apply()
+        }
 
         // If the previous session crashed, the handler auto-saved a dump. Offer to
         // share it right away (once per launch); the button stays available too.
@@ -68,6 +181,7 @@ class LauncherActivity : AppCompatActivity() {
                 .show()
         }
 
+        fetchPlayerCount()
         ensureRuntime()
     }
 
@@ -79,8 +193,63 @@ class LauncherActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         val hasLogs = LogExporter.wasLaunchAttempted(this) || LogExporter.latestCrash(this) != null
-        binding.btnShareLogs.isEnabled = hasLogs
-        binding.btnSaveLogs.isEnabled = hasLogs
+        binding.sidebarBtnShareLogs.isEnabled = hasLogs
+        binding.sidebarBtnSaveLogs.isEnabled = hasLogs
+
+        // Update logout button visibility
+        val showLogout = FrenchpressInstaller.credFile(this).exists()
+        binding.sidebarBtnLogout.visibility = if (showLogout) View.VISIBLE else View.GONE
+        binding.sidebarDividerLogout.visibility = if (showLogout) View.VISIBLE else View.GONE
+    }
+
+    private fun openFolder() {
+        val authority = "${packageName}.documents"
+        try {
+            // Build root URI to open directly in Files app
+            val rootUri = android.provider.DocumentsContract.buildRootUri(authority, filesDir.absolutePath)
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(rootUri, "vnd.android.document/root")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            try {
+                // Fallback: open system file picker pointing to our DocumentsProvider root
+                val fallbackIntent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+                    val rootUri = android.provider.DocumentsContract.buildRootUri(authority, filesDir.absolutePath)
+                    putExtra(android.provider.DocumentsContract.EXTRA_INITIAL_URI, rootUri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                }
+                startActivity(fallbackIntent)
+            } catch (ex: Exception) {
+                Toast.makeText(this, "Could not open folder", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun openUrl(url: String) {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        } catch (e: Exception) {
+            Toast.makeText(this, "No browser found to open link", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun onLogout() {
+        AlertDialog.Builder(this)
+            .setMessage(R.string.logout_confirm_message)
+            .setPositiveButton(R.string.logout_confirm_yes) { _, _ ->
+                val cred = FrenchpressInstaller.credFile(this)
+                if (cred.exists()) {
+                    cred.delete()
+                }
+                binding.sidebarBtnLogout.visibility = View.GONE
+                binding.sidebarDividerLogout.visibility = View.GONE
+                Toast.makeText(this, "Logged out successfully", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     /** Captures a dump, then opens the SAF picker (suggesting its filename) to save it. */
@@ -128,8 +297,8 @@ class LauncherActivity : AppCompatActivity() {
     }
 
     private fun setButtonsEnabled(enabled: Boolean) {
-        binding.btnPlayWeb.isEnabled = enabled
-        binding.btnPlaySteam.isEnabled = enabled
+        binding.btnLaunch.isEnabled = enabled
+        binding.btnLaunch.alpha = if (enabled) 1.0f else 0.5f
     }
 
     /**
@@ -185,6 +354,163 @@ class LauncherActivity : AppCompatActivity() {
                 putExtra(EXTRA_STEAM_PASS, steamPass)
             }
         })
+    }
+
+    private fun fetchPlayerCount() {
+        lifecycleScope.launch {
+            val count = withContext(Dispatchers.IO) {
+                try {
+                    val url = java.net.URL("https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/?appid=99900")
+                    val conn = url.openConnection() as java.net.HttpURLConnection
+                    conn.connectTimeout = 5000
+                    conn.readTimeout = 5000
+                    val text = conn.inputStream.bufferedReader().readText()
+                    conn.disconnect()
+                    val json = org.json.JSONObject(text)
+                    val steam = json.getJSONObject("response").getInt("player_count")
+                    Math.round(steam * 1.4f)
+                } catch (e: Exception) {
+                    -1
+                }
+            }
+            if (count > 0) {
+                binding.subtitle.text = "Fight alongside ~$count other Spiral Knights!"
+            }
+        }
+    }
+
+    private fun downloadMods() {
+        val builder = AlertDialog.Builder(this)
+        val pad = (resources.displayMetrics.density * 20).toInt()
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(pad, pad, pad, pad)
+        }
+        val statusText = TextView(this).apply {
+            text = "Starting download…"
+            setTextColor(Color.WHITE)
+            textSize = 16f
+        }
+        val progressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            isIndeterminate = true
+            progressTintList = ColorStateList.valueOf(Color.parseColor("#ab4a81"))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = (resources.displayMetrics.density * 12).toInt()
+            }
+        }
+        layout.addView(statusText)
+        layout.addView(progressBar)
+
+        builder.setTitle(R.string.mod_sync_title)
+        builder.setView(layout)
+        builder.setCancelable(false)
+        val dialog = builder.create()
+        dialog.show()
+
+        lifecycleScope.launch {
+            try {
+                val modsDir = File(SkInstaller.homeDir(this@LauncherActivity), "mods")
+                val stats = ModsDownloader.sync(modsDir) { status, current, total ->
+                    runOnUiThread {
+                        statusText.text = status
+                        if (total > 0) {
+                            progressBar.isIndeterminate = false
+                            progressBar.max = total
+                            progressBar.progress = current
+                        } else {
+                            progressBar.isIndeterminate = true
+                        }
+                    }
+                }
+                dialog.dismiss()
+                Toast.makeText(
+                    this@LauncherActivity,
+                    "Download complete: ${stats.downloaded} downloaded, ${stats.skipped} skipped, ${stats.deleted} deleted",
+                    Toast.LENGTH_LONG
+                ).show()
+            } catch (e: Exception) {
+                dialog.dismiss()
+                AlertDialog.Builder(this@LauncherActivity)
+                    .setTitle("Download Failed")
+                    .setMessage(e.message ?: "Unknown error")
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+            }
+        }
+    }
+
+    private fun applyMods() {
+        val builder = AlertDialog.Builder(this)
+        val pad = (resources.displayMetrics.density * 20).toInt()
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(pad, pad, pad, pad)
+        }
+        val statusText = TextView(this).apply {
+            text = "Starting apply…"
+            setTextColor(Color.WHITE)
+            textSize = 16f
+        }
+        val progressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            isIndeterminate = true
+            progressTintList = ColorStateList.valueOf(Color.parseColor("#ab4a81"))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = (resources.displayMetrics.density * 12).toInt()
+            }
+        }
+        layout.addView(statusText)
+        layout.addView(progressBar)
+
+        builder.setTitle(R.string.mod_apply_title)
+        builder.setView(layout)
+        builder.setCancelable(false)
+        val dialog = builder.create()
+        dialog.show()
+
+        lifecycleScope.launch {
+            try {
+                val gameHome = SkInstaller.homeDir(this@LauncherActivity)
+                val stats = ModsApplier.apply(gameHome) { status, current, total ->
+                    runOnUiThread {
+                        statusText.text = status
+                        if (total > 0) {
+                            progressBar.isIndeterminate = false
+                            progressBar.max = total
+                            progressBar.progress = current
+                        } else {
+                            progressBar.isIndeterminate = true
+                        }
+                    }
+                }
+                dialog.dismiss()
+                val message = buildString {
+                    append("Applied: ${stats.getTotalModsApplied()} mods (${stats.resourceModsApplied} resource, ${stats.classModsApplied} class, ${stats.modpacksApplied} modpacks).\n")
+                    append("Unpacked ${stats.jarsUnpacked} resources.")
+                    if (stats.warnings.isNotEmpty()) {
+                        append("\n\nWarnings:\n")
+                        stats.warnings.forEach { append("- ").append(it).append("\n") }
+                    }
+                }
+                AlertDialog.Builder(this@LauncherActivity)
+                    .setTitle(R.string.mod_completed)
+                    .setMessage(message.trim())
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+            } catch (e: Exception) {
+                dialog.dismiss()
+                AlertDialog.Builder(this@LauncherActivity)
+                    .setTitle("Apply Failed")
+                    .setMessage(e.message ?: "Unknown error")
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+            }
+        }
     }
 
     enum class LoginMode { Web, Steam }

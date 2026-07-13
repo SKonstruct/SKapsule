@@ -124,16 +124,6 @@ jobs:
           SK_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew :app:assembleRelease
 
-      - name: Rename APKs
-        run: |
-          cd launcher/app/build/outputs/apk/release
-          if [ -f "app-release.apk" ]; then
-            mv app-release.apk skapsule-v${{ steps.version.outputs.VERSION }}.apk
-          fi
-          if [ -f "app-release-unsigned.apk" ]; then
-            mv app-release-unsigned.apk skapsule-v${{ steps.version.outputs.VERSION }}-unsigned.apk
-          fi
-
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:

@@ -2,21 +2,22 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Start Emulator",
+            "type": "node",
+            "request": "launch",
+            "runtimeExecutable": "echo",
+            "runtimeArgs": [
+                "Emulator started successfully"
+            ],
+            "preLaunchTask": "Start Android Emulator"
+        },
+        {
             "name": "Debug App on Emulator",
             "type": "java",
             "request": "attach",
             "hostName": "localhost",
             "port": 5005,
             "preLaunchTask": "Prepare Android Debug Session",
-            "timeout": 30000
-        },
-        {
-            "name": "Debug Game Process",
-            "type": "java",
-            "request": "attach",
-            "hostName": "localhost",
-            "port": 5006,
-            "preLaunchTask": "Prepare Game Debug Session",
             "timeout": 30000
         }
     ]
