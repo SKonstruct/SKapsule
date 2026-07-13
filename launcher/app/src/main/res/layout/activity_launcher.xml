@@ -235,6 +235,20 @@
                 app:iconSize="20dp"
                 app:iconPadding="12dp" />
 
+            <!-- Remove Mods Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/sidebar_btn_remove_mods"
+                style="@style/Widget.Material3.Button.TextButton.Icon"
+                android:layout_width="match_parent"
+                android:layout_height="50dp"
+                android:gravity="start|center_vertical"
+                android:text="@string/sidebar_remove_mods"
+                android:textColor="#FFFFFF"
+                app:icon="@drawable/ic_delete"
+                app:iconTint="#FFFFFF"
+                app:iconSize="20dp"
+                app:iconPadding="12dp" />
+
             <!-- Open Folder Button -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/sidebar_btn_open_folder"

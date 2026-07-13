@@ -158,6 +158,7 @@ class LauncherActivity : AppCompatActivity() {
         binding.sidebarBtnSaveLogs.setOnClickListener { onSaveLogs() }
         binding.sidebarBtnDownloadMods.setOnClickListener { downloadMods() }
         binding.sidebarBtnApplyMods.setOnClickListener { applyMods() }
+        binding.sidebarBtnRemoveMods.setOnClickListener { removeMods() }
         binding.sidebarBtnOpenFolder.setOnClickListener { openFolder() }
         binding.sidebarBtnGithub.setOnClickListener { openUrl("https://github.com/SKonstruct/SKapsule") }
         binding.sidebarBtnDiscord.setOnClickListener { openUrl("https://dankware.alwaysdata.net/discord") }
@@ -508,6 +509,69 @@ class LauncherActivity : AppCompatActivity() {
                 dialog.dismiss()
                 AlertDialog.Builder(this@LauncherActivity)
                     .setTitle("Apply Failed")
+                    .setMessage(e.message ?: "Unknown error")
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+            }
+        }
+    }
+
+    private fun removeMods() {
+        val builder = AlertDialog.Builder(this)
+        val pad = (resources.displayMetrics.density * 20).toInt()
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(pad, pad, pad, pad)
+        }
+        val statusText = TextView(this).apply {
+            text = "Starting remove…"
+            setTextColor(Color.WHITE)
+            textSize = 16f
+        }
+        val progressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            isIndeterminate = true
+            progressTintList = ColorStateList.valueOf(Color.parseColor("#ab4a81"))
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                topMargin = (resources.displayMetrics.density * 12).toInt()
+            }
+        }
+        layout.addView(statusText)
+        layout.addView(progressBar)
+
+        builder.setTitle(R.string.mod_remove_title)
+        builder.setView(layout)
+        builder.setCancelable(false)
+        val dialog = builder.create()
+        dialog.show()
+
+        lifecycleScope.launch {
+            try {
+                val gameHome = SkInstaller.homeDir(this@LauncherActivity)
+                val jarsUnpacked = ModsApplier.remove(gameHome) { status, current, total ->
+                    runOnUiThread {
+                        statusText.text = status
+                        if (total > 0) {
+                            progressBar.isIndeterminate = false
+                            progressBar.max = total
+                            progressBar.progress = current
+                        } else {
+                            progressBar.isIndeterminate = true
+                        }
+                    }
+                }
+                dialog.dismiss()
+                AlertDialog.Builder(this@LauncherActivity)
+                    .setTitle(R.string.mod_completed)
+                    .setMessage(getString(R.string.mod_removed, jarsUnpacked))
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show()
+            } catch (e: Exception) {
+                dialog.dismiss()
+                AlertDialog.Builder(this@LauncherActivity)
+                    .setTitle("Remove Failed")
                     .setMessage(e.message ?: "Unknown error")
                     .setPositiveButton(android.R.string.ok, null)
                     .show()

@@ -50,8 +50,11 @@
     <string name="subtitle_android">Spiral Knights for Android</string>
     <string name="sidebar_download_mods">Download Modpack</string>
     <string name="sidebar_apply_mods">Apply Mods</string>
+    <string name="sidebar_remove_mods">Remove Mods</string>
     <string name="mod_sync_title">Downloading Mods</string>
     <string name="mod_apply_title">Applying Mods</string>
+    <string name="mod_remove_title">Removing Mods</string>
     <string name="mod_completed">Operation completed successfully.</string>
+    <string name="mod_removed">Mods removed successfully!\nUnpacked %1$d resources.</string>
     <string name="mod_failed">Operation failed: %1$s</string>
 </resources>

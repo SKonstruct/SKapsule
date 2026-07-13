@@ -118,7 +118,7 @@ object ModsApplier {
         Log.i(TAG, "Current game version: $gameVersion")
 
         // Step 1: Rebuild resources (unpack jar bundles)
-        onProgress("Rebuilding game resources…", 0, 0)
+        purgeDirectory(rsrcDir)
         stats.jarsUnpacked = rebuildResources(rsrcDir, onProgress)
 
         // Step 2: Mount mods based on their type
@@ -284,8 +284,11 @@ object ModsApplier {
 
     private fun rebuildResources(rsrcDir: File, onProgress: (String, Int, Int) -> Unit): Int {
         val jarFiles = rsrcDir.listFiles { _, name -> name.endsWith(".jar") } ?: return 0
+        val total = jarFiles.size
         var unpacked = 0
-        jarFiles.forEach { jarFile ->
+        jarFiles.forEachIndexed { index, jarFile ->
+            val current = index + 1
+            onProgress("Extracting resource [$current/$total]: ${jarFile.name}", current, total)
             Log.i(TAG, "Unpacking jar bundle: ${jarFile.name}")
             try {
                 extractZipToDirectory(jarFile, rsrcDir, false)
@@ -295,6 +298,31 @@ object ModsApplier {
             }
         }
         return unpacked
+    }
+
+    suspend fun remove(
+        gameHome: File,
+        onProgress: (status: String, current: Int, total: Int) -> Unit,
+    ): Int = withContext(Dispatchers.IO) {
+        val rsrcDir = File(gameHome, "rsrc")
+        if (!rsrcDir.exists()) {
+            throw IOException("Game not installed. Please launch the game first.")
+        }
+        purgeDirectory(rsrcDir)
+        rebuildResources(rsrcDir, onProgress)
+    }
+
+    private fun purgeDirectory(dir: File) {
+        dir.listFiles()?.forEach { file ->
+            if (file.name.endsWith(".jar") || file.name.endsWith(".zip") || file.name.endsWith(".jarv")) {
+                return@forEach
+            }
+            if (file.isDirectory) {
+                deleteDirectory(file)
+            } else {
+                file.delete()
+            }
+        }
     }
 
     private fun extractZipToDirectory(zipFile: File, targetDir: File, checkProtected: Boolean) {
