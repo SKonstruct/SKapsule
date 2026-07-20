@@ -101,8 +101,12 @@ class LauncherActivity : AppCompatActivity() {
         }
 
         // Segmented control listener
-        binding.modeToggleGroup.addOnButtonCheckedListener { group, checkedId, isChecked ->
-            val button = group.findViewById<MaterialButton>(checkedId) ?: return@addOnButtonCheckedListener
+        binding.modeToggleGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            val button = when (checkedId) {
+                R.id.btn_mode_steam -> binding.btnModeSteam
+                R.id.btn_mode_web -> binding.btnModeWeb
+                else -> return@addOnButtonCheckedListener
+            }
             if (isChecked) {
                 button.textSize = 15f
                 button.setTypeface(null, android.graphics.Typeface.BOLD)
