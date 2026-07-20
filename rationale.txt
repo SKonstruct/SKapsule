@@ -1,0 +1,3 @@
+Rationale for Performance Improvement:
+Calling `getSharedPreferences` multiple times requires the Android context to look up the preference file name, check its internal cache (a synchronized map), and return the SharedPreferences instance. While Android caches this instance, looking it up multiple times still incurs map lookups, string hash code calculations, and synchronization overhead.
+By caching the `SharedPreferences` instance in a local variable `launcherPrefs` at the start of `onCreate`, we bypass this redundant work, improving the initialization speed of `LauncherActivity` and the execution speed of the UI listeners (like `addOnButtonCheckedListener`).
