@@ -44,7 +44,7 @@ val skVersionName: String = System.getenv("SK_VERSION_NAME")
             null
         }
     }.getOrNull()?.takeIf { it.isNotEmpty() }
-    ?: "2.1.0"
+    ?: "2.1.1"
 
 android {
     namespace = "com.skarm.launcher"

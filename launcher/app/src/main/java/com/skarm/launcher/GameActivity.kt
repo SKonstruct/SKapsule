@@ -28,11 +28,13 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.core.view.doOnLayout
 import com.skarm.launcher.databinding.ActivityGameBinding
 import java.io.File
 import java.io.IOException
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 /**
  * In-game host. Owns the SurfaceView that the EGL/GLES2 context will be
@@ -65,6 +67,65 @@ class GameActivity :
     // user out to the browser. See openUrl()/shouldOpenNow().
     private var pendingUrl: String? = null
     private var pendingAtMs: Long = 0L
+
+    // Render-scale (resolution slider) state. The framebuffer is decoupled from the
+    // SurfaceView via holder.setFixedSize; the compositor upscales the smaller buffer
+    // so the HUD/UI grows. fullSurface* is the native (unscaled) surface size, captured
+    // from the first surfaceChanged before any fixed size is applied; currentBuffer* is
+    // the size the buffer is actually running at (== the values pushed to native).
+    private var renderScale = 1.0f
+    private var fullSurfaceWidth = 0
+    private var fullSurfaceHeight = 0
+    private var currentBufferWidth = 0
+    private var currentBufferHeight = 0
+    private var fixedSizeApplied = false
+
+    // Drag-to-reposition for the chrome buttons (gear/keyboard), active only while
+    // the touch overlay is in Edit Layout mode. A press that stays put is treated as
+    // a normal tap; a press that moves past the slop repositions and persists.
+    private val chromeDragListener = object : View.OnTouchListener {
+        private var downRawX = 0f
+        private var downRawY = 0f
+        private var startX = 0f
+        private var startY = 0f
+        private var moved = false
+
+        @SuppressLint("ClickableViewAccessibility")
+        override fun onTouch(v: View, event: MotionEvent): Boolean {
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    downRawX = event.rawX
+                    downRawY = event.rawY
+                    startX = v.x
+                    startY = v.y
+                    moved = false
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = event.rawX - downRawX
+                    val dy = event.rawY - downRawY
+                    if (!moved && (abs(dx) > CHROME_DRAG_SLOP || abs(dy) > CHROME_DRAG_SLOP)) moved = true
+                    if (moved) {
+                        val parent = v.parent as View
+                        v.x = (startX + dx).coerceIn(0f, (parent.width - v.width).toFloat())
+                        v.y = (startY + dy).coerceIn(0f, (parent.height - v.height).toFloat())
+                    }
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (moved) {
+                        saveChromePosition(v)
+                    } else {
+                        // Below the slop: it was a tap, so run the button's action.
+                        when (v.id) {
+                            binding.btnEditLayout.id -> binding.touchOverlay.toggleEditMode()
+                            binding.btnKeyboard.id -> toggleSoftKeyboard()
+                        }
+                    }
+                }
+                MotionEvent.ACTION_CANCEL -> if (moved) saveChromePosition(v)
+            }
+            return true
+        }
+    }
 
     private lateinit var inputManager: InputManager
     private val deviceListener = object : InputManager.InputDeviceListener {
@@ -144,6 +205,17 @@ class GameActivity :
         binding.btnKeyboard.setOnClickListener { toggleSoftKeyboard() }
         binding.btnEditLayout.setOnClickListener { binding.touchOverlay.toggleEditMode() }
 
+        // Resolution slider: apply the persisted scale on launch, and re-apply live.
+        renderScale = binding.touchOverlay.currentRenderScale()
+        binding.touchOverlay.renderScaleChangeListener = { scale ->
+            renderScale = scale
+            applyRenderScale()
+        }
+
+        // Let the gear/keyboard buttons be dragged while Edit Layout mode is active.
+        binding.touchOverlay.editModeChangeListener = { editing -> setChromeEditMode(editing) }
+        binding.root.doOnLayout { applyChromePositions() }
+
         binding.touchOverlay.opacityChangeListener = { opacity ->
             val minOpacity = 0.2f
             val finalOpacity = Math.max(opacity, minOpacity)
@@ -187,7 +259,10 @@ class GameActivity :
      */
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) enableImmersiveMode()
+        if (hasFocus) {
+            enableImmersiveMode()
+            applyChromePositions()
+        }
     }
 
     /**
@@ -203,8 +278,9 @@ class GameActivity :
      * Routes touches on the game surface to the native input queue as plain
      * mouse events (UI/cursor navigation; gameplay movement is the gamepad's
      * job). Only the primary pointer is tracked — SK's UI is a single cursor.
-     * MotionEvent coords are in the SurfaceView's pixel space, which equals the
-     * EGL framebuffer, so they pass through unscaled.
+     * MotionEvent coords are in the SurfaceView's pixel space; when the resolution
+     * slider shrinks the framebuffer (holder.setFixedSize) that no longer equals the
+     * buffer, so scale view pixels to buffer pixels before pushing.
      */
     @SuppressLint("ClickableViewAccessibility")
     private fun wireTouchInput() {
@@ -212,8 +288,18 @@ class GameActivity :
         // the custom touch controls to intercept first. The overlay will pass unhandled
         // touches to this listener on the SurfaceView.
         surface.setOnTouchListener { _, event ->
-            val x = event.x.toInt()
-            val y = event.y.toInt()
+            val sx = if (surface.width > 0 && currentBufferWidth > 0) {
+                currentBufferWidth.toFloat() / surface.width
+            } else {
+                1f
+            }
+            val sy = if (surface.height > 0 && currentBufferHeight > 0) {
+                currentBufferHeight.toFloat() / surface.height
+            } else {
+                1f
+            }
+            val x = (event.x * sx).toInt()
+            val y = (event.y * sy).toInt()
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> NativeBridge.onTouchEvent(TOUCH_DOWN, x, y)
                 MotionEvent.ACTION_MOVE -> NativeBridge.onTouchEvent(TOUCH_MOVE, x, y)
@@ -377,6 +463,47 @@ class GameActivity :
         }
     }
 
+    // --- Chrome button (gear/keyboard) repositioning ---
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun setChromeEditMode(editing: Boolean) {
+        val listener = if (editing) chromeDragListener else null
+        binding.btnEditLayout.setOnTouchListener(listener)
+        binding.btnKeyboard.setOnTouchListener(listener)
+    }
+
+    private fun saveChromePosition(v: View) {
+        val parent = v.parent as View
+        if (parent.width == 0 || parent.height == 0) return
+        val key = chromeKey(v) ?: return
+        getSharedPreferences(CHROME_PREFS, MODE_PRIVATE).edit()
+            .putFloat("${key}_x", v.x / parent.width)
+            .putFloat("${key}_y", v.y / parent.height)
+            .apply()
+    }
+
+    private fun applyChromePositions() {
+        positionChrome(binding.btnEditLayout, DEFAULT_GEAR_X, DEFAULT_GEAR_Y)
+        positionChrome(binding.btnKeyboard, DEFAULT_KB_X, DEFAULT_KB_Y)
+    }
+
+    private fun positionChrome(v: View, defaultX: Float, defaultY: Float) {
+        val parent = v.parent as? View ?: return
+        if (parent.width == 0 || parent.height == 0 || v.width == 0) return
+        val key = chromeKey(v) ?: return
+        val prefs = getSharedPreferences(CHROME_PREFS, MODE_PRIVATE)
+        val fx = prefs.getFloat("${key}_x", defaultX)
+        val fy = prefs.getFloat("${key}_y", defaultY)
+        v.x = (fx * parent.width).coerceIn(0f, (parent.width - v.width).toFloat())
+        v.y = (fy * parent.height).coerceIn(0f, (parent.height - v.height).toFloat())
+    }
+
+    private fun chromeKey(v: View): String? = when (v.id) {
+        binding.btnEditLayout.id -> "gear"
+        binding.btnKeyboard.id -> "kb"
+        else -> null
+    }
+
     /**
      * Wires up the xdg-open shim so SK's News/wiki/forum links reach the system
      * browser. SK is a desktop game and execs "xdg-open <url>", which Android
@@ -468,6 +595,14 @@ class GameActivity :
     }
 
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
+        // The first report (and any before a fixed size is applied) is the native,
+        // unscaled surface size — the baseline the render scale multiplies.
+        if (!fixedSizeApplied) {
+            fullSurfaceWidth = width
+            fullSurfaceHeight = height
+        }
+        currentBufferWidth = width
+        currentBufferHeight = height
         NativeBridge.onSurfaceChanged(width, height)
         if (!jvmKicked) {
             jvmKicked = true
@@ -538,6 +673,24 @@ class GameActivity :
                 screenHeight = sh,
             )
         }
+        // Apply the persisted (or last-set) render scale now that the baseline size
+        // is known. No-ops when already at the target size, so it won't loop on the
+        // surfaceChanged that setFixedSize itself triggers.
+        applyRenderScale()
+    }
+
+    /**
+     * Decouples the framebuffer from the SurfaceView so the game renders at
+     * [renderScale] × the native size and the compositor upscales it — the HUD/UI
+     * grows without a game restart. A scale of 1.0 restores the native buffer.
+     */
+    private fun applyRenderScale() {
+        if (fullSurfaceWidth == 0 || fullSurfaceHeight == 0) return
+        val targetW = max(1, (fullSurfaceWidth * renderScale).roundToInt())
+        val targetH = max(1, (fullSurfaceHeight * renderScale).roundToInt())
+        if (targetW == currentBufferWidth && targetH == currentBufferHeight) return
+        fixedSizeApplied = true
+        surface.holder.setFixedSize(targetW, targetH)
     }
 
     override fun surfaceDestroyed(holder: SurfaceHolder) {
@@ -688,6 +841,19 @@ class GameActivity :
         // How long the "tap again to open" confirmation stays armed, roughly the
         // lifetime of the Toast prompt.
         const val URL_CONFIRM_WINDOW_MS = 3000L
+
+        // Repositionable chrome-button positions (fractions of the surface),
+        // persisted per button. Defaults sit top-right, clear of SK's top-center
+        // "My Auctions" button that the gear used to cover.
+        private const val CHROME_PREFS = "game_chrome_prefs"
+        private const val DEFAULT_GEAR_X = 0.72f
+        private const val DEFAULT_GEAR_Y = 0.03f
+        private const val DEFAULT_KB_X = 0.84f
+        private const val DEFAULT_KB_Y = 0.03f
+
+        // Movement past this many pixels turns a chrome-button press into a drag
+        // rather than a tap.
+        private const val CHROME_DRAG_SLOP = 20f
 
         // Mirrors the action codes in NativeBridge.onTouchEvent / sklauncher.c
         const val TOUCH_DOWN = 0

@@ -98,6 +98,32 @@ class TouchControlOverlay @JvmOverloads constructor(
             }
             addView(opacitySlider)
 
+            // Resolution (render scale): lower = the game renders fewer pixels and
+            // the display upscales, making the HUD/UI physically larger and easier
+            // to touch on high-DPI screens. 0 -> 0.5x, 100 -> 1.0x.
+            val resolutionLabel = TextView(context).apply {
+                text = "Resolution"
+                setTextColor(Color.WHITE)
+            }
+            addView(resolutionLabel)
+            val resolutionSlider = SeekBar(context).apply {
+                max = 100
+                tag = "resolutionSlider"
+                progress = renderScaleToProgress(layoutData.renderScale)
+                setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                        // Track the value live, but defer the (surface-rebuilding)
+                        // apply to release so a drag doesn't thrash the EGL surface.
+                        layoutData.renderScale = progressToRenderScale(progress)
+                    }
+                    override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+                    override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                        renderScaleChangeListener?.invoke(layoutData.renderScale)
+                    }
+                })
+            }
+            addView(resolutionSlider)
+
             // Reset Layout (double-tap gated so a stray tap doesn't wipe work)
             val resetButton = Button(context).apply {
                 text = RESET_LABEL
@@ -234,6 +260,16 @@ class TouchControlOverlay @JvmOverloads constructor(
 
     var opacityChangeListener: ((Float) -> Unit)? = null
 
+    // Notified with the chosen render scale (0.5..1.0) when the resolution slider
+    // moves; the host Activity applies it to the game surface.
+    var renderScaleChangeListener: ((Float) -> Unit)? = null
+
+    // Notified whenever edit mode is entered/exited so the host can toggle
+    // drag-to-reposition on the static chrome buttons (gear/keyboard).
+    var editModeChangeListener: ((Boolean) -> Unit)? = null
+
+    fun currentRenderScale(): Float = layoutData.renderScale
+
     override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {
         super.onLayout(changed, left, top, right, bottom)
 
@@ -281,6 +317,7 @@ class TouchControlOverlay @JvmOverloads constructor(
 
         applyControlAppearance()
         updateEditorPanel()
+        editModeChangeListener?.invoke(inEditMode)
     }
 
     private fun handleResetTap(button: Button) {
@@ -308,6 +345,9 @@ class TouchControlOverlay @JvmOverloads constructor(
         editorPanel.findViewWithTag<Switch>("enableSwitch")?.isChecked = layoutData.controlsEnabled
         editorPanel.findViewWithTag<SeekBar>("opacitySlider")?.progress =
             (layoutData.globalOpacity * 100).toInt()
+        editorPanel.findViewWithTag<SeekBar>("resolutionSlider")?.progress =
+            renderScaleToProgress(layoutData.renderScale)
+        renderScaleChangeListener?.invoke(layoutData.renderScale)
 
         editorPanel.bringToFront()
     }
@@ -433,5 +473,14 @@ class TouchControlOverlay @JvmOverloads constructor(
 
         // Hidden controls are shown faintly in edit mode so they can be re-enabled.
         private const val EDIT_HIDDEN_OPACITY = 0.3f
+
+        // Resolution slider spans render scale MIN_RENDER_SCALE..1.0 across its 0..100 range.
+        private val MIN_RENDER_SCALE = TouchControlManager.MIN_RENDER_SCALE
+
+        private fun progressToRenderScale(progress: Int): Float =
+            MIN_RENDER_SCALE + (progress / 100f) * (1f - MIN_RENDER_SCALE)
+
+        private fun renderScaleToProgress(scale: Float): Int =
+            (((scale - MIN_RENDER_SCALE) / (1f - MIN_RENDER_SCALE)) * 100f).toInt().coerceIn(0, 100)
     }
 }

@@ -21,6 +21,8 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.progressindicator.CircularProgressIndicatorSpec
+import com.google.android.material.progressindicator.IndeterminateDrawable
 import com.skarm.launcher.databinding.ActivityLauncherBinding
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -193,6 +195,7 @@ class LauncherActivity : AppCompatActivity() {
      */
     override fun onResume() {
         super.onResume()
+        setLaunchButtonLoading(false)
         val hasLogs = LogExporter.wasLaunchAttempted(this) || LogExporter.latestCrash(this) != null
         binding.sidebarBtnShareLogs.isEnabled = hasLogs
         binding.sidebarBtnSaveLogs.isEnabled = hasLogs
@@ -343,11 +346,34 @@ class LauncherActivity : AppCompatActivity() {
                 // Empty username => web account; frenchpress treats it as such.
                 launchGame(LoginMode.Steam, user, pass)
             }
-            .setNegativeButton(android.R.string.cancel, null)
+            .setNegativeButton(android.R.string.cancel) { _, _ ->
+                setLaunchButtonLoading(false)
+            }
             .show()
     }
 
+    private fun setLaunchButtonLoading(loading: Boolean) {
+        if (loading) {
+            val spec = CircularProgressIndicatorSpec(this, null).apply {
+                indicatorColors = intArrayOf(Color.WHITE)
+                trackThickness = (3 * resources.displayMetrics.density).toInt()
+                indicatorSize = (20 * resources.displayMetrics.density).toInt()
+            }
+            val progressDrawable = IndeterminateDrawable.createCircularDrawable(this, spec)
+            binding.btnLaunch.icon = progressDrawable
+            binding.btnLaunch.iconTint = ColorStateList.valueOf(Color.WHITE)
+            binding.btnLaunch.text = "Launching..."
+            binding.btnLaunch.setTextColor(Color.WHITE)
+        } else {
+            binding.btnLaunch.icon = androidx.core.content.ContextCompat.getDrawable(this, android.R.drawable.ic_media_play)
+            binding.btnLaunch.iconTint = ColorStateList.valueOf(Color.WHITE)
+            binding.btnLaunch.text = getString(R.string.launch)
+            binding.btnLaunch.setTextColor(Color.WHITE)
+        }
+    }
+
     private fun launchGame(mode: LoginMode, steamUser: String = "", steamPass: String = "") {
+        setLaunchButtonLoading(true)
         startActivity(
             Intent(this, GameActivity::class.java).apply {
                 putExtra(EXTRA_LOGIN_MODE, mode.name)

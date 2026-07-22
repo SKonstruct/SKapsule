@@ -27,12 +27,18 @@ data class ControlNode(
     /** True for the Strafe button */
     val isToggle: Boolean = false,
     val label: String = "",
+    /** GLFW keycode this button taps (e.g. 256 = ESC); -1 = not a key button */
+    val keyCode: Int = -1,
 )
 
 @Keep
 data class TouchLayoutData(
     var globalOpacity: Float = 0.5f,
     var controlsEnabled: Boolean = true,
+    /** Render-scale multiplier for the game framebuffer, 0.5..1.0. Lower = the
+     *  game renders fewer pixels and the display upscales, so the HUD/UI grows.
+     *  Defaults to the minimum so the HUD starts at its largest / most touchable. */
+    var renderScale: Float = TouchControlManager.MIN_RENDER_SCALE,
     val nodes: MutableList<ControlNode> = mutableListOf(),
 )
 
@@ -45,6 +51,14 @@ object TouchControlManager {
     // Axis codes for triggers, mapped to GameActivity constants
     const val AXIS_LTRIGGER = 4
     const val AXIS_RTRIGGER = 5
+
+    // GLFW keycodes emitted by key buttons (see ControlNode.keyCode).
+    const val KEY_ESCAPE = 256
+
+    // Render-scale (resolution slider) bounds. Default is the minimum, for the
+    // largest / most touchable HUD.
+    const val MIN_RENDER_SCALE = 0.5f
+    const val MAX_RENDER_SCALE = 1.0f
 
     // Button codes from GameActivity
     const val GP_BTN_A = 0
@@ -72,7 +86,12 @@ object TouchControlManager {
         }
 
         return try {
-            gson.fromJson(jsonStr, TouchLayoutData::class.java) ?: createDefaultLayout()
+            val data = gson.fromJson(jsonStr, TouchLayoutData::class.java) ?: createDefaultLayout()
+            // Gson zero-fills fields missing from layouts saved before renderScale
+            // existed, which would give a 0 scale (a 1x1 framebuffer). Clamp to the
+            // valid range so old saves stay renderable.
+            data.renderScale = data.renderScale.coerceIn(MIN_RENDER_SCALE, MAX_RENDER_SCALE)
+            data
         } catch (e: Exception) {
             e.printStackTrace()
             createDefaultLayout()
@@ -94,8 +113,13 @@ object TouchControlManager {
         // Left Joystick (Move)
         layout.nodes.add(ControlNode("joy_move", ControlType.JOYSTICK_LEFT, 0.15f, 0.7f))
 
-        // Right Joystick (Face) - Tap to Primary Attack handled in Joystick implementation
+        // Right Joystick (Face) - hold to charge / aim, tap to Primary Attack;
+        // handled in the Joystick implementation.
         layout.nodes.add(ControlNode("joy_face", ControlType.JOYSTICK_RIGHT, 0.85f, 0.7f))
+
+        // Escape - taps the ESC key (opens/closes SK menus). Top-left by default,
+        // clear of the joysticks and the top chrome buttons.
+        layout.nodes.add(ControlNode("btn_esc", ControlType.BUTTON, 0.06f, 0.10f, keyCode = KEY_ESCAPE, label = "ESC"))
 
         // Strafe (R3) - toggle button offset to the lower right of Movement Circle pad.
         // Kept above the bottom Ability/Item row (y=0.9) so they don't overlap.

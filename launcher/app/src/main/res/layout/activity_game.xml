@@ -17,38 +17,32 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <LinearLayout
-        android:id="@+id/top_button_bar"
+    <!-- Chrome buttons. Positioned programmatically (GameActivity.applyChromePositions)
+         and draggable to reposition while Edit Layout mode is active, so the gear can be
+         moved off SK's "My Auctions" button. Exit is handled by Android Back. -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_edit_layout"
+        style="@style/Widget.Material3.Button.UnelevatedButton"
+        app:cornerRadius="12dp"
+        app:backgroundTint="#202020"
+        android:textColor="#FFFFFF"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="top|center_horizontal"
-        android:orientation="horizontal"
-        android:layout_margin="12dp">
+        android:layout_gravity="top|start"
+        android:alpha="0.55"
+        android:text="⚙" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_edit_layout"
-            style="@style/Widget.Material3.Button.UnelevatedButton"
-            app:cornerRadius="12dp"
-            app:backgroundTint="#202020"
-            android:textColor="#FFFFFF"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="8dp"
-            android:alpha="0.55"
-            android:text="⚙" />
-
-        <!-- Exit is handled by Android Back (-> exit-confirm dialog). -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btn_keyboard"
-            style="@style/Widget.Material3.Button.UnelevatedButton"
-            app:cornerRadius="12dp"
-            app:backgroundTint="#202020"
-            android:textColor="#FFFFFF"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:alpha="0.55"
-            android:text="@string/keyboard" />
-    </LinearLayout>
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_keyboard"
+        style="@style/Widget.Material3.Button.UnelevatedButton"
+        app:cornerRadius="12dp"
+        app:backgroundTint="#202020"
+        android:textColor="#FFFFFF"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:alpha="0.55"
+        android:text="@string/keyboard" />
 
     <!-- Invisible focusable view that hosts the soft-keyboard InputConnection and
          forwards typed input to SK (the SurfaceView can't host an IME). -->

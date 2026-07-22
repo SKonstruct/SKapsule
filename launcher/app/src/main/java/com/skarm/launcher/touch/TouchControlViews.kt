@@ -74,10 +74,6 @@ class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(
     private val axisX = if (node.type == ControlType.JOYSTICK_LEFT) GameActivity.GP_AXIS_LEFT_X else GameActivity.GP_AXIS_RIGHT_X
     private val axisY = if (node.type == ControlType.JOYSTICK_LEFT) GameActivity.GP_AXIS_LEFT_Y else GameActivity.GP_AXIS_RIGHT_Y
 
-    private var tapStartTime = 0L
-    private var lastTapTime = 0L
-    private var isHoldingAttack = false
-
     // Holding previous aim direction briefly on release
     private var releaseAimTask: Runnable? = null
     private var lastReportedX = 0f
@@ -134,12 +130,11 @@ class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(
                         releaseAimTask?.let { removeCallbacks(it) }
 
                         if (node.type == ControlType.JOYSTICK_RIGHT) {
-                            val now = System.currentTimeMillis()
-                            if (now - lastTapTime < 250) {
-                                isHoldingAttack = true
-                                NativeBridge.onGamepadAxis(TouchControlManager.AXIS_RTRIGGER, 1f)
-                            }
-                            tapStartTime = now
+                            // Charge starts on the first press: hold the right trigger
+                            // while the stick is held (SK charges while RT = +1) and aim
+                            // with the stick. A quick tap-and-release is just a short RT
+                            // press, i.e. a basic primary attack.
+                            NativeBridge.onGamepadAxis(TouchControlManager.AXIS_RTRIGGER, 1f)
                         }
 
                         updateKnob(x, y)
@@ -161,17 +156,8 @@ class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(
                     resetKnob()
 
                     if (node.type == ControlType.JOYSTICK_RIGHT) {
-                        if (isHoldingAttack) {
-                            isHoldingAttack = false
-                            NativeBridge.onGamepadAxis(TouchControlManager.AXIS_RTRIGGER, -1f)
-                        } else if ((System.currentTimeMillis() - tapStartTime) < 200) {
-                            // Simulate right trigger tap for Primary Attack
-                            NativeBridge.onGamepadAxis(TouchControlManager.AXIS_RTRIGGER, 1f)
-                            postDelayed({ NativeBridge.onGamepadAxis(TouchControlManager.AXIS_RTRIGGER, -1f) }, 50)
-                            lastTapTime = System.currentTimeMillis()
-                        } else {
-                            lastTapTime = 0L // Was a drag, don't trigger double tap
-                        }
+                        // Release the charge (or end the tap-attack) on lift.
+                        NativeBridge.onGamepadAxis(TouchControlManager.AXIS_RTRIGGER, -1f)
                     }
                 }
             }
@@ -298,11 +284,10 @@ class TouchButtonView(context: Context, node: ControlNode) : BaseTouchControl(co
     }
 
     private fun reportInput(pressed: Boolean) {
-        if (node.isAxisTrigger) {
-            val v = if (pressed) 1f else -1f
-            NativeBridge.onGamepadAxis(node.buttonCode, v)
-        } else {
-            NativeBridge.onGamepadButton(node.buttonCode, pressed)
+        when {
+            node.keyCode >= 0 -> NativeBridge.onKeyEvent(node.keyCode, if (pressed) 1 else 0, 0)
+            node.isAxisTrigger -> NativeBridge.onGamepadAxis(node.buttonCode, if (pressed) 1f else -1f)
+            else -> NativeBridge.onGamepadButton(node.buttonCode, pressed)
         }
     }
 }

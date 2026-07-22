@@ -215,7 +215,13 @@ static bool egl_bring_up(void) {
     if (gfx.surface == EGL_NO_SURFACE) {
         EGLint native_visual_id = 0;
         eglGetConfigAttrib(gfx.display, gfx.config, EGL_NATIVE_VISUAL_ID, &native_visual_id);
-        ANativeWindow_setBuffersGeometry(gfx.window, 0, 0, native_visual_id);
+        // Size the buffer explicitly to the render size (== what SK is told via
+        // glfw_get_surface_size) so the resolution slider's smaller buffer is honored
+        // and the compositor upscales it to the view. Passing 0,0 would reset to the
+        // window's default (full view size) and defeat the slider. Falls back to the
+        // window default only if we somehow have no size yet.
+        ANativeWindow_setBuffersGeometry(gfx.window, gfx.width > 0 ? gfx.width : 0,
+                                         gfx.height > 0 ? gfx.height : 0, native_visual_id);
 
         gfx.surface = eglCreateWindowSurface(gfx.display, gfx.config, gfx.window, NULL);
         if (gfx.surface == EGL_NO_SURFACE) {
@@ -270,6 +276,21 @@ static void egl_release_surface(void) {
         gfx.window = NULL;
     }
     gfx.width = gfx.height = 0;
+    pthread_mutex_unlock(&egl_lock);
+}
+
+// Drops just the EGL window surface, keeping the ANativeWindow and EGLContext, so
+// egl_bring_up() can rebuild a surface at the window's new buffer geometry. Used for
+// the resolution slider (SurfaceHolder.setFixedSize): the buffer shrinks but the
+// existing EGLSurface would keep the old size, so SK's smaller viewport renders into
+// a corner of the old surface. The render thread rebinds the fresh surface via the
+// same surface_dirty path as a background/resume.
+static void egl_release_surface_keep_window(void) {
+    pthread_mutex_lock(&egl_lock);
+    if (gfx.display != EGL_NO_DISPLAY && gfx.surface != EGL_NO_SURFACE) {
+        eglDestroySurface(gfx.display, gfx.surface);
+    }
+    gfx.surface = EGL_NO_SURFACE;
     pthread_mutex_unlock(&egl_lock);
 }
 
@@ -341,6 +362,8 @@ static const char *const BENIGN_NOISE[] = {
     "terminally deprecated method in sun.misc.Unsafe",
     "CTCPreloadAgent",
     "SLF4J",                                        // slf4j-api (via frenchpress/ktor) no-provider warning, NOPs
+    "s_glBindAttribLocation: bind attrib",          // Android emulator's GLES encoder traces every attrib bind
+                                                    // to stderr; emulator-only, never emitted on real devices
 };
 
 static bool line_is_benign(const char *line) {
@@ -1142,8 +1165,16 @@ JNIEXPORT void JNICALL
 Java_com_skarm_launcher_NativeBridge_onSurfaceChanged(JNIEnv *env, jobject thiz,
                                                      jint width, jint height) {
     LOGI("onSurfaceChanged %dx%d", width, height);
+    bool size_changed = (width != gfx.width || height != gfx.height);
     gfx.width = width;
     gfx.height = height;
+
+    // A live buffer-size change (resolution slider -> setFixedSize) must rebuild the
+    // EGL surface so it matches the new geometry; otherwise SK renders its resized
+    // viewport into the stale, larger surface and the frame lands in a corner.
+    if (size_changed && gfx.surface != EGL_NO_SURFACE) {
+        egl_release_surface_keep_window();
+    }
 
     if (!egl_bring_up()) return;
 }
