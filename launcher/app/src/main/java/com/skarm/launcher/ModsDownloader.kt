@@ -3,9 +3,11 @@ package com.skarm.launcher
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
+import com.google.gson.stream.JsonReader
+import com.google.gson.stream.JsonToken
 import java.io.File
 import java.io.IOException
+import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
@@ -94,17 +96,35 @@ object ModsDownloader {
             if (conn.responseCode != HttpURLConnection.HTTP_OK) {
                 throw IOException("GitHub API returned HTTP ${conn.responseCode}")
             }
-            val responseText = conn.inputStream.bufferedReader().readText()
-            val filesArray = JSONArray(responseText)
             val mods = mutableListOf<ModFile>()
-            for (i in 0 until filesArray.length()) {
-                val fileObj = filesArray.getJSONObject(i)
-                if (fileObj.getString("type") == "file") {
-                    val name = fileObj.getString("name")
-                    val downloadUrl = fileObj.getString("download_url")
-                    val sha = fileObj.optString("sha", "")
-                    mods.add(ModFile(name, downloadUrl, sha))
+            JsonReader(InputStreamReader(conn.inputStream, Charsets.UTF_8)).use { reader ->
+                reader.beginArray()
+                while (reader.hasNext()) {
+                    reader.beginObject()
+                    var type = ""
+                    var name = ""
+                    var downloadUrl = ""
+                    var sha = ""
+                    while (reader.hasNext()) {
+                        val key = reader.nextName()
+                        if (reader.peek() == JsonToken.NULL) {
+                            reader.nextNull()
+                            continue
+                        }
+                        when (key) {
+                            "type" -> type = reader.nextString()
+                            "name" -> name = reader.nextString()
+                            "download_url" -> downloadUrl = reader.nextString()
+                            "sha" -> sha = reader.nextString()
+                            else -> reader.skipValue()
+                        }
+                    }
+                    reader.endObject()
+                    if (type == "file") {
+                        mods.add(ModFile(name, downloadUrl, sha))
+                    }
                 }
+                reader.endArray()
             }
             return mods
         } finally {
