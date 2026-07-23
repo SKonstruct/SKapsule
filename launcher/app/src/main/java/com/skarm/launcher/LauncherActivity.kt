@@ -408,7 +408,12 @@ class LauncherActivity : AppCompatActivity() {
         }
     }
 
-    private fun downloadMods() {
+    private class ProgressDialogInfo(
+        val dialog: AlertDialog,
+        val updateProgress: (String, Int, Int) -> Unit
+    )
+
+    private fun showProgressDialog(titleRes: Int, initialText: String): ProgressDialogInfo {
         val builder = AlertDialog.Builder(this)
         val pad = (resources.displayMetrics.density * 20).toInt()
         val layout = LinearLayout(this).apply {
@@ -416,7 +421,7 @@ class LauncherActivity : AppCompatActivity() {
             setPadding(pad, pad, pad, pad)
         }
         val statusText = TextView(this).apply {
-            text = "Starting download…"
+            text = initialText
             setTextColor(Color.WHITE)
             textSize = 16f
         }
@@ -433,35 +438,43 @@ class LauncherActivity : AppCompatActivity() {
         layout.addView(statusText)
         layout.addView(progressBar)
 
-        builder.setTitle(R.string.mod_sync_title)
+        builder.setTitle(titleRes)
         builder.setView(layout)
         builder.setCancelable(false)
         val dialog = builder.create()
         dialog.show()
 
+        val updateProgress: (String, Int, Int) -> Unit = { status, current, total ->
+            runOnUiThread {
+                statusText.text = status
+                if (total > 0) {
+                    progressBar.isIndeterminate = false
+                    progressBar.max = total
+                    progressBar.progress = current
+                } else {
+                    progressBar.isIndeterminate = true
+                }
+            }
+        }
+
+        return ProgressDialogInfo(dialog, updateProgress)
+    }
+
+    private fun downloadMods() {
+        val progressInfo = showProgressDialog(R.string.mod_sync_title, "Starting download…")
+
         lifecycleScope.launch {
             try {
                 val modsDir = File(SkInstaller.homeDir(this@LauncherActivity), "mods")
-                val stats = ModsDownloader.sync(modsDir) { status, current, total ->
-                    runOnUiThread {
-                        statusText.text = status
-                        if (total > 0) {
-                            progressBar.isIndeterminate = false
-                            progressBar.max = total
-                            progressBar.progress = current
-                        } else {
-                            progressBar.isIndeterminate = true
-                        }
-                    }
-                }
-                dialog.dismiss()
+                val stats = ModsDownloader.sync(modsDir, progressInfo.updateProgress)
+                progressInfo.dialog.dismiss()
                 Toast.makeText(
                     this@LauncherActivity,
                     "Download complete: ${stats.downloaded} downloaded, ${stats.skipped} skipped, ${stats.deleted} deleted",
                     Toast.LENGTH_LONG,
                 ).show()
             } catch (e: Exception) {
-                dialog.dismiss()
+                progressInfo.dialog.dismiss()
                 AlertDialog.Builder(this@LauncherActivity)
                     .setTitle("Download Failed")
                     .setMessage(e.message ?: "Unknown error")
@@ -472,52 +485,13 @@ class LauncherActivity : AppCompatActivity() {
     }
 
     private fun applyMods() {
-        val builder = AlertDialog.Builder(this)
-        val pad = (resources.displayMetrics.density * 20).toInt()
-        val layout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(pad, pad, pad, pad)
-        }
-        val statusText = TextView(this).apply {
-            text = "Starting apply…"
-            setTextColor(Color.WHITE)
-            textSize = 16f
-        }
-        val progressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
-            isIndeterminate = true
-            progressTintList = ColorStateList.valueOf(Color.parseColor("#ab4a81"))
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-            ).apply {
-                topMargin = (resources.displayMetrics.density * 12).toInt()
-            }
-        }
-        layout.addView(statusText)
-        layout.addView(progressBar)
-
-        builder.setTitle(R.string.mod_apply_title)
-        builder.setView(layout)
-        builder.setCancelable(false)
-        val dialog = builder.create()
-        dialog.show()
+        val progressInfo = showProgressDialog(R.string.mod_apply_title, "Starting apply…")
 
         lifecycleScope.launch {
             try {
                 val gameHome = SkInstaller.homeDir(this@LauncherActivity)
-                val stats = ModsApplier.apply(gameHome) { status, current, total ->
-                    runOnUiThread {
-                        statusText.text = status
-                        if (total > 0) {
-                            progressBar.isIndeterminate = false
-                            progressBar.max = total
-                            progressBar.progress = current
-                        } else {
-                            progressBar.isIndeterminate = true
-                        }
-                    }
-                }
-                dialog.dismiss()
+                val stats = ModsApplier.apply(gameHome, progressInfo.updateProgress)
+                progressInfo.dialog.dismiss()
                 val message = buildString {
                     append("Applied: ${stats.getTotalModsApplied()} mods (${stats.resourceModsApplied} resource, ${stats.classModsApplied} class, ${stats.modpacksApplied} modpacks).\n")
                     append("Unpacked ${stats.jarsUnpacked} resources.")
@@ -532,7 +506,7 @@ class LauncherActivity : AppCompatActivity() {
                     .setPositiveButton(android.R.string.ok, null)
                     .show()
             } catch (e: Exception) {
-                dialog.dismiss()
+                progressInfo.dialog.dismiss()
                 AlertDialog.Builder(this@LauncherActivity)
                     .setTitle("Apply Failed")
                     .setMessage(e.message ?: "Unknown error")
@@ -543,59 +517,20 @@ class LauncherActivity : AppCompatActivity() {
     }
 
     private fun removeMods() {
-        val builder = AlertDialog.Builder(this)
-        val pad = (resources.displayMetrics.density * 20).toInt()
-        val layout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(pad, pad, pad, pad)
-        }
-        val statusText = TextView(this).apply {
-            text = "Starting remove…"
-            setTextColor(Color.WHITE)
-            textSize = 16f
-        }
-        val progressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
-            isIndeterminate = true
-            progressTintList = ColorStateList.valueOf(Color.parseColor("#ab4a81"))
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-            ).apply {
-                topMargin = (resources.displayMetrics.density * 12).toInt()
-            }
-        }
-        layout.addView(statusText)
-        layout.addView(progressBar)
-
-        builder.setTitle(R.string.mod_remove_title)
-        builder.setView(layout)
-        builder.setCancelable(false)
-        val dialog = builder.create()
-        dialog.show()
+        val progressInfo = showProgressDialog(R.string.mod_remove_title, "Starting remove…")
 
         lifecycleScope.launch {
             try {
                 val gameHome = SkInstaller.homeDir(this@LauncherActivity)
-                val jarsUnpacked = ModsApplier.remove(gameHome) { status, current, total ->
-                    runOnUiThread {
-                        statusText.text = status
-                        if (total > 0) {
-                            progressBar.isIndeterminate = false
-                            progressBar.max = total
-                            progressBar.progress = current
-                        } else {
-                            progressBar.isIndeterminate = true
-                        }
-                    }
-                }
-                dialog.dismiss()
+                val jarsUnpacked = ModsApplier.remove(gameHome, progressInfo.updateProgress)
+                progressInfo.dialog.dismiss()
                 AlertDialog.Builder(this@LauncherActivity)
                     .setTitle(R.string.mod_completed)
                     .setMessage(getString(R.string.mod_removed, jarsUnpacked))
                     .setPositiveButton(android.R.string.ok, null)
                     .show()
             } catch (e: Exception) {
-                dialog.dismiss()
+                progressInfo.dialog.dismiss()
                 AlertDialog.Builder(this@LauncherActivity)
                     .setTitle("Remove Failed")
                     .setMessage(e.message ?: "Unknown error")
