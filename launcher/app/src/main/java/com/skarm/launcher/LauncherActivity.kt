@@ -190,6 +190,7 @@ class LauncherActivity : AppCompatActivity() {
         }
 
         fetchPlayerCount()
+        checkForUpdate()
         ensureRuntime()
     }
 
@@ -411,6 +412,76 @@ class LauncherActivity : AppCompatActivity() {
                 binding.subtitle.text = "Fight alongside ~$count other Spiral Knights!"
             }
         }
+    }
+
+    private fun checkForUpdate() {
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                try {
+                    val url = java.net.URL("https://api.github.com/repos/SKonstruct/SKapsule/releases/latest")
+                    val conn = (url.openConnection() as java.net.HttpURLConnection).apply {
+                        setRequestProperty("Accept", "application/vnd.github+json")
+                        setRequestProperty("User-Agent", "SKapsule-Android")
+                        connectTimeout = 10_000
+                        readTimeout = 10_000
+                    }
+                    if (conn.responseCode != 200) return@withContext null
+                    val text = conn.inputStream.bufferedReader().readText()
+                    conn.disconnect()
+                    val json = org.json.JSONObject(text)
+                    val tagName = json.optString("tag_name") ?: return@withContext null
+                    val htmlUrl = json.optString("html_url") ?: return@withContext null
+                    val remoteVer = if (tagName.startsWith("v")) tagName.substring(1) else tagName
+                    Pair(remoteVer, htmlUrl)
+                } catch (e: Exception) {
+                    null
+                }
+            } ?: return@launch
+
+            val (remoteVer, htmlUrl) = result
+            val localVer = try {
+                packageManager.getPackageInfo(packageName, 0).versionName ?: "0.0.0"
+            } catch (e: Exception) {
+                "0.0.0"
+            }
+
+            val cmp = compareVersions(localVer, remoteVer)
+            when {
+                cmp < 0 -> showUpdateBanner(remoteVer, htmlUrl)
+                cmp > 0 -> showDevBuildIndicator(localVer, remoteVer)
+            }
+        }
+    }
+
+    private fun compareVersions(a: String, b: String): Int {
+        val aParts = a.split(".").mapNotNull { it.toIntOrNull() }
+        val bParts = b.split(".").mapNotNull { it.toIntOrNull() }
+        val maxLen = maxOf(aParts.size, bParts.size)
+        for (i in 0 until maxLen) {
+            val av = aParts.getOrElse(i) { 0 }
+            val bv = bParts.getOrElse(i) { 0 }
+            if (av < bv) return -1
+            if (av > bv) return 1
+        }
+        return 0
+    }
+
+    private fun showUpdateBanner(version: String, htmlUrl: String) {
+        binding.updateTitle.text = "Update available — v$version"
+        binding.updateBanner.setOnClickListener { openUrl(htmlUrl) }
+        binding.updateBanner.visibility = View.VISIBLE
+        binding.updateBanner.alpha = 0f
+        binding.updateBanner.translationY = -20f
+        binding.updateBanner.animate()
+            .alpha(1f)
+            .translationY(0f)
+            .setDuration(400)
+            .start()
+    }
+
+    private fun showDevBuildIndicator(localVer: String, remoteVer: String) {
+        binding.title.text = "SKapsule v$localVer-dev"
+        binding.title.setTextColor(Color.parseColor("#F2BF3A"))
     }
 
     private class ProgressDialogInfo(
