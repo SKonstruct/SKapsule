@@ -102,6 +102,8 @@ class LauncherActivity : AppCompatActivity() {
             insets
         }
 
+        val launcherPrefs = getSharedPreferences("launcher_prefs", MODE_PRIVATE)
+
         // Segmented control listener
         binding.modeToggleGroup.addOnButtonCheckedListener { group, checkedId, isChecked ->
             val button = group.findViewById<MaterialButton>(checkedId) ?: return@addOnButtonCheckedListener
@@ -111,7 +113,7 @@ class LauncherActivity : AppCompatActivity() {
                 button.setBackgroundColor(android.graphics.Color.parseColor("#ab4a81"))
                 button.setTextColor(android.graphics.Color.WHITE)
                 val mode = if (checkedId == R.id.btn_mode_steam) "Steam" else "Web"
-                getSharedPreferences("launcher_prefs", MODE_PRIVATE).edit().putString("login_mode", mode).apply()
+                launcherPrefs.edit().putString("login_mode", mode).apply()
             } else {
                 button.textSize = 13f
                 button.setTypeface(null, android.graphics.Typeface.NORMAL)
@@ -121,7 +123,7 @@ class LauncherActivity : AppCompatActivity() {
         }
 
         // Restore saved selection
-        val savedMode = getSharedPreferences("launcher_prefs", MODE_PRIVATE).getString("login_mode", "Web")
+        val savedMode = launcherPrefs.getString("login_mode", "Web")
         if (savedMode == "Steam") {
             binding.modeToggleGroup.check(R.id.btn_mode_steam)
             binding.btnModeSteam.textSize = 15f
@@ -168,7 +170,6 @@ class LauncherActivity : AppCompatActivity() {
 
         // Avoid screen edges switch
         val avoidEdgesSwitch = binding.switchAvoidEdges
-        val launcherPrefs = getSharedPreferences("launcher_prefs", MODE_PRIVATE)
         avoidEdgesSwitch.isChecked = launcherPrefs.getBoolean("avoid_screen_edges", false)
         avoidEdgesSwitch.setOnCheckedChangeListener { _, isChecked ->
             launcherPrefs.edit().putBoolean("avoid_screen_edges", isChecked).apply()
