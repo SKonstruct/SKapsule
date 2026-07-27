@@ -233,6 +233,7 @@ object ModsApplier {
                     ?.substring("version = ".length)?.trim()
             }
         } catch (e: Exception) {
+            Log.w(TAG, "Failed to read game version from getdown.txt", e)
             null
         }
     }
