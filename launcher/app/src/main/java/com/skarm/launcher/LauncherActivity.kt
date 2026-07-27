@@ -405,6 +405,7 @@ class LauncherActivity : AppCompatActivity() {
                     val steam = json.getJSONObject("response").getInt("player_count")
                     Math.round(steam * 1.4f)
                 } catch (e: Exception) {
+                    Log.w(TAG, "Failed to fetch player count", e)
                     -1
                 }
             }
