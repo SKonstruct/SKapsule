@@ -363,8 +363,12 @@ class TouchControlOverlay @JvmOverloads constructor(
                 if (view.visibility == View.VISIBLE && isPointInsideView(event.x, event.y, view)) {
                     val viewEvent = MotionEvent.obtain(event)
                     viewEvent.offsetLocation(-view.left.toFloat(), -view.top.toFloat())
-                    handled = view.dispatchTouchEvent(viewEvent) || handled
+                    val viewHandled = view.dispatchTouchEvent(viewEvent)
+                    handled = viewHandled || handled
                     viewEvent.recycle()
+                    if (viewHandled) {
+                        break
+                    }
                 }
             }
             return handled
