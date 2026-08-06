@@ -542,6 +542,7 @@ class GameActivity :
                 val client = try {
                     server.accept()
                 } catch (e: IOException) {
+                    Log.w(TAG, "url server closed or accept failed", e)
                     break
                 }
                 try {
