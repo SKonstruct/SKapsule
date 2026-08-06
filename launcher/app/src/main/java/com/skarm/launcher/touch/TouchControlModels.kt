@@ -1,6 +1,7 @@
 package com.skarm.launcher.touch
 
 import android.content.Context
+import android.util.Log
 import androidx.annotation.Keep
 import com.google.gson.Gson
 
@@ -43,6 +44,7 @@ data class TouchLayoutData(
 )
 
 object TouchControlManager {
+    private const val TAG = "TouchControlManager"
     private const val PREFS_NAME = "touch_controls_prefs"
     private const val KEY_LAYOUT_DATA = "layout_data"
 
@@ -93,7 +95,7 @@ object TouchControlManager {
             data.renderScale = data.renderScale.coerceIn(MIN_RENDER_SCALE, MAX_RENDER_SCALE)
             data
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Failed to parse touch layout data", e)
             createDefaultLayout()
         }
     }
