@@ -248,15 +248,14 @@ object ModsApplier {
                     if (name == "mod.json" || name.endsWith("/mod.json")) {
                         val content = zis.bufferedReader().readText()
                         val json = JSONObject(content)
-                        val modObj = if (json.has("mod")) json.getJSONObject("mod") else json
+                        val modObj = json.optJSONObject("mod") ?: json
 
-                        metadata.name = if (modObj.has("name")) modObj.getString("name") else modFile.name
-                        metadata.type = if (modObj.has("type")) modObj.getString("type") else null
-                        metadata.pxVersion = if (modObj.has("pxVersion")) modObj.getString("pxVersion") else null
+                        metadata.name = modObj.optString("name", modFile.name)
+                        metadata.type = modObj.optString("type", null)
+                        metadata.pxVersion = modObj.optString("pxVersion", null)
 
-                        if (modObj.has("locale")) {
+                        modObj.optJSONObject("locale")?.let { localeObj ->
                             val localeMap = mutableMapOf<String, Map<String, String>>()
-                            val localeObj = modObj.getJSONObject("locale")
                             localeObj.keys().forEach { bundle ->
                                 val bundleObj = localeObj.getJSONObject(bundle)
                                 val changesMap = mutableMapOf<String, String>()

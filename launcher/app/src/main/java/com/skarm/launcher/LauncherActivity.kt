@@ -20,7 +20,6 @@ import androidx.core.view.GravityCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
-import com.google.android.material.button.MaterialButton
 import com.google.android.material.progressindicator.CircularProgressIndicatorSpec
 import com.google.android.material.progressindicator.IndeterminateDrawable
 import com.skarm.launcher.databinding.ActivityLauncherBinding
@@ -486,7 +485,7 @@ class LauncherActivity : AppCompatActivity() {
 
     private class ProgressDialogInfo(
         val dialog: AlertDialog,
-        val updateProgress: (String, Int, Int) -> Unit
+        val updateProgress: (String, Int, Int) -> Unit,
     )
 
     private fun showProgressDialog(titleRes: Int, initialText: String): ProgressDialogInfo {

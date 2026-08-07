@@ -1,10 +1,10 @@
 package com.skarm.launcher
 
 import android.util.Log
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import com.google.gson.stream.JsonReader
 import com.google.gson.stream.JsonToken
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
 import java.io.InputStreamReader
