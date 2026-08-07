@@ -102,6 +102,10 @@ android {
         }
     }
 
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -149,6 +153,8 @@ dependencies {
     implementation("org.apache.commons:commons-compress:1.27.1")
     implementation("org.tukaani:xz:1.9")
     implementation("com.google.code.gson:gson:2.10.1")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20231013")
 }
 
 val stageBootstrapJar by tasks.registering(Copy::class) {
