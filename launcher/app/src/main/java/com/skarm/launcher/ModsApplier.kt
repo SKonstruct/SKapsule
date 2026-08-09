@@ -13,6 +13,7 @@ import java.util.jar.JarEntry
 import java.util.jar.JarInputStream
 import java.util.jar.JarOutputStream
 import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
 import java.util.zip.ZipInputStream
 
 object ModsApplier {
@@ -241,12 +242,11 @@ object ModsApplier {
     private fun parseModMetadata(modFile: File): ModMetadata {
         val metadata = ModMetadata(name = modFile.name)
         try {
-            ZipInputStream(FileInputStream(modFile)).use { zis ->
-                var entry: ZipEntry?
-                while (zis.nextEntry.also { entry = it } != null) {
-                    val name = entry!!.name
-                    if (name == "mod.json" || name.endsWith("/mod.json")) {
-                        val content = zis.bufferedReader().readText()
+            ZipFile(modFile).use { zipFile ->
+                val entry = zipFile.getEntry("mod.json") ?: zipFile.entries().asSequence().find { it.name.endsWith("/mod.json") }
+                if (entry != null) {
+                    zipFile.getInputStream(entry).use { inputStream ->
+                        val content = inputStream.bufferedReader().readText()
                         val json = JSONObject(content)
                         val modObj = json.optJSONObject("mod") ?: json
 
@@ -266,9 +266,7 @@ object ModsApplier {
                             }
                             metadata.locale = localeMap
                         }
-                        break
                     }
-                    zis.closeEntry()
                 }
             }
         } catch (e: Exception) {
