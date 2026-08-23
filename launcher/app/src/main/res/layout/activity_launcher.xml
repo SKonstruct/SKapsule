@@ -242,20 +242,6 @@
                 app:iconSize="20dp"
                 app:iconPadding="12dp" />
 
-            <!-- Save Logs Button -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/sidebar_btn_save_logs"
-                style="@style/Widget.Material3.Button.TextButton.Icon"
-                android:layout_width="match_parent"
-                android:layout_height="50dp"
-                android:gravity="start|center_vertical"
-                android:text="@string/sidebar_save_logs"
-                android:textColor="#FFFFFF"
-                app:icon="@drawable/ic_save"
-                app:iconTint="#FFFFFF"
-                app:iconSize="20dp"
-                app:iconPadding="12dp" />
-
             <!-- Download Modpack Button -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/sidebar_btn_download_mods"
@@ -370,6 +356,69 @@
                 android:layout_marginTop="8dp"
                 android:layout_marginBottom="16dp" />
 
+            <!-- Java heap cap -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:padding="6dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="8dp"
+                    android:text="@string/pref_max_ram"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_ram_minus"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="34dp"
+                    android:layout_height="30dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:padding="0dp"
+                    android:text="@string/ram_decrease"
+                    android:textColor="#FFFFFF" />
+
+                <TextView
+                    android:id="@+id/text_ram_value"
+                    android:layout_width="64dp"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"
+                    tools:text="768 MB" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_ram_plus"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="34dp"
+                    android:layout_height="30dp"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp"
+                    android:padding="0dp"
+                    android:text="@string/ram_increase"
+                    android:textColor="#FFFFFF" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/text_ram_free"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:paddingBottom="8dp"
+                android:textColor="#AAAAAA"
+                android:textSize="12sp"
+                tools:text="2901 MB free of 7681 MB" />
             <!-- Avoid Screen Edges Option -->
             <LinearLayout
                 android:layout_width="match_parent"
@@ -391,6 +440,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content" />
             </LinearLayout>
+
 
         </LinearLayout>
     </ScrollView>

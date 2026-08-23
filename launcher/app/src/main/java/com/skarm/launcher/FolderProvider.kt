@@ -84,6 +84,9 @@ class FolderProvider : DocumentsProvider() {
 
     override fun deleteDocument(documentId: String) {
         val file = getFileForDocId(documentId)
+        if (file.canonicalPath == baseDir.canonicalPath) {
+            throw FileNotFoundException("Refusing to delete the provider root")
+        }
         if (file.isDirectory) {
             file.deleteRecursively()
         } else {
@@ -110,6 +113,14 @@ class FolderProvider : DocumentsProvider() {
 
     private fun getFileForDocId(docId: String): File {
         val file = File(docId)
+        // Document ids are absolute paths. The provider is MANAGE_DOCUMENTS-gated so only
+        // the system picker can reach it, but keep every id inside our own files dir so a
+        // crafted id can never name a path outside the app's storage.
+        val root = baseDir.canonicalPath
+        val path = file.canonicalPath
+        if (path != root && !path.startsWith(root + File.separator)) {
+            throw FileNotFoundException("Document is outside the provider root: $docId")
+        }
         if (!file.exists()) throw FileNotFoundException("File not found: $docId")
         return file
     }

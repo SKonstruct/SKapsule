@@ -348,7 +348,7 @@ object ModsApplier {
                     continue
                 }
 
-                val destFile = File(targetDir, entryName)
+                val destFile = safeDestination(targetDir, entryName) ?: continue
                 destFile.parentFile?.mkdirs()
                 FileOutputStream(destFile).use { fos ->
                     var len: Int
@@ -390,6 +390,24 @@ object ModsApplier {
         }
     }
 
+    /**
+     * Resolves an archive entry against the extraction root, or null if it escapes it.
+     *
+     * Entry names are attacker-controlled — mod archives come from a third-party GitHub
+     * repo — and nothing in the zip format stops one being "../../../shared_prefs/x.xml".
+     */
+    private fun safeDestination(targetDir: File, entryName: String): File? {
+        val dest = File(targetDir, entryName)
+        val rootPath = targetDir.canonicalPath
+        val destPath = dest.canonicalPath
+        // Compare against root + separator so a sibling sharing the prefix can't pass.
+        if (destPath != rootPath && !destPath.startsWith(rootPath + File.separator)) {
+            Log.w(TAG, "Rejected entry escaping the extraction root: $entryName")
+            return null
+        }
+        return dest
+    }
+
     private fun extractJarWithoutOverwrite(jarFile: File, targetDir: File) {
         val buffer = ByteArray(8192)
         JarInputStream(FileInputStream(jarFile)).use { jis ->
@@ -397,10 +415,10 @@ object ModsApplier {
             while (jis.nextJarEntry.also { entry = it } != null) {
                 val e = entry!!
                 if (e.isDirectory) {
-                    File(targetDir, e.name).mkdirs()
+                    (safeDestination(targetDir, e.name) ?: continue).mkdirs()
                     continue
                 }
-                val destFile = File(targetDir, e.name)
+                val destFile = safeDestination(targetDir, e.name) ?: continue
                 if (!destFile.exists()) {
                     destFile.parentFile?.mkdirs()
                     FileOutputStream(destFile).use { fos ->

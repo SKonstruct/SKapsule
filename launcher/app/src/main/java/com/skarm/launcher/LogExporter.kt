@@ -83,21 +83,6 @@ object LogExporter {
         )
     }
 
-    /**
-     * Copies a captured [file] into a user-chosen [dest] (a content:// URI from
-     * the Storage Access Framework's CreateDocument picker). The system owns the
-     * write, so no storage permission is needed. Returns true on success.
-     */
-    fun copyToUri(context: Context, file: File, dest: Uri): Boolean = try {
-        context.contentResolver.openOutputStream(dest)?.use { sink ->
-            file.inputStream().use { it.copyTo(sink) }
-        } ?: error("openOutputStream returned null for $dest")
-        true
-    } catch (t: Throwable) {
-        Log.e(TAG, "save-to-document failed", t)
-        false
-    }
-
     /** Capture + share in one step, toasting if there's nothing to send. */
     fun captureAndShare(context: Context) {
         val file = capture(context)

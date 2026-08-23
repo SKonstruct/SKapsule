@@ -149,20 +149,30 @@ class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(
                     }
                 }
             }
-            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP, MotionEvent.ACTION_CANCEL -> {
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
                 if (isDragging && event.getPointerId(pointerIndex) == pointerId) {
-                    isDragging = false
-                    pointerId = -1
-                    resetKnob()
-
-                    if (node.type == ControlType.JOYSTICK_RIGHT) {
-                        // Release the charge (or end the tap-attack) on lift.
-                        NativeBridge.onGamepadAxis(TouchControlManager.AXIS_RTRIGGER, -1f)
-                    }
+                    release()
                 }
+            }
+            // A cancel (system gesture, layout rebuild, edit mode) carries no meaningful
+            // pointer, so release unconditionally rather than matching the id — otherwise
+            // the drag and the right-trigger charge stay asserted for good.
+            MotionEvent.ACTION_CANCEL -> {
+                if (isDragging) release()
             }
         }
         return isDragging
+    }
+
+    private fun release() {
+        isDragging = false
+        pointerId = -1
+        resetKnob()
+
+        if (node.type == ControlType.JOYSTICK_RIGHT) {
+            // Release the charge (or end the tap-attack) on lift.
+            NativeBridge.onGamepadAxis(TouchControlManager.AXIS_RTRIGGER, -1f)
+        }
     }
 
     private fun updateKnob(x: Float, y: Float) {
@@ -170,6 +180,7 @@ class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(
         val centerY = height / 2f
         val radius = min(width, height) / 2f
         val maxDist = radius * 0.6f
+        if (maxDist <= 0f) return  // degenerate bounds would push NaN into the axis
 
         val dx = x - centerX
         val dy = y - centerY

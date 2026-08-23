@@ -30,12 +30,18 @@ data class ControlNode(
     val label: String = "",
     /** GLFW keycode this button taps (e.g. 256 = ESC); -1 = not a key button */
     val keyCode: Int = -1,
-)
+) {
+    /** Part of the bottom action row (attacks + items), which has its own show/hide
+     *  switch. Derived from the id rather than persisted, so layouts saved by older
+     *  builds pick it up too. */
+    val isActionBar: Boolean get() = id.startsWith("btn_ab") || id.startsWith("btn_item")
+}
 
 @Keep
 data class TouchLayoutData(
     var globalOpacity: Float = 0.5f,
     var controlsEnabled: Boolean = true,
+    var actionBarVisible: Boolean = true,
     /** Render-scale multiplier for the game framebuffer, 0.5..1.0. Lower = the
      *  game renders fewer pixels and the display upscales, so the HUD/UI grows.
      *  Defaults to the minimum so the HUD starts at its largest / most touchable. */
@@ -79,6 +85,13 @@ object TouchControlManager {
     const val GP_BTN_DPAD_DOWN = 13
     const val GP_BTN_DPAD_LEFT = 14
 
+    /** Action-row labels, keyed by node id. Applied on load so layouts saved by older
+     *  builds show 1-7 instead of the old A1/I1 naming. */
+    private val ACTION_BAR_LABELS = mapOf(
+        "btn_ab1" to "1", "btn_ab2" to "2", "btn_ab3" to "3",
+        "btn_item1" to "4", "btn_item2" to "5", "btn_item3" to "6", "btn_item4" to "7",
+    )
+
     fun loadLayout(context: Context): TouchLayoutData {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val jsonStr = prefs.getString(KEY_LAYOUT_DATA, null)
@@ -93,6 +106,13 @@ object TouchControlManager {
             // existed, which would give a 0 scale (a 1x1 framebuffer). Clamp to the
             // valid range so old saves stay renderable.
             data.renderScale = data.renderScale.coerceIn(MIN_RENDER_SCALE, MAX_RENDER_SCALE)
+            data.nodes.replaceAll { node ->
+                // Gson zero-fills a `scale` missing from layouts saved before it existed,
+                // which lays the control out at zero size. Same guard as renderScale.
+                if (node.scale <= 0f) node.scale = 1.0f
+                node.scale = node.scale.coerceIn(0.5f, 2.5f)
+                ACTION_BAR_LABELS[node.id]?.let { node.copy(label = it) } ?: node
+            }
             data
         } catch (e: Exception) {
             Log.e(TAG, "Failed to parse touch layout data", e)
@@ -147,17 +167,19 @@ object TouchControlManager {
         // joystick (right edge ~0.22) and facing joystick (left edge ~0.78).
         val gap = 0.07f
         val bottomY = 0.9f
-        // Center the row around 0.5: first button = 0.5 - gap * (count-1)/2
-        val centerStartX = 0.5f - gap * 3f
+        // Extra space before button 4, separating attacks from items.
+        val itemGap = 0.03f
+        // Center the whole row around 0.5, itemGap included.
+        val centerStartX = 0.5f - (gap * 6f + itemGap) / 2f
 
-        layout.nodes.add(ControlNode("btn_ab1", ControlType.BUTTON, centerStartX + gap * 0, bottomY, buttonCode = GP_BTN_A, label = "A1"))
-        layout.nodes.add(ControlNode("btn_ab2", ControlType.BUTTON, centerStartX + gap * 1, bottomY, buttonCode = GP_BTN_B, label = "A2"))
-        layout.nodes.add(ControlNode("btn_ab3", ControlType.BUTTON, centerStartX + gap * 2, bottomY, buttonCode = GP_BTN_X, label = "A3"))
+        layout.nodes.add(ControlNode("btn_ab1", ControlType.BUTTON, centerStartX + gap * 0, bottomY, buttonCode = GP_BTN_A, label = "1"))
+        layout.nodes.add(ControlNode("btn_ab2", ControlType.BUTTON, centerStartX + gap * 1, bottomY, buttonCode = GP_BTN_B, label = "2"))
+        layout.nodes.add(ControlNode("btn_ab3", ControlType.BUTTON, centerStartX + gap * 2, bottomY, buttonCode = GP_BTN_X, label = "3"))
 
-        layout.nodes.add(ControlNode("btn_item1", ControlType.BUTTON, centerStartX + gap * 3, bottomY, buttonCode = GP_BTN_DPAD_UP, label = "I1"))
-        layout.nodes.add(ControlNode("btn_item2", ControlType.BUTTON, centerStartX + gap * 4, bottomY, buttonCode = GP_BTN_DPAD_RIGHT, label = "I2"))
-        layout.nodes.add(ControlNode("btn_item3", ControlType.BUTTON, centerStartX + gap * 5, bottomY, buttonCode = GP_BTN_DPAD_DOWN, label = "I3"))
-        layout.nodes.add(ControlNode("btn_item4", ControlType.BUTTON, centerStartX + gap * 6, bottomY, buttonCode = GP_BTN_DPAD_LEFT, label = "I4"))
+        layout.nodes.add(ControlNode("btn_item1", ControlType.BUTTON, centerStartX + gap * 3 + itemGap, bottomY, buttonCode = GP_BTN_DPAD_UP, label = "4"))
+        layout.nodes.add(ControlNode("btn_item2", ControlType.BUTTON, centerStartX + gap * 4 + itemGap, bottomY, buttonCode = GP_BTN_DPAD_RIGHT, label = "5"))
+        layout.nodes.add(ControlNode("btn_item3", ControlType.BUTTON, centerStartX + gap * 5 + itemGap, bottomY, buttonCode = GP_BTN_DPAD_DOWN, label = "6"))
+        layout.nodes.add(ControlNode("btn_item4", ControlType.BUTTON, centerStartX + gap * 6 + itemGap, bottomY, buttonCode = GP_BTN_DPAD_LEFT, label = "7"))
 
         return layout
     }

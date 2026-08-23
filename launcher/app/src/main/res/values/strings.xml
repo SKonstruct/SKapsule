@@ -32,14 +32,10 @@
     <string name="steam_login_channel_name">Steam sign-in</string>
     <string name="steam_login_notif_title">Signing in to Steam</string>
     <string name="steam_login_notif_text">Keeping SKapsule running while you approve the sign-in. You can switch to the Steam Mobile App.</string>
-    <string name="save_logs">Save logs</string>
-    <string name="save_logs_saved">Log saved.</string>
-    <string name="save_logs_failed">Couldn\'t save the log.</string>
     <string name="launch">Launch</string>
     <string name="mode_web">Web</string>
     <string name="mode_steam">Steam</string>
     <string name="sidebar_share_logs">Share Logs</string>
-    <string name="sidebar_save_logs">Save Logs</string>
     <string name="sidebar_open_folder">Open Folder</string>
     <string name="sidebar_github">GitHub</string>
     <string name="sidebar_discord">Discord</string>
@@ -47,6 +43,11 @@
     <string name="logout_confirm_message">Sign out of Steam? Your saved session will be cleared.</string>
     <string name="logout_confirm_yes">Sign out</string>
     <string name="pref_avoid_edges">Avoid screen edges</string>
+    <string name="pref_max_ram">Max RAM</string>
+    <string name="ram_decrease">\u2212</string>
+    <string name="ram_increase">+</string>
+    <string name="ram_value">%1$d MB</string>
+    <string name="ram_free">%1$d MB free of %2$d MB</string>
     <string name="subtitle_android">Spiral Knights for Android</string>
     <string name="sidebar_download_mods">Download Modpack</string>
     <string name="sidebar_apply_mods">Apply Mods</string>
@@ -57,4 +58,5 @@
     <string name="mod_completed">Operation completed successfully.</string>
     <string name="mod_removed">Mods removed successfully!\nUnpacked %1$d resources.</string>
     <string name="mod_failed">Operation failed: %1$s</string>
+    <string name="update_downloading">Updating SKapsule</string>
 </resources>

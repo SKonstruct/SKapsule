@@ -73,6 +73,7 @@ static struct {
     char bin_dir[1024];          // prepended to PATH so SK's Runtime.exec finds our xdg-open shim
     int initial_screen_width;
     int initial_screen_height;
+    int max_heap_mb;             // -Xmx, from the launcher's RAM setting; 0 = JVM default
 } jvm = { .started = ATOMIC_VAR_INIT(false) };
 
 // --- input event ring buffer --------------------------------------------------
@@ -404,6 +405,8 @@ static void *stdio_pump(void *arg) {
             }
         }
     }
+    close(p->read_fd);
+    free(p);
     return NULL;
 }
 
@@ -771,6 +774,15 @@ static void *jvm_thread_main(void *arg) {
         } \
     } while (0)
 
+    // Heap: the launcher's RAM setting. Without it the JVM sizes off total device RAM,
+    // which on a phone commits far more than SK's ~300MB live set ever needs.
+    char opt_xmx[32] = {0};
+    if (jvm.max_heap_mb > 0) {
+        snprintf(opt_xmx, sizeof opt_xmx, "-Xmx%dM", jvm.max_heap_mb);
+        ADD_OPT("-Xms128M");
+        ADD_OPT(opt_xmx);
+    }
+
     ADD_OPT(opt_home);
     ADD_OPT(opt_libpath);
     ADD_OPT(opt_classpath);
@@ -987,7 +999,7 @@ static void start_jvm_thread_once(const char *jre_home, const char *classpath,
                                   const char *cacio_dir, const char *frenchpress_jar,
                                   const char *cred_file, const char *steam_user,
                                   const char *steam_pass, const char *bin_dir,
-                                  int screen_width, int screen_height) {
+                                  int screen_width, int screen_height, int max_heap_mb) {
     bool expected = false;
     if (!atomic_compare_exchange_strong(&jvm.started, &expected, true)) {
         LOGW("JVM thread already started");
@@ -1005,6 +1017,7 @@ static void start_jvm_thread_once(const char *jre_home, const char *classpath,
     copy_arg(jvm.bin_dir,    sizeof(jvm.bin_dir),    bin_dir);
     jvm.initial_screen_width = screen_width;
     jvm.initial_screen_height = screen_height;
+    jvm.max_heap_mb = max_heap_mb;
 
     int rc = pthread_create(&jvm.thread, NULL, jvm_thread_main, NULL);
     if (rc != 0) {
@@ -1192,7 +1205,8 @@ Java_com_skarm_launcher_NativeBridge_startJvm(JNIEnv *env, jobject thiz,
                                               jstring cacioDir, jstring frenchpressJar,
                                               jstring credFile, jstring steamUser,
                                               jstring steamPass, jstring binDir,
-                                              jint screenWidth, jint screenHeight) {
+                                              jint screenWidth, jint screenHeight,
+                                              jint maxHeapMb) {
     const char *home = (*env)->GetStringUTFChars(env, jreHome,   NULL);
     const char *cp   = (*env)->GetStringUTFChars(env, classpath, NULL);
     const char *lp   = (*env)->GetStringUTFChars(env, libPath,   NULL);
@@ -1213,7 +1227,9 @@ Java_com_skarm_launcher_NativeBridge_startJvm(JNIEnv *env, jobject thiz,
     LOGI("  credFile    = %s", cf);
     LOGI("  steamUser   = %s", su[0] ? "(set)" : "(none)");  // never log pass
     LOGI("  binDir      = %s", bd);
-    start_jvm_thread_once(home, cp, lp, af, cd, fj, cf, su, sp, bd, screenWidth, screenHeight);
+    LOGI("  maxHeapMb   = %d", maxHeapMb);
+    start_jvm_thread_once(home, cp, lp, af, cd, fj, cf, su, sp, bd, screenWidth, screenHeight,
+                          maxHeapMb);
     (*env)->ReleaseStringUTFChars(env, jreHome,   home);
     (*env)->ReleaseStringUTFChars(env, classpath, cp);
     (*env)->ReleaseStringUTFChars(env, libPath,   lp);
@@ -1255,10 +1271,18 @@ Java_com_skarm_launcher_NativeBridge_onTouchEvent(JNIEnv *env, jobject thiz,
 JNIEXPORT void JNICALL
 Java_com_skarm_launcher_NativeBridge_onGamepadConnected(JNIEnv *env, jobject thiz,
                                                         jboolean connected) {
+    bool was_active = gamepad_active();
     atomic_store(&gamepad.present, connected ? true : false);
-    // Reset only once no source is left driving the pad, so toggling one source
-    // doesn't wipe the other's held state.
-    if (!gamepad_active()) gamepad_reset_state();
+    if (connected && !was_active) {
+        // Establish a clean resting state for the fresh pad. Without this the zero-init
+        // axes leave both triggers reading 50% pressed (they rest at -1, not 0) until the
+        // player physically pulls and releases each one.
+        gamepad_reset_state();
+    } else if (!gamepad_active()) {
+        // Reset only once no source is left driving the pad, so toggling one source
+        // doesn't wipe the other's held state.
+        gamepad_reset_state();
+    }
     LOGI("gamepad %s", connected ? "connected" : "disconnected");
 }
 

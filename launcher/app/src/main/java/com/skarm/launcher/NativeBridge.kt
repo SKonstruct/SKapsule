@@ -43,6 +43,7 @@ object NativeBridge {
         binDir: String,
         screenWidth: Int,
         screenHeight: Int,
+        maxHeapMb: Int,
     )
 
     /** Launches Spiral Knights inside the running JVM. (Stub) */

@@ -13,7 +13,6 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.GravityCompat
@@ -39,25 +38,6 @@ import java.io.File
 class LauncherActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityLauncherBinding
-
-    // Captured dump awaiting the SAF picker's chosen destination (the save flow is
-    // async: launch picker -> onResult writes to the URI). Held across that hop.
-    private var pendingSave: File? = null
-
-    // CreateDocument picker (no storage permission needed; DocumentsUI does the
-    // write). Result is the user-chosen content:// URI, or null if cancelled.
-    private val saveLog = registerForActivityResult(
-        ActivityResultContracts.CreateDocument("text/plain"),
-    ) { uri ->
-        val src = pendingSave.also { pendingSave = null }
-        if (uri == null || src == null) return@registerForActivityResult
-        val ok = LogExporter.copyToUri(this, src, uri)
-        Toast.makeText(
-            this,
-            if (ok) R.string.save_logs_saved else R.string.save_logs_failed,
-            Toast.LENGTH_SHORT,
-        ).show()
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -162,7 +142,6 @@ class LauncherActivity : AppCompatActivity() {
 
         // Sidebar click listeners
         binding.sidebarBtnShareLogs.setOnClickListener { LogExporter.captureAndShare(this) }
-        binding.sidebarBtnSaveLogs.setOnClickListener { onSaveLogs() }
         binding.sidebarBtnDownloadMods.setOnClickListener { downloadMods() }
         binding.sidebarBtnApplyMods.setOnClickListener { applyMods() }
         binding.sidebarBtnRemoveMods.setOnClickListener { removeMods() }
@@ -177,6 +156,11 @@ class LauncherActivity : AppCompatActivity() {
         avoidEdgesSwitch.setOnCheckedChangeListener { _, isChecked ->
             launcherPrefs.edit().putBoolean("avoid_screen_edges", isChecked).apply()
         }
+
+        // Max RAM stepper
+        binding.btnRamMinus.setOnClickListener { stepRam(-RamSettings.STEP_MB) }
+        binding.btnRamPlus.setOnClickListener { stepRam(RamSettings.STEP_MB) }
+        refreshRam()
 
         // If the previous session crashed, the handler auto-saved a dump. Offer to
         // share it right away (once per launch); the button stays available too.
@@ -203,7 +187,6 @@ class LauncherActivity : AppCompatActivity() {
         setLaunchButtonLoading(false)
         val hasLogs = LogExporter.wasLaunchAttempted(this) || LogExporter.latestCrash(this) != null
         binding.sidebarBtnShareLogs.isEnabled = hasLogs
-        binding.sidebarBtnSaveLogs.isEnabled = hasLogs
 
         // Update logout button visibility
         val showLogout = FrenchpressInstaller.credFile(this).exists()
@@ -259,17 +242,6 @@ class LauncherActivity : AppCompatActivity() {
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
-    }
-
-    /** Captures a dump, then opens the SAF picker (suggesting its filename) to save it. */
-    private fun onSaveLogs() {
-        val file = LogExporter.capture(this)
-        if (file == null) {
-            Toast.makeText(this, R.string.share_logs_empty, Toast.LENGTH_SHORT).show()
-            return
-        }
-        pendingSave = file
-        saveLog.launch(file.name)
     }
 
     private fun ensureRuntime() {
@@ -415,39 +387,21 @@ class LauncherActivity : AppCompatActivity() {
 
     private fun checkForUpdate() {
         lifecycleScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                try {
-                    val url = java.net.URL("https://api.github.com/repos/SKonstruct/SKapsule/releases/latest")
-                    val conn = (url.openConnection() as java.net.HttpURLConnection).apply {
-                        setRequestProperty("Accept", "application/vnd.github+json")
-                        setRequestProperty("User-Agent", "SKapsule-Android")
-                        connectTimeout = 10_000
-                        readTimeout = 10_000
-                    }
-                    if (conn.responseCode != 200) return@withContext null
-                    val text = conn.inputStream.bufferedReader().readText()
-                    conn.disconnect()
-                    val json = org.json.JSONObject(text)
-                    val tagName = json.optString("tag_name") ?: return@withContext null
-                    val htmlUrl = json.optString("html_url") ?: return@withContext null
-                    val remoteVer = if (tagName.startsWith("v")) tagName.substring(1) else tagName
-                    Pair(remoteVer, htmlUrl)
-                } catch (e: Exception) {
-                    null
-                }
-            } ?: return@launch
-
-            val (remoteVer, htmlUrl) = result
+            val release = AppUpdater.fetchLatest(this@LauncherActivity) ?: return@launch
             val localVer = try {
                 packageManager.getPackageInfo(packageName, 0).versionName ?: "0.0.0"
             } catch (e: Exception) {
                 "0.0.0"
             }
 
-            val cmp = compareVersions(localVer, remoteVer)
             when {
-                cmp < 0 -> showUpdateBanner(remoteVer, htmlUrl)
-                cmp > 0 -> showDevBuildIndicator(localVer, remoteVer)
+                compareVersions(localVer, release.version) < 0 -> {
+                    if (AppUpdater.skippedVersion(this@LauncherActivity) != release.version) {
+                        showUpdateBanner(release)
+                    }
+                }
+                compareVersions(localVer, release.version) > 0 ->
+                    showDevBuildIndicator(localVer, release.version)
             }
         }
     }
@@ -465,9 +419,9 @@ class LauncherActivity : AppCompatActivity() {
         return 0
     }
 
-    private fun showUpdateBanner(version: String, htmlUrl: String) {
-        binding.updateTitle.text = "Update available — v$version"
-        binding.updateBanner.setOnClickListener { openUrl(htmlUrl) }
+    private fun showUpdateBanner(release: AppUpdater.Release) {
+        binding.updateTitle.text = "Update available — v${release.version}"
+        binding.updateBanner.setOnClickListener { showUpdateDialog(release) }
         binding.updateBanner.visibility = View.VISIBLE
         binding.updateBanner.alpha = 0f
         binding.updateBanner.translationY = -20f
@@ -476,6 +430,49 @@ class LauncherActivity : AppCompatActivity() {
             .translationY(0f)
             .setDuration(400)
             .start()
+    }
+
+    private fun showUpdateDialog(release: AppUpdater.Release) {
+        val builder = AlertDialog.Builder(this)
+            .setTitle("Update to v${release.version}?")
+            .setNegativeButton("Skip this version") { _, _ ->
+                AppUpdater.skipVersion(this, release.version)
+                binding.updateBanner.visibility = View.GONE
+            }
+            .setNeutralButton("Release notes") { _, _ -> openUrl(release.htmlUrl) }
+        if (release.apkUrl != null) {
+            builder.setMessage("Download and install the new version?")
+                .setPositiveButton("Install") { _, _ -> installUpdate(release) }
+        } else {
+            builder.setMessage("This release has no APK attached — open it on GitHub instead.")
+        }
+        builder.show()
+    }
+
+    private fun installUpdate(release: AppUpdater.Release) {
+        val progress = showProgressDialog(R.string.update_downloading, "Starting download…")
+        val receiver = AppUpdater.registerInstallReceiver(this) { message ->
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        }
+        lifecycleScope.launch {
+            try {
+                AppUpdater.downloadAndInstall(this@LauncherActivity, release) { done, total ->
+                    val pct = if (total > 0) ((done * 100) / total).toInt() else 0
+                    runOnUiThread {
+                        progress.updateProgress("Downloading update… $pct%", pct, 100)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("LauncherActivity", "Update install failed", e)
+                Toast.makeText(this@LauncherActivity, "Update failed: ${e.message}",
+                    Toast.LENGTH_LONG).show()
+            } finally {
+                progress.dialog.dismiss()
+                // The system installer prompt has been raised (or the attempt failed),
+                // so nothing else will arrive on this receiver.
+                runCatching { unregisterReceiver(receiver) }
+            }
+        }
     }
 
     private fun showDevBuildIndicator(localVer: String, remoteVer: String) {
@@ -622,5 +619,20 @@ class LauncherActivity : AppCompatActivity() {
         const val EXTRA_LOGIN_MODE = "com.skarm.launcher.LOGIN_MODE"
         const val EXTRA_STEAM_USER = "com.skarm.launcher.STEAM_USER"
         const val EXTRA_STEAM_PASS = "com.skarm.launcher.STEAM_PASS"
+    }
+
+    private fun stepRam(deltaMb: Int) {
+        RamSettings.set(this, RamSettings.get(this) + deltaMb)
+        refreshRam()
+    }
+
+    private fun refreshRam() {
+        val current = RamSettings.get(this)
+        val max = RamSettings.maxMb(this)
+        binding.textRamValue.text = getString(R.string.ram_value, current)
+        binding.btnRamMinus.isEnabled = current > RamSettings.MIN_MB
+        binding.btnRamPlus.isEnabled = current < max
+        binding.textRamFree.text =
+            getString(R.string.ram_free, RamSettings.availableMb(this), RamSettings.totalMb(this))
     }
 }

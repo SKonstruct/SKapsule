@@ -29,7 +29,11 @@ and is not affiliated with, endorsed by, or supported by SEGA or Grey Havens.**
 
 ## Controls
 
-Gameplay is **gamepad-first**. Experimental touch controls are in place, but still need some fine-tuning and testing.
+Gameplay is **gamepad-first**. Touch controls are in place; they are newer than the gamepad
+path and still getting fine-tuning. Every finger is routed to the control it lands on, so
+buttons work while a joystick is held (fixed after
+[#43](https://github.com/SKonstruct/SKapsule/issues/43) — before that, holding the move
+stick made every button unpressable).
 
 - **Gamepad or Touch** — primary input for gameplay (movement, combat, menus).
 - **Keyboard** — used as needed for text entry (login, chat). An on-screen
@@ -47,6 +51,11 @@ Gameplay is **gamepad-first**. Experimental touch controls are in place, but sti
    downloads/patches the game from the official servers — this first launch takes a
    while and needs a network connection.
 4. Choose **Play (Web)** or **Play (Steam)** and sign in with your own account.
+
+Later releases install themselves: when a newer version is published the launcher shows an
+**Update available** banner, and tapping it downloads the APK and hands it to the system
+installer (grant "install unknown apps" once when prompted). The dialog also offers release
+notes and a **Skip this version** option.
 
 Only `arm64-v8a` devices are supported (no 32-bit builds).
 

@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Color
 import android.util.AttributeSet
+import android.util.SparseArray
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -24,6 +25,14 @@ class TouchControlOverlay @JvmOverloads constructor(
     private var layoutData: TouchLayoutData = TouchControlManager.loadLayout(context)
     private val controlViews = mutableListOf<BaseTouchControl>()
     private var inEditMode = false
+
+    // Play-mode touch routing: which control each active pointer was captured by, keyed
+    // by pointer id. A pointer stays with the control it landed on for its whole life.
+    private val pointerTargets = SparseArray<BaseTouchControl>()
+
+    // Pointer currently driving SK's mouse cursor (the one that landed on no control).
+    // SK's UI is a single cursor, so only the first such pointer is forwarded.
+    private var cursorPointerId = MotionEvent.INVALID_POINTER_ID
 
     // Edit state
     private var selectedView: BaseTouchControl? = null
@@ -67,7 +76,7 @@ class TouchControlOverlay @JvmOverloads constructor(
             addView(globalTitle)
 
             val enableSwitch = Switch(context).apply {
-                text = "Enable Controls"
+                text = "Show Controls"
                 setTextColor(Color.WHITE)
                 tag = "enableSwitch"
                 isChecked = layoutData.controlsEnabled
@@ -77,6 +86,18 @@ class TouchControlOverlay @JvmOverloads constructor(
                 }
             }
             addView(enableSwitch)
+
+            val actionBarSwitch = Switch(context).apply {
+                text = "Show Action Bar"
+                setTextColor(Color.WHITE)
+                tag = "actionBarSwitch"
+                isChecked = layoutData.actionBarVisible
+                setOnCheckedChangeListener { _, isChecked ->
+                    layoutData.actionBarVisible = isChecked
+                    applyControlAppearance()
+                }
+            }
+            addView(actionBarSwitch)
 
             val opacityLabel = TextView(context).apply {
                 text = "Opacity"
@@ -201,6 +222,9 @@ class TouchControlOverlay @JvmOverloads constructor(
     }
 
     private fun buildControls() {
+        // A pointer still routed to a view we are about to discard would leave its
+        // button or axis held down in the native mailbox for good.
+        cancelActivePointers()
         controlViews.forEach { removeView(it) }
         controlViews.clear()
 
@@ -227,6 +251,7 @@ class TouchControlOverlay @JvmOverloads constructor(
      */
     private fun applyControlAppearance() {
         val enabled = layoutData.controlsEnabled
+        if (!enabled) cancelActivePointers()
         for (view in controlViews) {
             if (inEditMode) {
                 applyEditModeAppearance(view)
@@ -246,7 +271,8 @@ class TouchControlOverlay @JvmOverloads constructor(
 
     private fun applyEditModeAppearance(view: BaseTouchControl) {
         view.visibility = View.VISIBLE
-        view.alpha = if (view.node.visible) {
+        val shown = view.node.visible && !(view.node.isActionBar && !layoutData.actionBarVisible)
+        view.alpha = if (shown) {
             maxOf(layoutData.globalOpacity, EDIT_MODE_MIN_OPACITY)
         } else {
             EDIT_HIDDEN_OPACITY
@@ -254,7 +280,8 @@ class TouchControlOverlay @JvmOverloads constructor(
     }
 
     private fun applyPlayModeAppearance(view: BaseTouchControl, enabled: Boolean) {
-        view.visibility = if (enabled && view.node.visible) View.VISIBLE else View.GONE
+        val shown = view.node.visible && !(view.node.isActionBar && !layoutData.actionBarVisible)
+        view.visibility = if (enabled && shown) View.VISIBLE else View.GONE
         view.alpha = layoutData.globalOpacity
     }
 
@@ -300,6 +327,9 @@ class TouchControlOverlay @JvmOverloads constructor(
     }
 
     fun toggleEditMode() {
+        // Whatever is under a finger right now stops receiving events on the other side
+        // of this switch, so release it first.
+        cancelActivePointers()
         inEditMode = !inEditMode
         editorPanel.visibility = if (inEditMode) View.VISIBLE else View.GONE
 
@@ -343,6 +373,7 @@ class TouchControlOverlay @JvmOverloads constructor(
 
         // Refresh the global controls to reflect the restored defaults.
         editorPanel.findViewWithTag<Switch>("enableSwitch")?.isChecked = layoutData.controlsEnabled
+        editorPanel.findViewWithTag<Switch>("actionBarSwitch")?.isChecked = layoutData.actionBarVisible
         editorPanel.findViewWithTag<SeekBar>("opacitySlider")?.progress =
             (layoutData.globalOpacity * 100).toInt()
         editorPanel.findViewWithTag<SeekBar>("resolutionSlider")?.progress =
@@ -352,22 +383,22 @@ class TouchControlOverlay @JvmOverloads constructor(
         editorPanel.bringToFront()
     }
 
+    /**
+     * Forwarded pointer events that hit no control, in this overlay's coordinate space,
+     * with a `MotionEvent.ACTION_DOWN`/`_MOVE`/`_UP` action. The host Activity turns
+     * these into SK mouse-cursor input. Set by GameActivity.
+     *
+     * The overlay claims every gesture in play mode, so it — not the SurfaceView
+     * underneath — is the only thing that sees touches; without forwarding, a tap that
+     * misses a control would be lost, and (worse) letting the SurfaceView take the
+     * gesture instead means no *later* finger in it can ever reach a control.
+     */
+    var cursorTouchListener: ((action: Int, x: Float, y: Float) -> Unit)? = null
+
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (!inEditMode) {
-            // In play mode, let the overlay dispatch touches down to the controls,
-            // or pass through to the game surface if no control was hit.
-            var handled = false
-            for (i in controlViews.size - 1 downTo 0) {
-                val view = controlViews[i]
-                if (view.visibility == View.VISIBLE && isPointInsideView(event.x, event.y, view)) {
-                    val viewEvent = MotionEvent.obtain(event)
-                    viewEvent.offsetLocation(-view.left.toFloat(), -view.top.toFloat())
-                    handled = view.dispatchTouchEvent(viewEvent) || handled
-                    viewEvent.recycle()
-                }
-            }
-            return handled
+            return handlePlayTouch(event)
         }
 
         // --- Edit Mode Logic ---
@@ -423,6 +454,129 @@ class TouchControlOverlay @JvmOverloads constructor(
 
     private fun isPointInsideView(x: Float, y: Float, view: View): Boolean {
         return x >= view.left && x <= view.right && y >= view.top && y <= view.bottom
+    }
+
+    /**
+     * Routes each pointer independently.
+     *
+     * The previous version hit-tested with `event.x`/`event.y`, which are pointer *0*'s
+     * coordinates whatever the action is. So while one thumb held a joystick, every other
+     * finger was tested at the joystick's position and no button could ever be pressed —
+     * and a release was delivered to whichever control held pointer 0, leaving buttons
+     * stuck down. Android's own dispatch doesn't help here (it would hand a whole gesture
+     * to one child), hence the manual per-pointer routing.
+     */
+    private fun handlePlayTouch(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> {
+                val index = event.actionIndex
+                val id = event.getPointerId(index)
+                val x = event.getX(index)
+                val y = event.getY(index)
+
+                val target = controlViews.lastOrNull { view ->
+                    view.visibility == View.VISIBLE && isPointInsideView(x, y, view)
+                }
+                if (target != null && pointerTargets.indexOfValue(target) >= 0) {
+                    // A second finger on a control another finger already holds: swallow
+                    // it rather than letting it click through into the game world.
+                    return true
+                }
+                // Capture only if the control actually took the press: a joystick refuses
+                // a touch inside its bounding box but outside its circle, and that
+                // pointer should still reach the game cursor.
+                if (target != null && dispatchToControl(target, MotionEvent.ACTION_DOWN, event, index)) {
+                    pointerTargets.put(id, target)
+                } else if (cursorPointerId == MotionEvent.INVALID_POINTER_ID) {
+                    cursorPointerId = id
+                    cursorTouchListener?.invoke(MotionEvent.ACTION_DOWN, x, y)
+                }
+                // Always claim the gesture: a miss must not hand it to the SurfaceView,
+                // or the fingers that follow could never reach a control.
+                return true
+            }
+
+            MotionEvent.ACTION_MOVE -> {
+                for (index in 0 until event.pointerCount) {
+                    val id = event.getPointerId(index)
+                    val target = pointerTargets.get(id)
+                    if (target != null) {
+                        dispatchToControl(target, MotionEvent.ACTION_MOVE, event, index)
+                    } else if (id == cursorPointerId) {
+                        cursorTouchListener?.invoke(
+                            MotionEvent.ACTION_MOVE, event.getX(index), event.getY(index)
+                        )
+                    }
+                }
+                return true
+            }
+
+            MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> {
+                val index = event.actionIndex
+                val id = event.getPointerId(index)
+                val target = pointerTargets.get(id)
+                if (target != null) {
+                    pointerTargets.remove(id)
+                    dispatchToControl(target, MotionEvent.ACTION_UP, event, index)
+                } else if (id == cursorPointerId) {
+                    cursorPointerId = MotionEvent.INVALID_POINTER_ID
+                    cursorTouchListener?.invoke(
+                        MotionEvent.ACTION_UP, event.getX(index), event.getY(index)
+                    )
+                }
+                return true
+            }
+
+            MotionEvent.ACTION_CANCEL -> {
+                cancelActivePointers()
+                if (cursorPointerId != MotionEvent.INVALID_POINTER_ID) {
+                    cursorPointerId = MotionEvent.INVALID_POINTER_ID
+                    cursorTouchListener?.invoke(MotionEvent.ACTION_UP, event.x, event.y)
+                }
+                return true
+            }
+        }
+        return false
+    }
+
+    /**
+     * Hands one pointer to one control as a single-pointer event in the control's own
+     * coordinate space, so `getX(actionIndex)` inside the control is always that pointer.
+     */
+    private fun dispatchToControl(
+        view: BaseTouchControl,
+        action: Int,
+        event: MotionEvent,
+        pointerIndex: Int,
+    ): Boolean {
+        val copy = MotionEvent.obtain(
+            event.downTime,
+            event.eventTime,
+            action,
+            event.getX(pointerIndex) - view.left,
+            event.getY(pointerIndex) - view.top,
+            event.metaState,
+        )
+        val handled = view.dispatchTouchEvent(copy)
+        copy.recycle()
+        return handled
+    }
+
+    /** Releases every control currently held, so nothing stays latched in the native
+     *  gamepad mailbox when the layout is rebuilt or the controls are switched off. */
+    private fun cancelActivePointers() {
+        for (i in 0 until pointerTargets.size()) {
+            dispatchCancel(pointerTargets.valueAt(i))
+        }
+        pointerTargets.clear()
+    }
+
+    private fun dispatchCancel(view: BaseTouchControl) {
+        val copy = MotionEvent.obtain(
+            0L, 0L, MotionEvent.ACTION_CANCEL, 0f, 0f, 0,
+        )
+        view.dispatchTouchEvent(copy)
+        copy.recycle()
     }
 
     private fun selectView(view: BaseTouchControl?) {

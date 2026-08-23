@@ -282,33 +282,38 @@ class GameActivity :
      * slider shrinks the framebuffer (holder.setFixedSize) that no longer equals the
      * buffer, so scale view pixels to buffer pixels before pushing.
      */
-    @SuppressLint("ClickableViewAccessibility")
     private fun wireTouchInput() {
-        // We now handle standard game touches directly in the TouchOverlay to allow
-        // the custom touch controls to intercept first. The overlay will pass unhandled
-        // touches to this listener on the SurfaceView.
-        surface.setOnTouchListener { _, event ->
-            val sx = if (surface.width > 0 && currentBufferWidth > 0) {
-                currentBufferWidth.toFloat() / surface.width
-            } else {
-                1f
-            }
-            val sy = if (surface.height > 0 && currentBufferHeight > 0) {
-                currentBufferHeight.toFloat() / surface.height
-            } else {
-                1f
-            }
-            val x = (event.x * sx).toInt()
-            val y = (event.y * sy).toInt()
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> NativeBridge.onTouchEvent(TOUCH_DOWN, x, y)
-                MotionEvent.ACTION_MOVE -> NativeBridge.onTouchEvent(TOUCH_MOVE, x, y)
-                MotionEvent.ACTION_UP,
-                MotionEvent.ACTION_CANCEL,
-                -> NativeBridge.onTouchEvent(TOUCH_UP, x, y)
-                else -> return@setOnTouchListener false
-            }
-            true
+        // The overlay claims every gesture so that each finger can be routed to the
+        // control it landed on, and forwards the pointer that hit no control back here
+        // as the game cursor. Nothing is left for a SurfaceView touch listener to see.
+        binding.touchOverlay.cursorTouchListener = ::pushCursorTouch
+    }
+
+    /**
+     * Pushes one cursor event. Coordinates arrive in the overlay's space; the SurfaceView
+     * can be inset from it ("Avoid screen edges" sets margins on the surface only), and
+     * the framebuffer can be smaller than the view (the resolution slider calls
+     * holder.setFixedSize), so translate then scale before pushing.
+     */
+    private fun pushCursorTouch(action: Int, overlayX: Float, overlayY: Float) {
+        val viewX = overlayX - surface.left
+        val viewY = overlayY - surface.top
+        val sx = if (surface.width > 0 && currentBufferWidth > 0) {
+            currentBufferWidth.toFloat() / surface.width
+        } else {
+            1f
+        }
+        val sy = if (surface.height > 0 && currentBufferHeight > 0) {
+            currentBufferHeight.toFloat() / surface.height
+        } else {
+            1f
+        }
+        val x = (viewX * sx).toInt()
+        val y = (viewY * sy).toInt()
+        when (action) {
+            MotionEvent.ACTION_DOWN -> NativeBridge.onTouchEvent(TOUCH_DOWN, x, y)
+            MotionEvent.ACTION_MOVE -> NativeBridge.onTouchEvent(TOUCH_MOVE, x, y)
+            MotionEvent.ACTION_UP -> NativeBridge.onTouchEvent(TOUCH_UP, x, y)
         }
     }
 
@@ -326,8 +331,10 @@ class GameActivity :
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        val fromPad = event.isFromSource(InputDevice.SOURCE_GAMEPAD) ||
-            event.isFromSource(InputDevice.SOURCE_DPAD)
+        // SOURCE_DPAD alone is not enough: Android tags ordinary keyboards with it because
+        // their arrow keys map to KEYCODE_DPAD_*, so testing for it swallowed the arrows
+        // before handleKeyboard could translate them to GLFW 262-265.
+        val fromPad = event.isFromSource(InputDevice.SOURCE_GAMEPAD)
         if (fromPad) {
             // L2/R2 reported as buttons (some pads) -> drive the trigger axes.
             val triggerAxis = when (event.keyCode) {
@@ -365,12 +372,9 @@ class GameActivity :
      * keys we actually translated, so Back/volume/etc. keep default behavior.
      */
     private fun handleKeyboard(event: KeyEvent): Boolean {
-        // Don't double-handle gamepad/dpad sources (handled above).
-        if (event.isFromSource(InputDevice.SOURCE_GAMEPAD) ||
-            event.isFromSource(InputDevice.SOURCE_DPAD)
-        ) {
-            return false
-        }
+        // Don't double-handle real gamepads (handled above). Keyboards also report
+        // SOURCE_DPAD, so that flag must not be part of the test.
+        if (event.isFromSource(InputDevice.SOURCE_GAMEPAD)) return false
 
         val glfwKey = glfwKeyCode(event.keyCode)
         val ch = event.unicodeChar
@@ -380,12 +384,16 @@ class GameActivity :
         when (event.action) {
             KeyEvent.ACTION_DOWN -> {
                 if (glfwKey >= 0) {
-                    NativeBridge.onKeyEvent(glfwKey, if (event.repeatCount == 0) 1 else 2, 0)
+                    NativeBridge.onKeyEvent(
+                        glfwKey,
+                        if (event.repeatCount == 0) 1 else 2,
+                        glfwModifiers(event.metaState),
+                    )
                 }
                 if (printable) NativeBridge.onCharInput(ch)
             }
             KeyEvent.ACTION_UP -> {
-                if (glfwKey >= 0) NativeBridge.onKeyEvent(glfwKey, 0, 0)
+                if (glfwKey >= 0) NativeBridge.onKeyEvent(glfwKey, 0, glfwModifiers(event.metaState))
             }
         }
         return true
@@ -672,6 +680,7 @@ class GameActivity :
                 binDir = binDir,
                 screenWidth = sw,
                 screenHeight = sh,
+                maxHeapMb = RamSettings.get(this),
             )
         }
         // Apply the persisted (or last-set) render scale now that the baseline size
@@ -952,7 +961,57 @@ class GameActivity :
             KeyEvent.KEYCODE_SHIFT_RIGHT -> 344
             KeyEvent.KEYCODE_CTRL_RIGHT -> 345
             KeyEvent.KEYCODE_ALT_RIGHT -> 346
+            KeyEvent.KEYCODE_META_LEFT -> 343
+            KeyEvent.KEYCODE_META_RIGHT -> 347
+
+            KeyEvent.KEYCODE_F1 -> 290
+            KeyEvent.KEYCODE_F2 -> 291
+            KeyEvent.KEYCODE_F3 -> 292
+            KeyEvent.KEYCODE_F4 -> 293
+            KeyEvent.KEYCODE_F5 -> 294
+            KeyEvent.KEYCODE_F6 -> 295
+            KeyEvent.KEYCODE_F7 -> 296
+            KeyEvent.KEYCODE_F8 -> 297
+            KeyEvent.KEYCODE_F9 -> 298
+            KeyEvent.KEYCODE_F10 -> 299
+            KeyEvent.KEYCODE_F11 -> 300
+            KeyEvent.KEYCODE_F12 -> 301
+
+            KeyEvent.KEYCODE_CAPS_LOCK -> 280
+            KeyEvent.KEYCODE_SCROLL_LOCK -> 281
+            KeyEvent.KEYCODE_NUM_LOCK -> 282
+            KeyEvent.KEYCODE_SYSRQ -> 283
+            KeyEvent.KEYCODE_BREAK -> 284
+
+            KeyEvent.KEYCODE_NUMPAD_0 -> 320
+            KeyEvent.KEYCODE_NUMPAD_1 -> 321
+            KeyEvent.KEYCODE_NUMPAD_2 -> 322
+            KeyEvent.KEYCODE_NUMPAD_3 -> 323
+            KeyEvent.KEYCODE_NUMPAD_4 -> 324
+            KeyEvent.KEYCODE_NUMPAD_5 -> 325
+            KeyEvent.KEYCODE_NUMPAD_6 -> 326
+            KeyEvent.KEYCODE_NUMPAD_7 -> 327
+            KeyEvent.KEYCODE_NUMPAD_8 -> 328
+            KeyEvent.KEYCODE_NUMPAD_9 -> 329
+            KeyEvent.KEYCODE_NUMPAD_DOT -> 330
+            KeyEvent.KEYCODE_NUMPAD_DIVIDE -> 331
+            KeyEvent.KEYCODE_NUMPAD_MULTIPLY -> 332
+            KeyEvent.KEYCODE_NUMPAD_SUBTRACT -> 333
+            KeyEvent.KEYCODE_NUMPAD_ADD -> 334
+            KeyEvent.KEYCODE_NUMPAD_EQUALS -> 336
             else -> -1
+        }
+
+        /** Android meta bits -> GLFW modifier bits, matching iOS's glfw_modifiers(). */
+        fun glfwModifiers(metaState: Int): Int {
+            var mods = 0
+            if (metaState and KeyEvent.META_SHIFT_ON != 0) mods = mods or 0x0001
+            if (metaState and KeyEvent.META_CTRL_ON != 0) mods = mods or 0x0002
+            if (metaState and KeyEvent.META_ALT_ON != 0) mods = mods or 0x0004
+            if (metaState and KeyEvent.META_META_ON != 0) mods = mods or 0x0008
+            if (metaState and KeyEvent.META_CAPS_LOCK_ON != 0) mods = mods or 0x0010
+            if (metaState and KeyEvent.META_NUM_LOCK_ON != 0) mods = mods or 0x0020
+            return mods
         }
     }
 }

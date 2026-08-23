@@ -144,10 +144,18 @@ object ModsDownloader {
                 throw IOException("Server returned HTTP ${conn.responseCode} for $urlString")
             }
             destFile.parentFile?.mkdirs()
+            // Write to a temp file and rename, so an interrupted download can't leave a
+            // truncated jar in mods/ for the game to load.
+            val tmp = File(destFile.absolutePath + ".part")
             conn.inputStream.use { input ->
-                destFile.outputStream().use { output ->
+                tmp.outputStream().use { output ->
                     input.copyTo(output)
                 }
+            }
+            destFile.delete()
+            if (!tmp.renameTo(destFile)) {
+                tmp.delete()
+                throw IOException("Failed to move downloaded file into ${destFile.name}")
             }
         } finally {
             conn.disconnect()
