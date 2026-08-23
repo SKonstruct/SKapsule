@@ -177,6 +177,18 @@ out/               native build outputs (generated, gitignored)
 
 ---
 
+## Crash reporting
+
+Uncaught exceptions and a few detected failures (runtime unpack, mod download/apply/remove,
+a failed self-update) are reported to Sentry, with the device model, Android version, app
+build, which process it came from, and the same logcat dump that **Share Logs** exports.
+Credentials, tokens and account emails are stripped. Native crashes are not captured: the
+SDK's NDK component installs signal handlers, and the bundled JVM in this process needs
+those signals for itself.
+
+On by default; **Send crash reports** in the options sidebar turns it off, and the change
+takes effect immediately.
+
 ## Known issues
 
 - **Character-shadow shader artifact.** Character shadows can render as a filled

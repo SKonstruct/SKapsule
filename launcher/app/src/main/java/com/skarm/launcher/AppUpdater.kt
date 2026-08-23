@@ -173,17 +173,24 @@ object AppUpdater {
             PackageInstaller.SessionParams.MODE_FULL_INSTALL
         )
         val sessionId = installer.createSession(params)
-        installer.openSession(sessionId).use { session ->
-            session.openWrite("apk", 0, apk.length()).use { output ->
-                apk.inputStream().use { it.copyTo(output) }
-                session.fsync(output)
+        try {
+            installer.openSession(sessionId).use { session ->
+                session.openWrite("apk", 0, apk.length()).use { output ->
+                    apk.inputStream().use { it.copyTo(output) }
+                    session.fsync(output)
+                }
+                val intent = Intent(INSTALL_ACTION).setPackage(context.packageName)
+                val pending = PendingIntent.getBroadcast(
+                    context, sessionId, intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+                )
+                session.commit(pending.intentSender)
             }
-            val intent = Intent(INSTALL_ACTION).setPackage(context.packageName)
-            val pending = PendingIntent.getBroadcast(
-                context, sessionId, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
-            )
-            session.commit(pending.intentSender)
+        } catch (e: Exception) {
+            // Closing the handle does not discard the session; without this, repeated
+            // failures pile up against the 50-session-per-installer cap.
+            runCatching { installer.abandonSession(sessionId) }
+            throw e
         }
     }
 

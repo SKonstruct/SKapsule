@@ -395,6 +395,22 @@ class TouchControlOverlay @JvmOverloads constructor(
      */
     var cursorTouchListener: ((action: Int, x: Float, y: Float) -> Unit)? = null
 
+    /**
+     * Take every gesture ourselves instead of letting ViewGroup hand one to a child.
+     *
+     * Without this the platform routes each pointer straight to whichever control view
+     * contains it, [handlePlayTouch] only ever sees the gestures that missed everything,
+     * and [pointerTargets] stays empty — so nothing can release a held control when the
+     * layout is rebuilt or the controls are switched off, and the cursor pass-through
+     * only works for the first finger. Owning the dispatch keeps all of that in one place.
+     */
+    override fun onInterceptTouchEvent(event: MotionEvent): Boolean {
+        // Never in edit mode: the editor panel is a child, and its sliders and switches
+        // need their own touches. Control views return false from onTouchEvent while
+        // editing, so drag gestures still fall through to us there.
+        return !inEditMode
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (!inEditMode) {
@@ -565,10 +581,11 @@ class TouchControlOverlay @JvmOverloads constructor(
     /** Releases every control currently held, so nothing stays latched in the native
      *  gamepad mailbox when the layout is rebuilt or the controls are switched off. */
     private fun cancelActivePointers() {
-        for (i in 0 until pointerTargets.size()) {
-            dispatchCancel(pointerTargets.valueAt(i))
-        }
+        // Sweep every control, not just the ones we hold a pointer for: a control can
+        // also be mid-press from a touch the platform delivered directly.
+        controlViews.forEach { dispatchCancel(it) }
         pointerTargets.clear()
+        cursorPointerId = MotionEvent.INVALID_POINTER_ID
     }
 
     private fun dispatchCancel(view: BaseTouchControl) {

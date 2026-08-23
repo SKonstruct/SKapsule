@@ -153,6 +153,10 @@ dependencies {
     implementation("org.apache.commons:commons-compress:1.27.1")
     implementation("org.tukaani:xz:1.9")
     implementation("com.google.code.gson:gson:2.10.1")
+    // sentry-android-core, NOT sentry-android: the umbrella artifact pulls
+    // sentry-android-ndk, whose signal handlers would fight the bundled HotSpot
+    // running in this same process.
+    implementation("io.sentry:sentry-android-core:8.53.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20231013")
 }

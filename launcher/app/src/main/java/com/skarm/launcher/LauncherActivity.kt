@@ -39,6 +39,9 @@ class LauncherActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityLauncherBinding
 
+    /** Registered lazily by installUpdate; see the note there. */
+    private var installReceiver: android.content.BroadcastReceiver? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityLauncherBinding.inflate(layoutInflater)
@@ -157,6 +160,12 @@ class LauncherActivity : AppCompatActivity() {
             launcherPrefs.edit().putBoolean("avoid_screen_edges", isChecked).apply()
         }
 
+        val crashSwitch = binding.switchCrashReporting
+        crashSwitch.isChecked = CrashReporting.isEnabled(this)
+        crashSwitch.setOnCheckedChangeListener { _, isChecked ->
+            CrashReporting.setEnabled(this, isChecked)
+        }
+
         // Max RAM stepper
         binding.btnRamMinus.setOnClickListener { stepRam(-RamSettings.STEP_MB) }
         binding.btnRamPlus.setOnClickListener { stepRam(RamSettings.STEP_MB) }
@@ -182,6 +191,12 @@ class LauncherActivity : AppCompatActivity() {
      * was attempted this install, or a crash dump is on disk. Re-checked on resume
      * because the launch marker is written by the :game process while we're paused.
      */
+    override fun onDestroy() {
+        installReceiver?.let { runCatching { unregisterReceiver(it) } }
+        installReceiver = null
+        super.onDestroy()
+    }
+
     override fun onResume() {
         super.onResume()
         setLaunchButtonLoading(false)
@@ -272,6 +287,7 @@ class LauncherActivity : AppCompatActivity() {
                 setButtonsEnabled(true)
             } catch (t: Throwable) {
                 Log.e(TAG, "Runtime install failed", t)
+                CrashReporting.report("runtime_install_failed", t.toString())
                 binding.setupStatus.text = "Runtime setup failed: ${t.message}"
             }
         }
@@ -354,6 +370,9 @@ class LauncherActivity : AppCompatActivity() {
         startActivity(
             Intent(this, GameActivity::class.java).apply {
                 putExtra(EXTRA_LOGIN_MODE, mode.name)
+                // Passed explicitly: GameActivity runs in :game, and that process can
+                // outlive a launch with a stale SharedPreferences cache of this value.
+                putExtra(EXTRA_MAX_HEAP_MB, RamSettings.get(this@LauncherActivity))
                 if (steamUser.isNotEmpty()) {
                     putExtra(EXTRA_STEAM_USER, steamUser)
                     putExtra(EXTRA_STEAM_PASS, steamPass)
@@ -451,8 +470,14 @@ class LauncherActivity : AppCompatActivity() {
 
     private fun installUpdate(release: AppUpdater.Release) {
         val progress = showProgressDialog(R.string.update_downloading, "Starting download…")
-        val receiver = AppUpdater.registerInstallReceiver(this) { message ->
-            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        // The receiver has to outlive this call: PackageInstaller.commit() broadcasts
+        // asynchronously, so STATUS_PENDING_USER_ACTION -- the intent that actually opens
+        // the system installer -- arrives well after downloadAndInstall() returns. It is
+        // registered for the Activity's lifetime and torn down in onDestroy.
+        if (installReceiver == null) {
+            installReceiver = AppUpdater.registerInstallReceiver(this) { message ->
+                Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+            }
         }
         lifecycleScope.launch {
             try {
@@ -464,13 +489,12 @@ class LauncherActivity : AppCompatActivity() {
                 }
             } catch (e: Exception) {
                 Log.e("LauncherActivity", "Update install failed", e)
+                CrashReporting.report("update_install_failed", e.toString(),
+                    mapOf("version" to release.version))
                 Toast.makeText(this@LauncherActivity, "Update failed: ${e.message}",
                     Toast.LENGTH_LONG).show()
             } finally {
                 progress.dialog.dismiss()
-                // The system installer prompt has been raised (or the attempt failed),
-                // so nothing else will arrive on this receiver.
-                runCatching { unregisterReceiver(receiver) }
             }
         }
     }
@@ -547,6 +571,7 @@ class LauncherActivity : AppCompatActivity() {
                 ).show()
             } catch (e: Exception) {
                 progressInfo.dialog.dismiss()
+                CrashReporting.report("mods_download_failed", e.toString())
                 AlertDialog.Builder(this@LauncherActivity)
                     .setTitle("Download Failed")
                     .setMessage(e.message ?: "Unknown error")
@@ -579,6 +604,7 @@ class LauncherActivity : AppCompatActivity() {
                     .show()
             } catch (e: Exception) {
                 progressInfo.dialog.dismiss()
+                CrashReporting.report("mods_apply_failed", e.toString())
                 AlertDialog.Builder(this@LauncherActivity)
                     .setTitle("Apply Failed")
                     .setMessage(e.message ?: "Unknown error")
@@ -603,6 +629,7 @@ class LauncherActivity : AppCompatActivity() {
                     .show()
             } catch (e: Exception) {
                 progressInfo.dialog.dismiss()
+                CrashReporting.report("mods_remove_failed", e.toString())
                 AlertDialog.Builder(this@LauncherActivity)
                     .setTitle("Remove Failed")
                     .setMessage(e.message ?: "Unknown error")
@@ -617,6 +644,7 @@ class LauncherActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "LauncherActivity"
         const val EXTRA_LOGIN_MODE = "com.skarm.launcher.LOGIN_MODE"
+        const val EXTRA_MAX_HEAP_MB = "com.skarm.launcher.MAX_HEAP_MB"
         const val EXTRA_STEAM_USER = "com.skarm.launcher.STEAM_USER"
         const val EXTRA_STEAM_PASS = "com.skarm.launcher.STEAM_PASS"
     }

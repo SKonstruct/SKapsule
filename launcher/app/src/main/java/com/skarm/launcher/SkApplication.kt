@@ -17,6 +17,10 @@ class SkApplication : Application() {
         // Activity-independent Context so the native Steam-login keep-alive can
         // start/stop SteamAuthService even as the Activity surface tears down.
         NativeBridge.attachContext(this)
+        // Before installCrashHandler(): Sentry installs its own uncaught handler,
+        // which ours then captures as `previous`, so the chain runs ours (logcat
+        // dump) -> Sentry (report) -> platform default (tear the process down).
+        CrashReporting.init(this)
         installCrashHandler()
     }
 
@@ -31,7 +35,10 @@ class SkApplication : Application() {
         Thread.setDefaultUncaughtExceptionHandler { thread, error ->
             Log.e(TAG, "Uncaught exception on ${thread.name}", error)
             try {
-                LogExporter.captureCrash(this)
+                val dump = LogExporter.captureCrash(this)
+                // Attach before delegating: Sentry's handler runs next and sends the
+                // event with whatever is on the scope at that moment.
+                if (dump != null) CrashReporting.attachCrashLog(dump)
             } catch (t: Throwable) {
                 Log.e(TAG, "Failed to generate crash log", t)
             }

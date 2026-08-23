@@ -680,7 +680,8 @@ class GameActivity :
                 binDir = binDir,
                 screenWidth = sw,
                 screenHeight = sh,
-                maxHeapMb = RamSettings.get(this),
+                maxHeapMb = intent.getIntExtra(LauncherActivity.EXTRA_MAX_HEAP_MB, 0)
+                    .takeIf { it > 0 } ?: RamSettings.get(this),
             )
         }
         // Apply the persisted (or last-set) render scale now that the baseline size

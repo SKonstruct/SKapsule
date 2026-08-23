@@ -43,6 +43,8 @@
     <string name="logout_confirm_message">Sign out of Steam? Your saved session will be cleared.</string>
     <string name="logout_confirm_yes">Sign out</string>
     <string name="pref_avoid_edges">Avoid screen edges</string>
+    <string name="pref_crash_reporting">Send crash reports</string>
+    <string name="pref_crash_reporting_note">Anonymous: device model, Android version, app build and the crash log.</string>
     <string name="pref_max_ram">Max RAM</string>
     <string name="ram_decrease">\u2212</string>
     <string name="ram_increase">+</string>

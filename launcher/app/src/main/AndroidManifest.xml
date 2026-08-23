@@ -31,6 +31,9 @@
         android:networkSecurityConfig="@xml/network_security_config"
         tools:targetApi="35">
 
+        <!-- Initialised by hand in SkApplication so the opt-out is read first. -->
+        <meta-data android:name="io.sentry.auto-init" android:value="false" />
+
         <activity
             android:name=".LauncherActivity"
             android:exported="true"
