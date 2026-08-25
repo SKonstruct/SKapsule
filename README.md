@@ -177,6 +177,13 @@ out/               native build outputs (generated, gitignored)
 
 ---
 
+## News card
+
+The home screen shows the current in-game announcement — the same feed the desktop
+[KnightLauncher](https://github.com/lucasluqui/KnightLauncher) renders, so both show the
+same thing at the same time. Tapping the card opens the announcement thread. If there is
+nothing running, or the service is unreachable, the card simply is not shown.
+
 ## Crash reporting
 
 Uncaught exceptions and a few detected failures (runtime unpack, mod download/apply/remove,

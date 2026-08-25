@@ -43,6 +43,13 @@
     <string name="logout_confirm_message">Sign out of Steam? Your saved session will be cleared.</string>
     <string name="logout_confirm_yes">Sign out</string>
     <string name="pref_avoid_edges">Avoid screen edges</string>
+    <string name="subtitle_player_count">Fight alongside ~%1$d other Spiral Knights!</string>
+    <string name="player_count_title">Players online</string>
+    <string name="player_count_breakdown">This is an approximation based on the players currently online through Steam, increased by 1.4x to account for standalone players as well.\n\nLive server: %1$d on Steam, %2$d estimated\nPreview server: %3$d on Steam, %4$d estimated</string>
+    <string name="news_ends_in_days">Ends in %1$dd</string>
+    <string name="news_ends_in_hours">Ends in %1$dh</string>
+    <string name="news_ends_soon">Ends soon</string>
+    <string name="news_image_description">Announcement banner</string>
     <string name="pref_crash_reporting">Send crash reports</string>
     <string name="pref_crash_reporting_note">Anonymous: device model, Android version, app build and the crash log.</string>
     <string name="pref_max_ram">Max RAM</string>

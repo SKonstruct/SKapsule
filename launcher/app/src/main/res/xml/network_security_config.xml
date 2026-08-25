@@ -8,4 +8,12 @@
         <domain includeSubdomains="true">spiralknights.com</domain>
         <domain includeSubdomains="true">threerings.net</domain>
     </domain-config>
+    <!--
+      KnightLauncher's announcement service. It listens on port 6060 with no TLS
+      at all, so the home-screen news card cannot be fetched over HTTPS. Scoped to
+      that one host; its banner images are served over HTTPS from a CDN.
+    -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">flamingo.knightlauncher.com</domain>
+    </domain-config>
 </network-security-config>

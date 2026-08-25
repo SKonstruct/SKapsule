@@ -181,7 +181,9 @@ class LauncherActivity : AppCompatActivity() {
                 .show()
         }
 
+        binding.subtitle.setOnClickListener { showPlayerCountBreakdown() }
         fetchPlayerCount()
+        fetchNews()
         checkForUpdate()
         ensureRuntime()
     }
@@ -381,27 +383,65 @@ class LauncherActivity : AppCompatActivity() {
         )
     }
 
+    /**
+     * Steam only knows about Steam players, so both servers' counts are scaled by
+     * [PLAYER_ESTIMATE_MULT] to account for standalone installs and then summed —
+     * the same arithmetic KnightLauncher does, so the two agree.
+     */
     private fun fetchPlayerCount() {
         lifecycleScope.launch {
-            val count = withContext(Dispatchers.IO) {
-                try {
-                    val url = java.net.URL("https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/?appid=99900")
-                    val conn = url.openConnection() as java.net.HttpURLConnection
-                    conn.connectTimeout = 5000
-                    conn.readTimeout = 5000
-                    val text = conn.inputStream.bufferedReader().readText()
-                    conn.disconnect()
-                    val json = org.json.JSONObject(text)
-                    val steam = json.getJSONObject("response").getInt("player_count")
-                    Math.round(steam * 1.4f)
-                } catch (e: Exception) {
-                    -1
-                }
-            }
-            if (count > 0) {
-                binding.subtitle.text = "Fight alongside ~$count other Spiral Knights!"
+            val live = withContext(Dispatchers.IO) { steamPlayers(APPID_LIVE) }
+            val preview = withContext(Dispatchers.IO) { steamPlayers(APPID_PREVIEW) }
+            // Only give up when neither server answered; a dead preview leg must
+            // not hide the live number.
+            if (live < 0 && preview < 0) return@launch
+
+            playerCounts = Pair(maxOf(live, 0), maxOf(preview, 0))
+            val total = estimate(maxOf(live, 0)) + estimate(maxOf(preview, 0))
+            if (total > 0) {
+                binding.subtitle.text = getString(R.string.subtitle_player_count, total)
             }
         }
+    }
+
+    /** @return the Steam player count, or -1 if the request failed. */
+    private fun steamPlayers(appId: Int): Int = try {
+        val url = java.net.URL(
+            "https://api.steampowered.com/ISteamUserStats/GetNumberOfCurrentPlayers/v1/?appid=$appId"
+        )
+        val conn = (url.openConnection() as java.net.HttpURLConnection).apply {
+            connectTimeout = 5000
+            readTimeout = 5000
+        }
+        try {
+            org.json.JSONObject(conn.inputStream.bufferedReader().readText())
+                .getJSONObject("response")
+                .optInt("player_count", -1)
+        } finally {
+            conn.disconnect()
+        }
+    } catch (e: Exception) {
+        -1
+    }
+
+    private fun estimate(steam: Int): Int = Math.round(steam * PLAYER_ESTIMATE_MULT)
+
+    /** Live and preview Steam counts from the last successful fetch, or null. */
+    private var playerCounts: Pair<Int, Int>? = null
+
+    /** Explains where the number in the subtitle comes from. */
+    private fun showPlayerCountBreakdown() {
+        val (live, preview) = playerCounts ?: return
+        AlertDialog.Builder(this)
+            .setTitle(R.string.player_count_title)
+            .setMessage(
+                getString(
+                    R.string.player_count_breakdown,
+                    live, estimate(live), preview, estimate(preview),
+                )
+            )
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
     }
 
     private fun checkForUpdate() {
@@ -436,6 +476,27 @@ class LauncherActivity : AppCompatActivity() {
             if (av > bv) return 1
         }
         return 0
+    }
+
+    /**
+     * Loads the current announcement into the home-screen card. The card stays
+     * gone unless there is a live one, so a quiet week or an unreachable service
+     * leaves the screen exactly as it was.
+     */
+    private fun fetchNews() {
+        lifecycleScope.launch {
+            val news = NewsFeed.fetch(this@LauncherActivity) ?: return@launch
+            binding.newsEndsIn.text = NewsFeed.endsInLabel(this@LauncherActivity, news.endsAt)
+            binding.newsTitle.text = news.title
+            binding.newsBody.text = news.body
+            binding.newsCard.setOnClickListener { openUrl(news.link) }
+            binding.newsCard.visibility = View.VISIBLE
+
+            val width = binding.newsCard.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+            NewsFeed.image(this@LauncherActivity, news.imageUrl, width)?.let {
+                binding.newsImage.setImageBitmap(it)
+            }
+        }
     }
 
     private fun showUpdateBanner(release: AppUpdater.Release) {
@@ -644,6 +705,11 @@ class LauncherActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "LauncherActivity"
         const val EXTRA_LOGIN_MODE = "com.skarm.launcher.LOGIN_MODE"
+        /** Scales a Steam-only count to an estimated total including standalone players. */
+        private const val PLAYER_ESTIMATE_MULT = 1.4f
+        private const val APPID_LIVE = 99900
+        private const val APPID_PREVIEW = 99920
+
         const val EXTRA_MAX_HEAP_MB = "com.skarm.launcher.MAX_HEAP_MB"
         const val EXTRA_STEAM_USER = "com.skarm.launcher.STEAM_USER"
         const val EXTRA_STEAM_PASS = "com.skarm.launcher.STEAM_PASS"
