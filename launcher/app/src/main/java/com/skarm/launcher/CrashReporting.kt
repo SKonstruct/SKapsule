@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.util.Log
+import androidx.core.content.pm.PackageInfoCompat
 import io.sentry.Attachment
 import io.sentry.Sentry
 import io.sentry.SentryLevel
@@ -76,7 +77,9 @@ object CrashReporting {
             options.dsn = DSN
             val info = app.packageManager.getPackageInfo(app.packageName, 0)
             options.release = "skapsule@${info.versionName ?: "0.0.0"}"
-            options.dist = info.longVersionCode.toString()
+            // PackageInfoCompat: longVersionCode is API 28 and this module ships to 26,
+            // where the miss is a NoSuchMethodError -- an Error, which no catch here stops.
+            options.dist = PackageInfoCompat.getLongVersionCode(info).toString()
             options.environment =
                 if (app.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) "debug"
                 else "production"

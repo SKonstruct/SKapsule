@@ -27,6 +27,16 @@ Notable changes per release. Versions are the git tags the APKs are built from
   atomic, and the document provider cannot be walked outside the app's own files.
 
 ### Changed
+- Touch controls start at 40 % opacity, and the slider now bottoms out at 20 % instead of
+  fully invisible. A saved value below that is raised on load.
+- "Show Action Bar" is now **Show Buttons** and hides every button except ESC; the joysticks
+  and the three chrome buttons stay. A new eye button in the chrome row toggles it directly.
+- The chrome row is three equal icon squares instead of two mixed text buttons.
+- Mouse scroll wheel now reaches the game — `EV_SCROLL` had no producer, so inventory and
+  chat lists could not be scrolled. Right and middle clicks are no longer reported as left
+  clicks.
+- Crash reporting no longer dies at startup on Android 8.x: it called `longVersionCode`,
+  which is API 28, and the resulting `NoSuchMethodError` was not caught.
 
 - Minimum render scale is now 0.6 (and the new default). At 0.5 a 1080p-tall device
   rendered a 540 px surface and Spiral Knights' own UI stopped laying out, which is why

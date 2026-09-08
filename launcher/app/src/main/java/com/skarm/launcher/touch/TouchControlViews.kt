@@ -50,6 +50,7 @@ object HudPalette {
     const val SURFACE: Int = 0xB3000000.toInt() // popup panel
     const val BUTTON_IDLE: Int = 0x99202020.toInt() // touch button idle
     const val BUTTON_PRESSED: Int = 0xCC606060.toInt() // touch button pressed/toggled
+    const val BUTTON_OUTLINE: Int = 0x47FFFFFF // touch button hairline edge, matches iOS
     const val JOY_BG: Int = 0x66202020.toInt() // joystick base (more transparent)
     const val JOY_KNOB: Int = 0xCC808080.toInt() // joystick knob
 }
@@ -223,6 +224,12 @@ class TouchButtonView(context: Context, node: ControlNode) : BaseTouchControl(co
         textSize = 40f
     }
 
+    private val outlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = HudPalette.BUTTON_OUTLINE
+        style = Paint.Style.STROKE
+        strokeWidth = context.resources.displayMetrics.density
+    }
+
     private var isPressedState = false
     private var isToggledOn = false
 
@@ -245,6 +252,13 @@ class TouchButtonView(context: Context, node: ControlNode) : BaseTouchControl(co
         // Use a rounded square instead of a circle
         val cornerRadius = size * 0.25f
         canvas.drawRoundRect(buttonRect, cornerRadius, cornerRadius, bgPaint)
+
+        // Hairline edge, matching the iOS buttons. Inset by half the stroke so it sits
+        // inside the fill rather than straddling its edge.
+        val half = outlinePaint.strokeWidth / 2f
+        buttonRect.inset(half, half)
+        canvas.drawRoundRect(buttonRect, cornerRadius - half, cornerRadius - half, outlinePaint)
+        buttonRect.inset(-half, -half)
 
         // Draw label — scale text with button size, then shrink-to-fit so
         // multi-character labels ("Dodge", "Strafe") don't run past the edge

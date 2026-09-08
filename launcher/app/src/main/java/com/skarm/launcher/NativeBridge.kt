@@ -53,8 +53,12 @@ object NativeBridge {
      * Forwards a touch as a mouse event into the native input queue.
      * @param action 0=down, 1=move, 2=up
      * @param x,y framebuffer pixels (y-down, top-left origin)
+     * @param button GLFW mouse button (0=left, 1=right, 2=middle)
      */
-    external fun onTouchEvent(action: Int, x: Int, y: Int)
+    external fun onTouchEvent(action: Int, x: Int, y: Int, button: Int)
+
+    /** One notch of the wheel; positive is up. SK reads discrete ticks, not pixels. */
+    external fun onScroll(ticks: Int)
 
     /** Marks a controller connected/disconnected. Disconnect zeroes held state. */
     external fun onGamepadConnected(connected: Boolean)

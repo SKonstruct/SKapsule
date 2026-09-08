@@ -50,6 +50,8 @@
     <string name="news_ends_in_hours">Ends in %1$dh</string>
     <string name="news_ends_soon">Ends soon</string>
     <string name="news_image_description">Announcement banner</string>
+    <string name="chrome_edit_layout">Edit layout</string>
+    <string name="chrome_toggle_buttons">Show or hide buttons</string>
     <string name="sidebar_edit_controls">Edit Controls</string>
     <string name="editor_done">Done</string>
     <string name="editor_game_running_title">Game is still running</string>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Matches the iOS chrome buttons: dark translucent fill with a hairline edge, the same
+     one the touch buttons draw (HudPalette.BUTTON_OUTLINE). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#202020" />
+    <corners android:radius="12dp" />
+    <stroke android:width="1dp" android:color="#47FFFFFF" />
+</shape>

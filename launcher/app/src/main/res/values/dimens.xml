@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Edge length of the in-game chrome icon buttons (gear/keyboard/eye). The touch
+         control buttons use the same value so the row reads as one size. -->
+    <dimen name="chrome_button_size">44dp</dimen>
+</resources>

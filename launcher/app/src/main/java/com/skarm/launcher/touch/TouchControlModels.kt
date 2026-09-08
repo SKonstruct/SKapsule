@@ -39,9 +39,9 @@ data class ControlNode(
 
 @Keep
 data class TouchLayoutData(
-    var globalOpacity: Float = 0.5f,
+    var globalOpacity: Float = TouchControlManager.DEFAULT_OPACITY,
     var controlsEnabled: Boolean = true,
-    var actionBarVisible: Boolean = true,
+    var actionBarVisible: Boolean = false,
     /** Render-scale multiplier for the game framebuffer, 0.5..1.0. Lower = the
      *  game renders fewer pixels and the display upscales, so the HUD/UI grows.
      *  Defaults to the minimum so the HUD starts at its largest / most touchable. */
@@ -68,6 +68,17 @@ object TouchControlManager {
     // 0.6, not 0.5: at half scale a 1080p-tall device renders a 540 px surface and
     // SK's own UI stops laying out -- character select never appears. 578 px worked,
     // 540 did not, so the floor sits above that with room to spare.
+    /** Fully transparent controls are unusable, and Gson zero-fills a missing field. */
+    /** The one button "Show Buttons" never hides. */
+    const val NODE_ESC = "btn_esc"
+
+    /** ESC's default centre. The chrome row lines up beside it, so both read this. */
+    const val ESC_X = 0.06f
+    const val ESC_Y = 0.10f
+
+    const val MIN_OPACITY = 0.2f
+    const val DEFAULT_OPACITY = 0.4f
+
     const val MIN_RENDER_SCALE = 0.6f
     const val MAX_RENDER_SCALE = 1.0f
 
@@ -109,6 +120,9 @@ object TouchControlManager {
             // existed, which would give a 0 scale (a 1x1 framebuffer). Clamp to the
             // valid range so old saves stay renderable.
             data.renderScale = data.renderScale.coerceIn(MIN_RENDER_SCALE, MAX_RENDER_SCALE)
+            // Was unclamped: a layout saved before the floor existed (or zero-filled by
+            // Gson) left every control invisible with no way back except Reset.
+            data.globalOpacity = data.globalOpacity.coerceIn(MIN_OPACITY, 1f)
             data.nodes.replaceAll { node ->
                 // Gson zero-fills a `scale` missing from layouts saved before it existed,
                 // which lays the control out at zero size. Same guard as renderScale.
@@ -144,7 +158,7 @@ object TouchControlManager {
 
         // Escape - taps the ESC key (opens/closes SK menus). Top-left by default,
         // clear of the joysticks and the top chrome buttons.
-        layout.nodes.add(ControlNode("btn_esc", ControlType.BUTTON, 0.06f, 0.10f, keyCode = KEY_ESCAPE, label = "ESC"))
+        layout.nodes.add(ControlNode("btn_esc", ControlType.BUTTON, ESC_X, ESC_Y, keyCode = KEY_ESCAPE, label = "ESC"))
 
         // Strafe (R3) - toggle button offset to the lower right of Movement Circle pad.
         // Kept above the bottom Ability/Item row (y=0.9) so they don't overlap.

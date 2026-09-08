@@ -810,6 +810,9 @@ static void *jvm_thread_main(void *arg) {
         ADD_OPT("-Dfrenchpress.credentialPrompt=com.skarm.launcher.bootstrap.NativeBridgePrompt");
     }
     ADD_OPT("-Dno_log_redir=true");
+    // Re-drives getdown's resource unpack from unpacked.dat rather than depending on the
+    // one-time side effect at install; without it a wiped sk/rsrc is never repopulated.
+    ADD_OPT("-Dcheck_unpacked=true");
     ADD_OPT("-Dsilent=launch");
     ADD_OPT("--add-opens=java.base/java.lang=ALL-UNNAMED");
     ADD_OPT("--add-opens=java.base/java.util=ALL-UNNAMED");
@@ -1258,13 +1261,19 @@ Java_com_skarm_launcher_NativeBridge_launchGame(JNIEnv *env, jobject thiz,
 #define GLFW_MOUSE_BUTTON_LEFT 0
 JNIEXPORT void JNICALL
 Java_com_skarm_launcher_NativeBridge_onTouchEvent(JNIEnv *env, jobject thiz,
-                                                  jint action, jint x, jint y) {
+                                                  jint action, jint x, jint y, jint button) {
     input_push(EV_CURSOR_POS, x, y, 0);
     if (action == TOUCH_DOWN) {
-        input_push(EV_MOUSE_BUTTON, GLFW_MOUSE_BUTTON_LEFT, 1 /*press*/, 0);
+        input_push(EV_MOUSE_BUTTON, button, 1 /*press*/, 0);
     } else if (action == TOUCH_UP) {
-        input_push(EV_MOUSE_BUTTON, GLFW_MOUSE_BUTTON_LEFT, 0 /*release*/, 0);
+        input_push(EV_MOUSE_BUTTON, button, 0 /*release*/, 0);
     }
+}
+
+/// One notch of the wheel. SK reads discrete ticks, not pixels.
+JNIEXPORT void JNICALL
+Java_com_skarm_launcher_NativeBridge_onScroll(JNIEnv *env, jobject thiz, jint ticks) {
+    if (ticks != 0) input_push(EV_SCROLL, ticks, 0, 0);
 }
 
 // --- gamepad: Android UI thread writes, SK main thread reads ------------------

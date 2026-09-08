@@ -15,6 +15,7 @@ import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
 import com.skarm.launcher.NativeBridge
+import com.skarm.launcher.R
 
 class TouchControlOverlay @JvmOverloads constructor(
     context: Context,
@@ -36,6 +37,9 @@ class TouchControlOverlay @JvmOverloads constructor(
     // Pointer currently driving SK's mouse cursor (the one that landed on no control).
     // SK's UI is a single cursor, so only the first such pointer is forwarded.
     private var cursorPointerId = MotionEvent.INVALID_POINTER_ID
+
+    /** Latched at DOWN: buttonState reads 0 by the time the release arrives. */
+    private var cursorButton = 0
 
     // Edit state
     private var selectedView: BaseTouchControl? = null
@@ -91,13 +95,14 @@ class TouchControlOverlay @JvmOverloads constructor(
             addView(enableSwitch)
 
             val actionBarSwitch = Switch(context).apply {
-                text = "Show Action Bar"
+                text = "Show Buttons"
                 setTextColor(Color.WHITE)
                 tag = "actionBarSwitch"
                 isChecked = layoutData.actionBarVisible
                 setOnCheckedChangeListener { _, isChecked ->
                     layoutData.actionBarVisible = isChecked
                     applyControlAppearance()
+                    buttonsVisibleChangeListener?.invoke(isChecked)
                 }
             }
             addView(actionBarSwitch)
@@ -110,10 +115,10 @@ class TouchControlOverlay @JvmOverloads constructor(
             val opacitySlider = SeekBar(context).apply {
                 max = 100
                 tag = "opacitySlider"
-                progress = (layoutData.globalOpacity * 100).toInt()
+                progress = opacityToProgress(layoutData.globalOpacity)
                 setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                     override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                        layoutData.globalOpacity = progress / 100f
+                        layoutData.globalOpacity = progressToOpacity(progress)
                         applyControlAppearance()
                     }
                     override fun onStartTrackingTouch(seekBar: SeekBar?) {}
@@ -252,6 +257,28 @@ class TouchControlOverlay @JvmOverloads constructor(
      * so they're easy to see and drag; hidden controls show faintly. Exiting edit
      * mode restores the user's chosen global opacity (and hides hidden controls).
      */
+    /**
+     * "Show Buttons" off hides every button except ESC. The joysticks are not buttons so
+     * they stay, and ESC stays because without a hardware keyboard it is the only way out
+     * of a menu.
+     */
+    private fun isHiddenByShowButtons(node: ControlNode): Boolean =
+        !layoutData.actionBarVisible &&
+            node.type == ControlType.BUTTON &&
+            node.id != TouchControlManager.NODE_ESC
+
+    /** Current state, for the chrome eye button's icon. */
+    val buttonsVisible: Boolean get() = layoutData.actionBarVisible
+
+    /** Flips "Show Buttons" from outside the editor (the chrome eye button). */
+    fun toggleButtonsVisible(): Boolean {
+        layoutData.actionBarVisible = !layoutData.actionBarVisible
+        editorPanel.findViewWithTag<Switch>("actionBarSwitch")?.isChecked = layoutData.actionBarVisible
+        applyControlAppearance()
+        TouchControlManager.saveLayout(context, layoutData)
+        return layoutData.actionBarVisible
+    }
+
     private fun applyControlAppearance() {
         val enabled = layoutData.controlsEnabled
         if (!enabled) cancelActivePointers()
@@ -270,11 +297,13 @@ class TouchControlOverlay @JvmOverloads constructor(
 
         // Notify Activity if there's a listener to update static buttons (Keyboard, Gear)
         opacityChangeListener?.invoke(layoutData.globalOpacity)
+        // Editing keeps them on screen regardless, or they could not be repositioned.
+        controlsEnabledChangeListener?.invoke(enabled || inEditMode)
     }
 
     private fun applyEditModeAppearance(view: BaseTouchControl) {
         view.visibility = View.VISIBLE
-        val shown = view.node.visible && !(view.node.isActionBar && !layoutData.actionBarVisible)
+        val shown = view.node.visible && !isHiddenByShowButtons(view.node)
         view.alpha = if (shown) {
             maxOf(layoutData.globalOpacity, EDIT_MODE_MIN_OPACITY)
         } else {
@@ -283,12 +312,25 @@ class TouchControlOverlay @JvmOverloads constructor(
     }
 
     private fun applyPlayModeAppearance(view: BaseTouchControl, enabled: Boolean) {
-        val shown = view.node.visible && !(view.node.isActionBar && !layoutData.actionBarVisible)
+        val shown = view.node.visible && !isHiddenByShowButtons(view.node)
         view.visibility = if (enabled && shown) View.VISIBLE else View.GONE
         view.alpha = layoutData.globalOpacity
     }
 
     var opacityChangeListener: ((Float) -> Unit)? = null
+
+    /** Notified when "Show Buttons" changes, so the chrome eye icon can follow. */
+    var buttonsVisibleChangeListener: ((Boolean) -> Unit)? = null
+
+    /**
+     * Notified with whether the keyboard and eye buttons should be on screen: they follow
+     * "Show Controls", since both only act on the touch controls, but stay up while the
+     * layout is being edited so they can be dragged. The gear is deliberately left out --
+     * it is the only way back into the editor to turn the controls on again.
+     */
+    var controlsEnabledChangeListener: ((Boolean) -> Unit)? = null
+
+    val controlsEnabled: Boolean get() = layoutData.controlsEnabled
 
     // Notified with the chosen render scale (0.5..1.0) when the resolution slider
     // moves; the host Activity applies it to the game surface.
@@ -308,7 +350,9 @@ class TouchControlOverlay @JvmOverloads constructor(
 
         // Base sizes
         val baseJoySize = w * 0.135f
-        val baseBtnSize = w * 0.067f
+        // Same edge length as the chrome icon buttons. The old w*0.067 fraction came out
+        // noticeably larger than them on a phone, which is what made the row look oversized.
+        val baseBtnSize = resources.getDimension(R.dimen.chrome_button_size)
 
         for (view in controlViews) {
             val node = view.node
@@ -396,7 +440,7 @@ class TouchControlOverlay @JvmOverloads constructor(
      * misses a control would be lost, and (worse) letting the SurfaceView take the
      * gesture instead means no *later* finger in it can ever reach a control.
      */
-    var cursorTouchListener: ((action: Int, x: Float, y: Float) -> Unit)? = null
+    var cursorTouchListener: ((action: Int, x: Float, y: Float, button: Int) -> Unit)? = null
 
     /**
      * Take every gesture ourselves instead of letting ViewGroup hand one to a child.
@@ -471,6 +515,19 @@ class TouchControlOverlay @JvmOverloads constructor(
         return false
     }
 
+    /**
+     * Which mouse button a pointer represents.
+     *
+     * A finger has no buttons and reports 0, which is what we want — left. A real mouse
+     * fills buttonState, and reporting its secondary click as a left click (which is what
+     * happened before) makes context menus unreachable.
+     */
+    private fun glfwButton(event: MotionEvent): Int = when {
+        event.buttonState and MotionEvent.BUTTON_SECONDARY != 0 -> 1
+        event.buttonState and MotionEvent.BUTTON_TERTIARY != 0 -> 2
+        else -> 0
+    }
+
     private fun isPointInsideView(x: Float, y: Float, view: View): Boolean {
         return x >= view.left && x <= view.right && y >= view.top && y <= view.bottom
     }
@@ -508,7 +565,8 @@ class TouchControlOverlay @JvmOverloads constructor(
                     pointerTargets.put(id, target)
                 } else if (cursorPointerId == MotionEvent.INVALID_POINTER_ID) {
                     cursorPointerId = id
-                    cursorTouchListener?.invoke(MotionEvent.ACTION_DOWN, x, y)
+                    cursorButton = glfwButton(event)
+                    cursorTouchListener?.invoke(MotionEvent.ACTION_DOWN, x, y, cursorButton)
                 }
                 // Always claim the gesture: a miss must not hand it to the SurfaceView,
                 // or the fingers that follow could never reach a control.
@@ -523,7 +581,8 @@ class TouchControlOverlay @JvmOverloads constructor(
                         dispatchToControl(target, MotionEvent.ACTION_MOVE, event, index)
                     } else if (id == cursorPointerId) {
                         cursorTouchListener?.invoke(
-                            MotionEvent.ACTION_MOVE, event.getX(index), event.getY(index)
+                            MotionEvent.ACTION_MOVE, event.getX(index), event.getY(index),
+                            cursorButton,
                         )
                     }
                 }
@@ -540,7 +599,8 @@ class TouchControlOverlay @JvmOverloads constructor(
                 } else if (id == cursorPointerId) {
                     cursorPointerId = MotionEvent.INVALID_POINTER_ID
                     cursorTouchListener?.invoke(
-                        MotionEvent.ACTION_UP, event.getX(index), event.getY(index)
+                        MotionEvent.ACTION_UP, event.getX(index), event.getY(index),
+                        cursorButton,
                     )
                 }
                 return true
@@ -550,7 +610,9 @@ class TouchControlOverlay @JvmOverloads constructor(
                 cancelActivePointers()
                 if (cursorPointerId != MotionEvent.INVALID_POINTER_ID) {
                     cursorPointerId = MotionEvent.INVALID_POINTER_ID
-                    cursorTouchListener?.invoke(MotionEvent.ACTION_UP, event.x, event.y)
+                    cursorTouchListener?.invoke(
+                        MotionEvent.ACTION_UP, event.x, event.y, cursorButton,
+                    )
                 }
                 return true
             }
@@ -650,6 +712,14 @@ class TouchControlOverlay @JvmOverloads constructor(
 
         // Resolution slider spans render scale MIN_RENDER_SCALE..1.0 across its 0..100 range.
         private val MIN_RENDER_SCALE = TouchControlManager.MIN_RENDER_SCALE
+        private val MIN_OPACITY = TouchControlManager.MIN_OPACITY
+
+        /** The slider bottoms out at MIN_OPACITY, not at invisible. */
+        private fun progressToOpacity(progress: Int): Float =
+            MIN_OPACITY + (progress / 100f) * (1f - MIN_OPACITY)
+
+        private fun opacityToProgress(opacity: Float): Int =
+            (((opacity - MIN_OPACITY) / (1f - MIN_OPACITY)) * 100f).toInt().coerceIn(0, 100)
 
         private fun progressToRenderScale(progress: Int): Float =
             MIN_RENDER_SCALE + (progress / 100f) * (1f - MIN_RENDER_SCALE)

@@ -16,6 +16,8 @@ import android.util.Log
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
+import kotlin.math.ceil
+import kotlin.math.floor
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.View
@@ -30,6 +32,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.doOnLayout
 import com.skarm.launcher.databinding.ActivityGameBinding
+import com.skarm.launcher.touch.TouchControlManager
 import java.io.File
 import java.io.IOException
 import kotlin.math.abs
@@ -118,6 +121,8 @@ class GameActivity :
                         when (v.id) {
                             binding.btnEditLayout.id -> binding.touchOverlay.toggleEditMode()
                             binding.btnKeyboard.id -> toggleSoftKeyboard()
+                            binding.btnToggleButtons.id ->
+                                refreshButtonsToggleIcon(binding.touchOverlay.toggleButtonsVisible())
                         }
                     }
                 }
@@ -213,7 +218,21 @@ class GameActivity :
         }
 
         // Let the gear/keyboard buttons be dragged while Edit Layout mode is active.
+        migrateChromeLayoutOnce()
         binding.touchOverlay.editModeChangeListener = { editing -> setChromeEditMode(editing) }
+        // The editor switch and the eye button drive the same setting, so each has to
+        // follow the other.
+        binding.touchOverlay.buttonsVisibleChangeListener = { visible ->
+            refreshButtonsToggleIcon(visible)
+        }
+        binding.touchOverlay.controlsEnabledChangeListener = { enabled ->
+            setChromeControlsVisible(enabled)
+        }
+        setChromeControlsVisible(binding.touchOverlay.controlsEnabled)
+        binding.btnToggleButtons.setOnClickListener {
+            refreshButtonsToggleIcon(binding.touchOverlay.toggleButtonsVisible())
+        }
+        refreshButtonsToggleIcon(binding.touchOverlay.buttonsVisible)
         binding.root.doOnLayout { applyChromePositions() }
 
         binding.touchOverlay.opacityChangeListener = { opacity ->
@@ -221,6 +240,7 @@ class GameActivity :
             val finalOpacity = Math.max(opacity, minOpacity)
             binding.btnKeyboard.alpha = finalOpacity
             binding.btnEditLayout.alpha = finalOpacity
+            binding.btnToggleButtons.alpha = finalOpacity
         }
 
         // Initially trigger the opacity listener to set the correct starting opacity
@@ -295,7 +315,7 @@ class GameActivity :
      * the framebuffer can be smaller than the view (the resolution slider calls
      * holder.setFixedSize), so translate then scale before pushing.
      */
-    private fun pushCursorTouch(action: Int, overlayX: Float, overlayY: Float) {
+    private fun pushCursorTouch(action: Int, overlayX: Float, overlayY: Float, button: Int) {
         val viewX = overlayX - surface.left
         val viewY = overlayY - surface.top
         val sx = if (surface.width > 0 && currentBufferWidth > 0) {
@@ -311,9 +331,9 @@ class GameActivity :
         val x = (viewX * sx).toInt()
         val y = (viewY * sy).toInt()
         when (action) {
-            MotionEvent.ACTION_DOWN -> NativeBridge.onTouchEvent(TOUCH_DOWN, x, y)
-            MotionEvent.ACTION_MOVE -> NativeBridge.onTouchEvent(TOUCH_MOVE, x, y)
-            MotionEvent.ACTION_UP -> NativeBridge.onTouchEvent(TOUCH_UP, x, y)
+            MotionEvent.ACTION_DOWN -> NativeBridge.onTouchEvent(TOUCH_DOWN, x, y, button)
+            MotionEvent.ACTION_MOVE -> NativeBridge.onTouchEvent(TOUCH_MOVE, x, y, button)
+            MotionEvent.ACTION_UP -> NativeBridge.onTouchEvent(TOUCH_UP, x, y, button)
         }
     }
 
@@ -400,6 +420,18 @@ class GameActivity :
     }
 
     override fun onGenericMotionEvent(event: MotionEvent): Boolean {
+        // A real mouse's wheel arrives here, not through the touch dispatch. SK reads
+        // discrete ticks, so round away from zero rather than truncating a partial notch
+        // to nothing.
+        if (event.isFromSource(InputDevice.SOURCE_MOUSE) &&
+            event.action == MotionEvent.ACTION_SCROLL
+        ) {
+            val ticks = event.getAxisValue(MotionEvent.AXIS_VSCROLL)
+            if (ticks != 0f) {
+                NativeBridge.onScroll(if (ticks > 0) ceil(ticks).toInt() else floor(ticks).toInt())
+            }
+            return true
+        }
         if (event.isFromSource(InputDevice.SOURCE_JOYSTICK) &&
             event.action == MotionEvent.ACTION_MOVE
         ) {
@@ -478,6 +510,7 @@ class GameActivity :
         val listener = if (editing) chromeDragListener else null
         binding.btnEditLayout.setOnTouchListener(listener)
         binding.btnKeyboard.setOnTouchListener(listener)
+        binding.btnToggleButtons.setOnTouchListener(listener)
     }
 
     private fun saveChromePosition(v: View) {
@@ -490,9 +523,53 @@ class GameActivity :
             .apply()
     }
 
+    /**
+     * "Show Controls" hides the keyboard and eye buttons too -- both only act on the touch
+     * controls. The gear is left alone: it is the only way back into the editor.
+     */
+    private fun setChromeControlsVisible(enabled: Boolean) {
+        val visibility = if (enabled) View.VISIBLE else View.GONE
+        binding.btnKeyboard.visibility = visibility
+        binding.btnToggleButtons.visibility = visibility
+    }
+
+    private fun refreshButtonsToggleIcon(visible: Boolean) {
+        binding.btnToggleButtons.setImageResource(
+            if (visible) R.drawable.ic_eye else R.drawable.ic_eye_off,
+        )
+    }
+
+    /**
+     * Clears saved chrome positions once, when the row changed shape.
+     *
+     * The buttons went from two wide text buttons to three squares sitting close together;
+     * anyone who already had positions saved would keep the old spread-out layout and never
+     * see the new arrangement.
+     */
+    private fun migrateChromeLayoutOnce() {
+        val prefs = getSharedPreferences(CHROME_PREFS, MODE_PRIVATE)
+        if (prefs.getInt(CHROME_LAYOUT_VERSION_KEY, 0) >= CHROME_LAYOUT_VERSION) return
+        prefs.edit().clear().putInt(CHROME_LAYOUT_VERSION_KEY, CHROME_LAYOUT_VERSION).apply()
+    }
+
+    /**
+     * Default row: ESC, gear, keyboard, eye, evenly spaced on ESC's line. Every button in
+     * it is one chrome_button_size across, so the step is that plus a gap. Positions are
+     * top-left fractions because that is what [positionChrome] applies, while the control
+     * nodes are placed by their centre.
+     */
     private fun applyChromePositions() {
-        positionChrome(binding.btnEditLayout, DEFAULT_GEAR_X, DEFAULT_GEAR_Y)
-        positionChrome(binding.btnKeyboard, DEFAULT_KB_X, DEFAULT_KB_Y)
+        val parent = binding.btnEditLayout.parent as? View ?: return
+        if (parent.width == 0 || parent.height == 0) return
+
+        val size = resources.getDimension(R.dimen.chrome_button_size)
+        val step = size + CHROME_GAP_DP * resources.displayMetrics.density
+        val firstX = TouchControlManager.ESC_X * parent.width + step - size / 2f
+        val topY = (TouchControlManager.ESC_Y * parent.height - size / 2f) / parent.height
+
+        positionChrome(binding.btnEditLayout, firstX / parent.width, topY)
+        positionChrome(binding.btnKeyboard, (firstX + step) / parent.width, topY)
+        positionChrome(binding.btnToggleButtons, (firstX + 2 * step) / parent.width, topY)
     }
 
     private fun positionChrome(v: View, defaultX: Float, defaultY: Float) {
@@ -509,6 +586,7 @@ class GameActivity :
     private fun chromeKey(v: View): String? = when (v.id) {
         binding.btnEditLayout.id -> "gear"
         binding.btnKeyboard.id -> "kb"
+        binding.btnToggleButtons.id -> "eye"
         else -> null
     }
 
@@ -854,13 +932,14 @@ class GameActivity :
         const val URL_CONFIRM_WINDOW_MS = 3000L
 
         // Repositionable chrome-button positions (fractions of the surface),
-        // persisted per button. Defaults sit top-right, clear of SK's top-center
-        // "My Auctions" button that the gear used to cover.
+        // persisted per button. The defaults are derived in applyChromePositions from
+        // ESC's position, so the row reads ESC, gear, keyboard, eye.
         private const val CHROME_PREFS = "game_chrome_prefs"
-        private const val DEFAULT_GEAR_X = 0.72f
-        private const val DEFAULT_GEAR_Y = 0.03f
-        private const val DEFAULT_KB_X = 0.84f
-        private const val DEFAULT_KB_Y = 0.03f
+        private const val CHROME_LAYOUT_VERSION_KEY = "layout_version"
+        private const val CHROME_LAYOUT_VERSION = 3
+
+        // Gap between adjacent buttons in that row.
+        private const val CHROME_GAP_DP = 8f
 
         // Movement past this many pixels turns a chrome-button press into a drag
         // rather than a tap.
