@@ -50,6 +50,11 @@
     <string name="news_ends_in_hours">Ends in %1$dh</string>
     <string name="news_ends_soon">Ends soon</string>
     <string name="news_image_description">Announcement banner</string>
+    <string name="sidebar_edit_controls">Edit Controls</string>
+    <string name="editor_done">Done</string>
+    <string name="editor_game_running_title">Game is still running</string>
+    <string name="editor_game_running_message">Spiral Knights is still open in the background and keeps its own copy of the control layout, so whichever closes last overwrites the other. Exit the game first to be safe.</string>
+    <string name="editor_edit_anyway">Edit anyway</string>
     <string name="pref_crash_reporting">Send crash reports</string>
     <string name="pref_crash_reporting_note">Anonymous: device model, Android version, app build and the crash log.</string>
     <string name="pref_max_ram">Max RAM</string>

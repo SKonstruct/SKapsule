@@ -26,6 +26,9 @@ class TouchControlOverlay @JvmOverloads constructor(
     private val controlViews = mutableListOf<BaseTouchControl>()
     private var inEditMode = false
 
+    /** True while the editor is open, so a host can leave it cleanly (leaving saves). */
+    val isEditing: Boolean get() = inEditMode
+
     // Play-mode touch routing: which control each active pointer was captured by, keyed
     // by pointer id. A pointer stays with the control it landed on for its whole life.
     private val pointerTargets = SparseArray<BaseTouchControl>()

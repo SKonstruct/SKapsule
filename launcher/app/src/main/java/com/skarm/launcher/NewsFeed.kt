@@ -104,10 +104,14 @@ object NewsFeed {
             if (!imageUrl.startsWith("https://") || !link.startsWith("https://")) continue
             if (!content.contains('|')) continue
 
+            // Zero means "no window": most announcements are evergreen and carry
+            // startsAt/endsAt of "0". Only gate on a bound that is actually set,
+            // or every one of those is discarded and the card never appears.
             val now = System.currentTimeMillis()
             val startsAt = server.optString("announceBannerStartsAt").toLongOrNull() ?: 0L
             val endsAt = server.optString("announceBannerEndsAt").toLongOrNull() ?: 0L
-            if (startsAt > now || endsAt <= now) continue
+            if (startsAt > 0L && startsAt > now) continue
+            if (endsAt > 0L && endsAt <= now) continue
 
             return Announcement(
                 title = content.substringBefore('|'),
@@ -120,8 +124,9 @@ object NewsFeed {
         return null
     }
 
-    /** Countdown for the card's chip. */
-    fun endsInLabel(context: Context, endsAt: Long): String {
+    /** Countdown for the card's chip, or null when the announcement never expires. */
+    fun endsInLabel(context: Context, endsAt: Long): String? {
+        if (endsAt <= 0L) return null
         val remaining = endsAt - System.currentTimeMillis()
         val hours = TimeUnit.MILLISECONDS.toHours(remaining)
         return when {

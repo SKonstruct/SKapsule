@@ -3,6 +3,7 @@ package com.skarm.launcher
 import android.content.Context
 import android.os.Build
 import android.util.Log
+import androidx.core.content.pm.PackageInfoCompat
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.tukaani.xz.XZInputStream
 import java.io.BufferedInputStream
@@ -32,9 +33,29 @@ object JreInstaller {
         if (!stamp.isFile) return false
         if (!libjvmPath(context).isFile) return false
         val have = stamp.readText().trim()
-        val want = bundledVersion(context)
-        return have == want
+        return have == stampValue(context)
     }
+
+    private fun stampValue(context: Context): String =
+        "${bundledVersion(context)}+${appStamp(context)}"
+
+    /**
+     * The installed app's own version, folded into the stamp below.
+     *
+     * The component version alone is not enough: shipping a rebuilt runtime under an
+     * unchanged version string would leave the previous unpack in place, so the game
+     * keeps running last release's files. Any app update changes this.
+     */
+    private fun appStamp(context: Context): String = try {
+        val info = context.packageManager.getPackageInfo(context.packageName, 0)
+        // PackageInfoCompat, not longVersionCode: that getter is API 28 and this module
+        // ships to API 26, where the miss is a NoSuchMethodError -- an Error, which the
+        // catch below would not stop.
+        "${info.versionName}-${PackageInfoCompat.getLongVersionCode(info)}"
+    } catch (e: Exception) {
+        "unknown"
+    }
+
 
     private fun bundledVersion(context: Context): String =
         context.assets.open("$ASSET_DIR/version").use { it.bufferedReader().readText().trim() }
@@ -75,7 +96,7 @@ object JreInstaller {
         onProgress("Staging libGL.so…")
         stageLibGL(context, home)
 
-        File(home, STAMP_NAME).writeText(bundledVersion(context))
+        File(home, STAMP_NAME).writeText(stampValue(context))
         onProgress("Runtime ready.")
         Log.i(TAG, "JRE 25 installed at $home; libjvm exists=${libjvmPath(context).exists()}")
     }

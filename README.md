@@ -177,12 +177,25 @@ out/               native build outputs (generated, gitignored)
 
 ---
 
+## Editing the touch controls
+
+**Edit Controls** in the options sidebar opens the same editor the ⚙ button opens in game —
+drag to reposition, per-control visibility and scale, opacity, resolution, and Reset — without
+booting the game first. It opens landscape because the layout is stored relative to the
+landscape play area, so what you arrange is what you get.
+
+If the game is still running in the background it keeps its own copy of the layout and will
+overwrite whatever you change here when it closes, so exit the game first.
+
 ## News card
 
 The home screen shows the current in-game announcement — the same feed the desktop
 [KnightLauncher](https://github.com/lucasluqui/KnightLauncher) renders, so both show the
 same thing at the same time. Tapping the card opens the announcement thread. If there is
 nothing running, or the service is unreachable, the card simply is not shown.
+
+Two things about the feed are normal, not bugs: it rotates, so consecutive launches can show
+different announcements, and most entries carry no expiry — those show no countdown.
 
 ## Crash reporting
 

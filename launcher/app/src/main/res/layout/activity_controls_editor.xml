@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Standalone touch-control editor. The overlay is full-screen and un-inset, matching how
+  activity_game.xml hosts it, so a control placed here lands in the same spot in play.
+-->
+<FrameLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/black">
+
+    <!-- Stands in for the game: marks out the play area so the edges are visible. -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_margin="4dp"
+        android:background="@drawable/bg_editor_backdrop" />
+
+    <com.skarm.launcher.touch.TouchControlOverlay
+        android:id="@+id/touch_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_done"
+        style="@style/Widget.Material3.Button.UnelevatedButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|end"
+        android:layout_margin="16dp"
+        android:text="@string/editor_done"
+        android:textColor="#FFFFFF"
+        app:backgroundTint="#ab4a81"
+        app:cornerRadius="12dp" />
+</FrameLayout>

@@ -65,7 +65,10 @@ object TouchControlManager {
 
     // Render-scale (resolution slider) bounds. Default is the minimum, for the
     // largest / most touchable HUD.
-    const val MIN_RENDER_SCALE = 0.5f
+    // 0.6, not 0.5: at half scale a 1080p-tall device renders a 540 px surface and
+    // SK's own UI stops laying out -- character select never appears. 578 px worked,
+    // 540 did not, so the floor sits above that with room to spare.
+    const val MIN_RENDER_SCALE = 0.6f
     const val MAX_RENDER_SCALE = 1.0f
 
     // Button codes from GameActivity

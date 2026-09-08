@@ -376,6 +376,20 @@
                 app:iconSize="20dp"
                 app:iconPadding="12dp" />
 
+            <!-- Edit Controls Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/sidebar_btn_edit_controls"
+                style="@style/Widget.Material3.Button.TextButton.Icon"
+                android:layout_width="match_parent"
+                android:layout_height="50dp"
+                android:gravity="start|center_vertical"
+                android:text="@string/sidebar_edit_controls"
+                android:textColor="#FFFFFF"
+                app:icon="@drawable/ic_gamepad"
+                app:iconTint="#FFFFFF"
+                app:iconSize="20dp"
+                app:iconPadding="12dp" />
+
             <!-- GitHub Button -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/sidebar_btn_github"

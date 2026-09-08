@@ -7,6 +7,12 @@ Notable changes per release. Versions are the git tags the APKs are built from
 
 ### Fixed
 
+- News card never appeared: announcements with no expiry (which is most of them) were
+  discarded by the countdown window check.
+- Steam auth tickets were sized against the buffer's remaining space rather than its
+  capacity, so a ticket that fit could be rejected and the game would never finish its
+  server logon.
+
 - **Touch buttons were unusable while a joystick was held** ([#43](https://github.com/SKonstruct/SKapsule/issues/43)).
   The overlay hit-tested every pointer at the *first* finger's position, so with a
   thumb on the move stick no button could be pressed, and releases were delivered to
@@ -20,8 +26,19 @@ Notable changes per release. Versions are the git tags the APKs are built from
 - Mod archives are contained to the extraction directory (Zip Slip), mod downloads are
   atomic, and the document provider cannot be walked outside the app's own files.
 
+### Changed
+
+- Minimum render scale is now 0.6 (and the new default). At 0.5 a 1080p-tall device
+  rendered a 540 px surface and Spiral Knights' own UI stopped laying out, which is why
+  character select never appeared. Existing layouts are clamped up on load.
+- The bundled runtime is re-unpacked whenever the app version changes, so an update
+  always replaces the staged JRE and LWJGL rather than keeping the previous unpack.
+- Default game preferences now also seed `interface_gain=1.0`.
+
 ### Added
 
+- **Edit Controls** in the options sidebar: arrange the on-screen controls without launching
+  the game.
 - **News card** on the home screen showing the current in-game announcement, from the
   same feed KnightLauncher uses. Tapping it opens the announcement.
 - **In-app updates**: the update banner now downloads and installs the new APK instead

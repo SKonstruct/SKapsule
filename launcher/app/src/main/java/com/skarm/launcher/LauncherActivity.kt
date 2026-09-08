@@ -149,6 +149,7 @@ class LauncherActivity : AppCompatActivity() {
         binding.sidebarBtnApplyMods.setOnClickListener { applyMods() }
         binding.sidebarBtnRemoveMods.setOnClickListener { removeMods() }
         binding.sidebarBtnOpenFolder.setOnClickListener { openFolder() }
+        binding.sidebarBtnEditControls.setOnClickListener { openControlsEditor() }
         binding.sidebarBtnGithub.setOnClickListener { openUrl("https://github.com/SKonstruct/SKapsule") }
         binding.sidebarBtnDiscord.setOnClickListener { openUrl("https://dankware.alwaysdata.net/discord") }
         binding.sidebarBtnLogout.setOnClickListener { onLogout() }
@@ -234,6 +235,42 @@ class LauncherActivity : AppCompatActivity() {
             } catch (ex: Exception) {
                 Toast.makeText(this, "Could not open folder", Toast.LENGTH_SHORT).show()
             }
+        }
+    }
+
+    /**
+     * Opens the standalone control editor.
+     *
+     * Guarded on the game still being alive: GameActivity runs in its own `:game` process,
+     * which keeps a separate SharedPreferences cache *and* its own in-memory copy of the
+     * layout that it rewrites wholesale when its editor closes. Editing in both at once
+     * silently loses one set of changes, so say so rather than let it happen quietly.
+     *
+     * The launcher cannot end that process itself — killBackgroundProcesses needs a
+     * permission this app has no other use for, and the game's own exit path runs inside
+     * the game — so the choice is the user's.
+     */
+    private fun openControlsEditor() {
+        if (!isGameProcessRunning()) {
+            startActivity(Intent(this, ControlsEditorActivity::class.java))
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.editor_game_running_title)
+            .setMessage(R.string.editor_game_running_message)
+            .setPositiveButton(R.string.editor_edit_anyway) { _, _ ->
+                startActivity(Intent(this, ControlsEditorActivity::class.java))
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun isGameProcessRunning(): Boolean {
+        val am = getSystemService(ACTIVITY_SERVICE) as android.app.ActivityManager
+        // Own processes are always visible to us, whatever the package visibility rules.
+        return am.runningAppProcesses.orEmpty().any {
+            it.processName == "$packageName:game" &&
+                it.importance < android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_GONE
         }
     }
 
@@ -486,7 +523,11 @@ class LauncherActivity : AppCompatActivity() {
     private fun fetchNews() {
         lifecycleScope.launch {
             val news = NewsFeed.fetch(this@LauncherActivity) ?: return@launch
-            binding.newsEndsIn.text = NewsFeed.endsInLabel(this@LauncherActivity, news.endsAt)
+            val endsIn = NewsFeed.endsInLabel(this@LauncherActivity, news.endsAt)
+            binding.newsEndsIn.text = endsIn
+            // Evergreen announcements carry no expiry; drop the chip rather than
+            // inventing a countdown for one.
+            binding.newsEndsIn.visibility = if (endsIn != null) View.VISIBLE else View.GONE
             binding.newsTitle.text = news.title
             binding.newsBody.text = news.body
             binding.newsCard.setOnClickListener { openUrl(news.link) }

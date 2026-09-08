@@ -2,6 +2,7 @@ package com.skarm.launcher
 
 import android.content.Context
 import android.util.Log
+import androidx.core.content.pm.PackageInfoCompat
 import java.io.File
 import java.io.FileOutputStream
 import java.util.zip.ZipInputStream
@@ -25,8 +26,28 @@ object LwjglInstaller {
     fun isInstalled(context: Context): Boolean {
         val stamp = File(homeDir(context), STAMP_NAME)
         if (!stamp.isFile) return false
-        return stamp.readText().trim() == VERSION
+        return stamp.readText().trim() == stampValue(context)
     }
+
+    private fun stampValue(context: Context): String = "$VERSION+${appStamp(context)}"
+
+    /**
+     * The installed app's own version, folded into the stamp below.
+     *
+     * The component version alone is not enough: shipping a rebuilt runtime under an
+     * unchanged version string would leave the previous unpack in place, so the game
+     * keeps running last release's files. Any app update changes this.
+     */
+    private fun appStamp(context: Context): String = try {
+        val info = context.packageManager.getPackageInfo(context.packageName, 0)
+        // PackageInfoCompat, not longVersionCode: that getter is API 28 and this module
+        // ships to API 26, where the miss is a NoSuchMethodError -- an Error, which the
+        // catch below would not stop.
+        "${info.versionName}-${PackageInfoCompat.getLongVersionCode(info)}"
+    } catch (e: Exception) {
+        "unknown"
+    }
+
 
     /** Returns a JVM-style classpath of all staged jars, colon-separated. */
     fun classpath(context: Context): String =
@@ -53,7 +74,7 @@ object LwjglInstaller {
             if (name.endsWith(".jar")) name.substringAfterLast('/') else null
         }
 
-        File(home, STAMP_NAME).writeText(VERSION)
+        File(home, STAMP_NAME).writeText(stampValue(context))
         onProgress("LWJGL ready.")
         Log.i(TAG, "LWJGL $VERSION staged at $home; jars=${jarsDir(context).list()?.size}, natives=${libDir(context).list()?.size}")
     }

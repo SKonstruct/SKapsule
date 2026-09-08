@@ -45,6 +45,14 @@
             </intent-filter>
         </activity>
 
+        <!-- Same process as the launcher, deliberately: it shares the launcher's
+             SharedPreferences cache, which the :game process does not. -->
+        <activity
+            android:name=".ControlsEditorActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|density|uiMode"
+            android:screenOrientation="sensorLandscape" />
+
         <activity
             android:name=".GameActivity"
             android:exported="false"

@@ -31,6 +31,7 @@ object PrefsInstaller {
           <entry key="anonymous_logon" value="false"/>
           <entry key="compatibility_mode" value="true"/>
           <entry key="cull_transients_prod" value="true"/>
+          <entry key="interface_gain" value="1.0"/>
           <entry key="render_quality" value="LOW"/>
         </map>
     """.trimIndent() + "\n"
@@ -50,7 +51,7 @@ object PrefsInstaller {
             Log.i(
                 TAG,
                 "Seeded default projectx prefs (compatibility_mode, render_quality=LOW, " +
-                    "cull_transients_prod, anonymous_logon=false)",
+                    "cull_transients_prod, interface_gain=1.0, anonymous_logon=false)",
             )
         } catch (t: Throwable) {
             Log.w(TAG, "Failed to seed default projectx prefs", t)
