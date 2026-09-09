@@ -44,6 +44,7 @@ object NewsFeed {
         val body: String,
         val imageUrl: String,
         val link: String,
+        val startsAt: Long,
         val endsAt: Long,
     )
 
@@ -89,14 +90,21 @@ object NewsFeed {
      * `announceBanner` is `url|intensity` (the intensity is the desktop
      * launcher's dimming factor; we use our own scrim) and `announceContent` is
      * `title|body`. The timestamps arrive as JSON *strings* despite being longs
-     * upstream. Returns null for anything that is not a complete, live, HTTPS
+     * upstream. Returns null for anything that is not a complete HTTPS
      * announcement.
+     *
+     * The only gates are the ones that would otherwise break the card: both
+     * halves present, and HTTPS for the two URLs we act on. In particular the
+     * announcement window is *not* a gate -- KnightLauncher renders whatever
+     * `announceBanner` holds and uses the timestamps only to label the chip,
+     * so anything stricter here means an event it shows and we silently drop.
+     * `announceType` is not a gate either: it is dead data upstream (parsed
+     * into the model, never read), and it is "0" for the live event.
      */
     private fun parse(payload: String): Announcement? {
         val servers = JSONObject(payload).optJSONArray("serverlist") ?: return null
         for (i in 0 until servers.length()) {
             val server = servers.optJSONObject(i) ?: continue
-            if (server.optString("announceType").let { it.isEmpty() || it == "0" }) continue
 
             val imageUrl = server.optString("announceBanner").substringBefore('|')
             val content = server.optString("announceContent")
@@ -104,35 +112,40 @@ object NewsFeed {
             if (!imageUrl.startsWith("https://") || !link.startsWith("https://")) continue
             if (!content.contains('|')) continue
 
-            // Zero means "no window": most announcements are evergreen and carry
-            // startsAt/endsAt of "0". Only gate on a bound that is actually set,
-            // or every one of those is discarded and the card never appears.
-            val now = System.currentTimeMillis()
-            val startsAt = server.optString("announceBannerStartsAt").toLongOrNull() ?: 0L
-            val endsAt = server.optString("announceBannerEndsAt").toLongOrNull() ?: 0L
-            if (startsAt > 0L && startsAt > now) continue
-            if (endsAt > 0L && endsAt <= now) continue
-
             return Announcement(
                 title = content.substringBefore('|'),
                 body = content.substringAfter('|').replace("\\n", "\n"),
                 imageUrl = imageUrl,
                 link = link,
-                endsAt = endsAt,
+                startsAt = server.optString("announceBannerStartsAt").toLongOrNull() ?: 0L,
+                endsAt = server.optString("announceBannerEndsAt").toLongOrNull() ?: 0L,
             )
         }
         return null
     }
 
-    /** Countdown for the card's chip, or null when the announcement never expires. */
-    fun endsInLabel(context: Context, endsAt: Long): String? {
-        if (endsAt <= 0L) return null
-        val remaining = endsAt - System.currentTimeMillis()
+    /**
+     * The card's chip: how long until the event starts, how long it has left, or that it
+     * has ended. Null when neither bound is set -- an evergreen announcement, which is
+     * most of them, has nothing to count down.
+     */
+    fun statusLabel(context: Context, startsAt: Long, endsAt: Long): String? {
+        val now = System.currentTimeMillis()
+        return when {
+            startsAt <= 0L && endsAt <= 0L -> null
+            startsAt > now -> context.getString(R.string.news_starts_in, until(context, startsAt - now))
+            endsAt in 1 until now -> context.getString(R.string.news_ended)
+            endsAt > 0L -> context.getString(R.string.news_ends_in, until(context, endsAt - now))
+            else -> null
+        }
+    }
+
+    private fun until(context: Context, remaining: Long): String {
         val hours = TimeUnit.MILLISECONDS.toHours(remaining)
         return when {
-            hours >= 48 -> context.getString(R.string.news_ends_in_days, hours / 24)
-            hours >= 1 -> context.getString(R.string.news_ends_in_hours, hours)
-            else -> context.getString(R.string.news_ends_soon)
+            hours >= 48 -> context.getString(R.string.news_duration_days, hours / 24)
+            hours >= 1 -> context.getString(R.string.news_duration_hours, hours)
+            else -> context.getString(R.string.news_duration_soon)
         }
     }
 

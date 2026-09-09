@@ -517,17 +517,17 @@ class LauncherActivity : AppCompatActivity() {
 
     /**
      * Loads the current announcement into the home-screen card. The card stays
-     * gone unless there is a live one, so a quiet week or an unreachable service
+     * gone unless the feed carries one, so a quiet week or an unreachable service
      * leaves the screen exactly as it was.
      */
     private fun fetchNews() {
         lifecycleScope.launch {
             val news = NewsFeed.fetch(this@LauncherActivity) ?: return@launch
-            val endsIn = NewsFeed.endsInLabel(this@LauncherActivity, news.endsAt)
-            binding.newsEndsIn.text = endsIn
-            // Evergreen announcements carry no expiry; drop the chip rather than
+            val status = NewsFeed.statusLabel(this@LauncherActivity, news.startsAt, news.endsAt)
+            binding.newsEndsIn.text = status
+            // Evergreen announcements carry no window; drop the chip rather than
             // inventing a countdown for one.
-            binding.newsEndsIn.visibility = if (endsIn != null) View.VISIBLE else View.GONE
+            binding.newsEndsIn.visibility = if (status != null) View.VISIBLE else View.GONE
             binding.newsTitle.text = news.title
             binding.newsBody.text = news.body
             binding.newsCard.setOnClickListener { openUrl(news.link) }

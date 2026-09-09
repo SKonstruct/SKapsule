@@ -45,8 +45,11 @@ Notable changes per release. Versions are the git tags the APKs are built from
 
 ### Fixed
 
-- News card never appeared: announcements with no expiry (which is most of them) were
-  discarded by the countdown window check.
+- News card never appeared. Two separate causes: announcements with no expiry (which is
+  most of them) were discarded by the countdown window check, and any announcement whose
+  `announceType` was `"0"` was skipped outright — which the live one is. Neither is a gate
+  in KnightLauncher, so the card now shows whenever the feed carries a complete
+  announcement, and the timestamps only choose the chip: "Starts in", "Ends in", "Ended".
 - Steam auth tickets were sized against the buffer's remaining space rather than its
   capacity, so a ticket that fit could be rejected and the game would never finish its
   server logon.
