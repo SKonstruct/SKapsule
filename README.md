@@ -177,6 +177,17 @@ out/               native build outputs (generated, gitignored)
 
 ---
 
+## Game Mode
+
+The app declares itself a game (`android:appCategory="game"`), so Android 12+ treats it as
+one: the Game Dashboard appears and the system applies its game optimisations.
+
+`res/xml/game_mode_config.xml` opts out of one of them. The platform's downscaling
+intervention resizes the backbuffer without telling the app, and Spiral Knights lays its
+own UI out in raw framebuffer pixels: below roughly 578 px of surface height the client's
+UI stops laying out and character select never appears. The resolution slider already
+offers that trade-off, with a floor we know is safe. FPS override stays enabled.
+
 ## Editing the touch controls
 
 **Edit Controls** in the options sidebar opens the same editor the ⚙ button opens in game —

@@ -29,10 +29,16 @@
         android:supportsRtl="false"
         android:hardwareAccelerated="true"
         android:networkSecurityConfig="@xml/network_security_config"
+        android:appCategory="game"
         tools:targetApi="35">
 
         <!-- Initialised by hand in SkApplication so the opt-out is read first. -->
         <meta-data android:name="io.sentry.auto-init" android:value="false" />
+
+        <!-- Which Game Mode interventions the platform may apply; see the file. -->
+        <meta-data
+            android:name="android.game_mode_config"
+            android:resource="@xml/game_mode_config" />
 
         <activity
             android:name=".LauncherActivity"

@@ -18,6 +18,10 @@ Notable changes per release. Versions are the git tags the APKs are built from
   and the logcat dump is scrubbed of credentials and account emails.
 - Player count now includes the Preview server; tapping the subtitle explains how the
   estimate is calculated.
+- **Game Mode**: the app declares itself a game, so Android 12+ shows the Game Dashboard
+  and applies its game optimisations. The platform's resolution downscaling is opted out
+  of, because it resizes the backbuffer behind the app and Spiral Knights' UI stops laying
+  out below ~578 px of surface height; FPS override stays on.
 - Mouse scroll wheel now reaches the game — `EV_SCROLL` had no producer, so inventory and
   chat lists could not be scrolled. Right and middle clicks are no longer reported as left
   clicks.

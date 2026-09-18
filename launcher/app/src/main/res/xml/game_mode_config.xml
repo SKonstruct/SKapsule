@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Game Mode interventions. Declaring the app a game (android:appCategory="game") lets the
+  platform apply these; this file says which are safe for Spiral Knights.
+
+  Downscaling is not: it resizes the backbuffer behind our back, and SK lays its own UI out
+  in raw framebuffer pixels. Below roughly 578 px of surface height the client's UI stops
+  laying out entirely and character select never appears, the same failure that set the
+  0.6 render-scale floor in TouchControlManager. The resolution slider already gives the
+  player that trade-off, under a floor we know is safe.
+
+  FPS override is left enabled: we do no frame pacing of our own for it to fight, and
+  capping frame rate is a real battery win with no correctness risk.
+
+  supportsBatteryGameMode / supportsPerformanceGameMode are deliberately absent. Setting
+  either to true tells the platform the game applies its own per-mode optimisations and
+  makes it drop the interventions above; we implement none, so claiming that would trade
+  a working default for nothing.
+-->
+<game-mode-config xmlns:android="http://schemas.android.com/apk/res/android"
+    android:allowGameDownscaling="false"
+    android:allowGameFpsOverride="true" />
