@@ -1,0 +1,46 @@
+name: Feature request
+description: Suggest something SKapsule should do.
+labels: ["enhancement"]
+body:
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before filing
+      options:
+        - label: I searched existing issues, including closed ones.
+          required: true
+        - label: This is about the launcher/port, not a change to Spiral Knights itself.
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the situation you're in, not the solution you have in mind. That comes next.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like it to do?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: parity
+    attributes:
+      label: Does the iOS port already do this?
+      description: The two ports are kept close to each other, so an existing implementation is a strong argument.
+      options:
+        - "No / don't know"
+        - "Yes — iOS already has it"
+        - "Not applicable (Android-only concern)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Anything you've tried instead?
+      description: Optional. Workarounds, other apps, or settings that got you partway.

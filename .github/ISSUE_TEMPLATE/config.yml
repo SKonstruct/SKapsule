@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Troubleshooting first
+    url: https://github.com/SKonstruct/SKapsule#known-issues
+    about: Known issues and workarounds. Please check here before filing.
+  - name: iOS port
+    url: https://github.com/SKonstruct/SKapsule-iOS/issues
+    about: Bugs in the iPhone/iPad build belong in the iOS repository.
+  - name: Spiral Knights itself
+    url: https://forums.spiralknights.com/
+    about: SKapsule only packages the official client. Game bugs, account and billing issues are Grey Havens' to handle.

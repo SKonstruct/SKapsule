@@ -1,0 +1,123 @@
+name: Bug report
+description: Something in SKapsule behaves incorrectly.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please fill in the version, device and Android version. Most reports that go
+        nowhere are the ones missing those three.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before filing
+      options:
+        - label: I searched existing issues, including closed ones.
+          required: true
+        - label: I am on the latest [release](https://github.com/SKonstruct/SKapsule/releases), or I explain below why I can't be.
+          required: true
+        - label: This is a problem with SKapsule, not with Spiral Knights itself.
+          required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: SKapsule version
+      description: The launcher's title reads `SKapsule v2.3.0`. If you built it yourself, give the commit.
+      placeholder: "2.3.0"
+    validations:
+      required: true
+
+  - type: input
+    id: android
+    attributes:
+      label: Android version
+      description: Settings → About phone → Android version.
+      placeholder: "Android 14"
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Device
+      description: Make and model. Include the chipset if you know it.
+      placeholder: "Pixel 7a (Tensor G2)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install it?
+      options:
+        - APK from GitHub Releases
+        - The in-app updater
+        - Built from source
+        - Other (explain below)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: What area does this affect?
+      description: A rough guess is fine.
+      options:
+        - Launcher / home screen
+        - Login (Steam or web)
+        - Downloading or patching the game
+        - Gameplay, rendering or performance
+        - On-screen touch controls
+        - Hardware keyboard, mouse or controller
+        - Mods
+        - Updates
+        - Audio
+        - Something else
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: If it only happens sometimes, say how often and what seems to bring it on.
+      placeholder: |
+        1. Launch SKapsule
+        2. Sign in with Steam
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Options sidebar → **Share Logs**, then attach the file or paste it here.
+        A crash without a log is usually not actionable. Logs are scrubbed of
+        credentials and account emails, but do read before posting.
+      render: text
+    validations:
+      required: true
+
+  - type: input
+    id: sentry
+    attributes:
+      label: Sentry event ID
+      description: Optional. If the app reported the crash, paste the ID it showed.
+
+  - type: textarea
+    id: mods
+    attributes:
+      label: Mods installed
+      description: Optional. List them, or say "none". Mods replace game files and cause a fair share of visual bugs.
