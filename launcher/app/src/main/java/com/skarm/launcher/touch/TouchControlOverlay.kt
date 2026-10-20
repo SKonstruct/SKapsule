@@ -366,6 +366,8 @@ class TouchControlOverlay @JvmOverloads constructor(
             val r = (cx + size / 2).toInt()
             val b = (cy + size / 2).toInt()
 
+            view.translationX = 0f
+            view.translationY = 0f
             view.layout(l, t, r, b)
         }
 
@@ -481,8 +483,10 @@ class TouchControlOverlay @JvmOverloads constructor(
 
                 if (tappedView != null) {
                     selectView(tappedView)
-                    dX = tappedView.x - event.x
-                    dY = tappedView.y - event.y
+                    // Layout coordinates, as the hit test uses. `x`/`y` include the view's
+                    // translation, which would put the grab point somewhere else.
+                    dX = tappedView.left - event.x
+                    dY = tappedView.top - event.y
                 } else {
                     // Tap on empty space deselects
                     selectView(null)
@@ -491,19 +495,12 @@ class TouchControlOverlay @JvmOverloads constructor(
             }
             MotionEvent.ACTION_MOVE -> {
                 selectedView?.let { view ->
-                    var newX = event.x + dX
-                    var newY = event.y + dY
-
-                    // Constrain to screen
-                    newX = newX.coerceIn(0f, width.toFloat() - view.width)
-                    newY = newY.coerceIn(0f, height.toFloat() - view.height)
-
-                    view.x = newX
-                    view.y = newY
-
-                    // Update node percent
-                    view.node.xPercent = (newX + view.width / 2f) / width
-                    view.node.yPercent = (newY + view.height / 2f) / height
+                    // The saved percent is the only position; onLayout places the view from
+                    // it. Moving the view as well (view.x = ...) left a translation behind
+                    // that the next layout added on top, so a control jumped on the next tap.
+                    view.node.xPercent = dragPercent(event.x, dX, view.width.toFloat(), width.toFloat())
+                    view.node.yPercent = dragPercent(event.y, dY, view.height.toFloat(), height.toFloat())
+                    requestLayout()
                 }
                 return true
             }

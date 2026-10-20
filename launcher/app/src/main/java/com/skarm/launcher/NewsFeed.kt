@@ -39,16 +39,27 @@ object NewsFeed {
 
     private const val MAX_IMAGE_BYTES = 1024 * 1024
 
-    data class Announcement(
+    /** How long each event stays on the card before the next one, as in KnightLauncher. */
+    const val ROTATE_INTERVAL_MS = 8_000L
+
+    // An event running out within this long gets the warning chip (Event.isEndingSoon upstream).
+    private val ENDING_SOON_MS = TimeUnit.DAYS.toMillis(2)
+
+    /** One entry in the card's rotation. [imageUrl] and [link] are null when absent or not HTTPS. */
+    data class Event(
         val title: String,
         val body: String,
-        val imageUrl: String,
-        val link: String,
+        val imageUrl: String?,
+        val link: String?,
         val startsAt: Long,
         val endsAt: Long,
-    )
+    ) {
+        fun isEndingSoon(now: Long = System.currentTimeMillis()): Boolean =
+            endsAt != 0L && startsAt <= now && now < endsAt && endsAt - now < ENDING_SOON_MS
+    }
 
-    suspend fun fetch(context: Context): Announcement? = withContext(Dispatchers.IO) {
+    /** The events to rotate through, in feed order; empty when there is nothing to show. */
+    suspend fun fetch(context: Context): List<Event> = withContext(Dispatchers.IO) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val cached = prefs.getString(KEY_CACHE, null)
         val age = System.currentTimeMillis() - prefs.getLong(KEY_CACHE_TIME, 0L)
@@ -67,9 +78,9 @@ object NewsFeed {
             }
             // A stale cache still beats an empty home screen when the host is down.
             fetched ?: cached
-        } ?: return@withContext null
+        } ?: return@withContext emptyList()
 
-        runCatching { parse(body) }.getOrElse { Log.w(TAG, "malformed news payload", it); null }
+        runCatching { parse(body) }.getOrElse { Log.w(TAG, "malformed news payload", it); emptyList() }
     }
 
     private fun request(): String? {
@@ -86,48 +97,89 @@ object NewsFeed {
     }
 
     /**
-     * Flamingo packs two values into each announcement field:
-     * `announceBanner` is `url|intensity` (the intensity is the desktop
-     * launcher's dimming factor; we use our own scrim) and `announceContent` is
-     * `title|body`. The timestamps arrive as JSON *strings* despite being longs
-     * upstream. Returns null for anything that is not a complete HTTPS
-     * announcement.
+     * Mirrors KnightLauncher 2.8's `LauncherEventHandler.updateBanner`: the Official
+     * server's `events`, minus any that have already ended (upcoming ones stay), and
+     * `defaultEvent*` only when nothing else is left. The legacy `announce*` fields are
+     * still sent for older launchers but KnightLauncher no longer reads them, so neither
+     * do we.
      *
-     * The only gates are the ones that would otherwise break the card: both
-     * halves present, and HTTPS for the two URLs we act on. In particular the
-     * announcement window is *not* a gate -- KnightLauncher renders whatever
-     * `announceBanner` holds and uses the timestamps only to label the chip,
-     * so anything stricter here means an event it shows and we silently drop.
-     * `announceType` is not a gate either: it is dead data upstream (parsed
-     * into the model, never read), and it is "0" for the live event.
+     * Each field packs two values: `banner` is `url|intensity` (the intensity is the
+     * desktop launcher's dimming factor; we use our own scrim) and `content` is
+     * `title|body`. Timestamps arrive as JSON *strings*.
      */
-    private fun parse(payload: String): Announcement? {
-        val servers = JSONObject(payload).optJSONArray("serverlist") ?: return null
-        for (i in 0 until servers.length()) {
-            val server = servers.optJSONObject(i) ?: continue
+    internal fun parse(payload: String, now: Long = System.currentTimeMillis()): List<Event> {
+        val servers = JSONObject(stripTrailingCommas(payload)).optJSONArray("serverlist")
+            ?: return emptyList()
+        val all = (0 until servers.length()).mapNotNull { servers.optJSONObject(it) }
+        val server = all.firstOrNull { it.optString("name") == "Official" } ?: all.firstOrNull()
+            ?: return emptyList()
 
-            val imageUrl = server.optString("announceBanner").substringBefore('|')
-            val content = server.optString("announceContent")
-            val link = server.optString("announceBannerLink")
-            if (!imageUrl.startsWith("https://") || !link.startsWith("https://")) continue
-            if (!content.contains('|')) continue
+        val listed = server.optJSONArray("events")
+        val events = (0 until (listed?.length() ?: 0))
+            .mapNotNull { listed!!.optJSONObject(it) }
+            .mapNotNull { event(it.optString("banner"), it.optString("content"), it.optString("link"),
+                it.optString("startsAt"), it.optString("endsAt")) }
+            .filter { it.endsAt == 0L || it.endsAt > now }
+        if (events.isNotEmpty()) return events
 
-            return Announcement(
-                title = content.substringBefore('|'),
-                body = content.substringAfter('|').replace("\\n", "\n"),
-                imageUrl = imageUrl,
-                link = link,
-                startsAt = server.optString("announceBannerStartsAt").toLongOrNull() ?: 0L,
-                endsAt = server.optString("announceBannerEndsAt").toLongOrNull() ?: 0L,
-            )
+        return listOfNotNull(event(server.optString("defaultEventBanner"),
+            server.optString("defaultEventContent"), server.optString("defaultEventLink"),
+            server.optString("defaultEventStartsAt"), server.optString("defaultEventEndsAt")))
+    }
+
+    /**
+     * One event, or null if it has no title to show. The service is cleartext, so the
+     * image and link are only kept when they are HTTPS; an event without them still
+     * shows, as it does upstream, just without a banner or a tap target.
+     */
+    private fun event(banner: String, content: String, link: String, startsAt: String, endsAt: String): Event? {
+        val title = content.substringBefore('|').trim()
+        if (title.isEmpty() || title.equals("null", ignoreCase = true)) return null
+        return Event(
+            title = title,
+            body = if ('|' in content) content.substringAfter('|').replace("\\n", "\n") else "",
+            imageUrl = banner.substringBefore('|').takeIf { it.startsWith("https://") },
+            link = link.takeIf { it.startsWith("https://") },
+            startsAt = startsAt.toLongOrNull() ?: 0L,
+            endsAt = endsAt.toLongOrNull() ?: 0L,
+        )
+    }
+
+    /**
+     * Flamingo writes a trailing comma after the last field of every `events` entry
+     * (`"endsAt":"…",}`). KnightLauncher links the reference org.json, which accepts that;
+     * Android's org.json does not, and rejects the whole payload. Drops any comma that
+     * directly precedes a `}` or `]`, leaving string contents untouched.
+     */
+    internal fun stripTrailingCommas(json: String): String {
+        val out = StringBuilder(json.length)
+        var inString = false
+        var escaped = false
+        for (c in json) {
+            if (inString) {
+                when {
+                    escaped -> escaped = false
+                    c == '\\' -> escaped = true
+                    c == '"' -> inString = false
+                }
+            } else if (c == '"') {
+                inString = true
+            } else if (c == '}' || c == ']') {
+                // Outside a string, everything after the previous token is whitespace, so a
+                // comma found here is structural.
+                var i = out.length - 1
+                while (i >= 0 && out[i].isWhitespace()) i--
+                if (i >= 0 && out[i] == ',') out.deleteCharAt(i)
+            }
+            out.append(c)
         }
-        return null
+        return out.toString()
     }
 
     /**
      * The card's chip: how long until the event starts, how long it has left, or that it
-     * has ended. Null when neither bound is set -- an evergreen announcement, which is
-     * most of them, has nothing to count down.
+     * has ended. Null when neither bound is set -- an evergreen event has nothing to
+     * count down.
      */
     fun statusLabel(context: Context, startsAt: Long, endsAt: Long): String? {
         val now = System.currentTimeMillis()

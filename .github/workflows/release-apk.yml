@@ -1,0 +1,27 @@
+name: Release APK
+
+# Manual: Actions -> Release APK -> Run workflow. Builds and signs the APK from main and, only
+# if that succeeds, creates the tag and the GitHub Release (notes from CHANGELOG.md). Nothing is
+# created on failure, so just run it again; there is no version to burn.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, e.g. 2.4.0 (CHANGELOG.md needs a '## 2.4.0' section)"
+        required: true
+        type: string
+
+concurrency: release
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    uses: ./.github/workflows/build-apk.yml
+    with:
+      version: ${{ inputs.version }}
+    secrets: inherit
+    permissions:
+      contents: write

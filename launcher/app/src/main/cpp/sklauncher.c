@@ -4,12 +4,17 @@
 #include <dlfcn.h>
 #include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <pthread.h>
+#include <stdarg.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
+#include <sys/stat.h>
+#include <time.h>
 #include <unistd.h>
 #include <android/log.h>
 #include <android/native_window.h>
@@ -23,9 +28,13 @@
 #endif
 
 #define LOG_TAG "sklauncher"
+// Warnings and errors are also kept in files/diag (see diag_write), because logcat rotates.
+static void diag_logf(const char *level, const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO,  LOG_TAG, __VA_ARGS__)
-#define LOGW(...) __android_log_print(ANDROID_LOG_WARN,  LOG_TAG, __VA_ARGS__)
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
+#define LOGW(...) do { __android_log_print(ANDROID_LOG_WARN, LOG_TAG, __VA_ARGS__); \
+                       diag_logf("W", __VA_ARGS__); } while (0)
+#define LOGE(...) do { __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__); \
+                       diag_logf("E", __VA_ARGS__); } while (0)
 
 // --- shared state -------------------------------------------------------------
 
@@ -332,6 +341,8 @@ static void gl4es_bring_up_once(void) {
     LOGI("gl4es GL_VERSION:  %s", gl4es_glGetString(GL_VERSION));
     LOGI("gl4es GL_VENDOR:   %s", gl4es_glGetString(GL_VENDOR));
     LOGI("gl4es GL_RENDERER: %s", gl4es_glGetString(GL_RENDERER));
+    diag_logf("I", "gl4es GL_RENDERER: %s  GL_VERSION: %s", (const char *)gl4es_glGetString(GL_RENDERER),
+              (const char *)gl4es_glGetString(GL_VERSION));
     LOGI("gl4es initialized on tid=%ld", (long)pthread_self());
     gfx.gl4es_initialized = true;
 }
@@ -350,6 +361,94 @@ typedef struct {
     int level;
     const char *tag;
 } pump_arg_t;
+
+// --- persisted diagnostics ----------------------------------------------------
+// What the game prints, and every JVM exit or abort, is also appended to
+// <files>/diag/game-stdio.log (rotated at 1 MB to game-stdio.old.log). Android's log ring
+// buffer rotates in minutes, so a crash an hour into a session used to leave nothing to share.
+static char diag_dir[1100];
+static pthread_mutex_t diag_lock = PTHREAD_MUTEX_INITIALIZER;
+static int diag_fd = -1;
+static off_t diag_size;
+#define DIAG_MAX_BYTES (1024 * 1024)
+
+static void diag_write(const char *tag, const char *line) {
+    if (!diag_dir[0]) return;
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    time_t sec = ts.tv_sec;
+    struct tm tm;
+    localtime_r(&sec, &tm);
+    char out[2200];
+    int n = snprintf(out, sizeof out, "%02d-%02d %02d:%02d:%02d.%03d %s: %s\n", tm.tm_mon + 1,
+                     tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, (int)(ts.tv_nsec / 1000000),
+                     tag, line);
+    if (n <= 0) return;
+    if (n >= (int)sizeof out) n = (int)sizeof out - 1;
+
+    pthread_mutex_lock(&diag_lock);
+    char path[1200];
+    if (diag_fd >= 0 && diag_size > DIAG_MAX_BYTES) {
+        close(diag_fd);
+        diag_fd = -1;
+        char old[1200];
+        snprintf(path, sizeof path, "%s/game-stdio.log", diag_dir);
+        snprintf(old, sizeof old, "%s/game-stdio.old.log", diag_dir);
+        rename(path, old);
+    }
+    if (diag_fd < 0) {
+        snprintf(path, sizeof path, "%s/game-stdio.log", diag_dir);
+        diag_fd = open(path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0600);
+        diag_size = diag_fd >= 0 ? lseek(diag_fd, 0, SEEK_END) : 0;
+    }
+    if (diag_fd >= 0 && write(diag_fd, out, (size_t)n) > 0) diag_size += n;
+    pthread_mutex_unlock(&diag_lock);
+}
+
+static void diag_logf(const char *level, const char *fmt, ...) {
+    char line[1024];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(line, sizeof line, fmt, ap);
+    va_end(ap);
+    char tag[24];
+    snprintf(tag, sizeof tag, "sklauncher/%s", level);
+    diag_write(tag, line);
+}
+
+// The pipes behind the stdout/stderr pumps, so the exit hook can let them drain.
+static int stdio_read_fds[2] = { -1, -1 };
+
+// HotSpot's "exit" and "abort" hooks. exit() is expected to end the process. The libc exit()
+// this replaces ran static destructors while Android's HWUI threads were still alive, which
+// aborts with "pthread_mutex_lock called on a destroyed mutex" and shows up as a crash every
+// time the game quit.
+static void JNICALL jvm_exit_hook(jint code) {
+    char m[64];
+    snprintf(m, sizeof m, "JVM exit(%d)", (int)code);
+    LOGW("%s", m);
+    // The pumps copy the game's last words (a fatal exception's trace) to the log
+    // asynchronously, and _exit would drop whatever they have not read yet.
+    for (int waited = 0; waited < 200; waited += 10) {
+        int pending = 0;
+        for (int i = 0; i < 2; i++) {
+            int n = 0;
+            if (stdio_read_fds[i] >= 0 && ioctl(stdio_read_fds[i], FIONREAD, &n) == 0) pending += n;
+        }
+        if (pending == 0) break;
+        usleep(10 * 1000);
+    }
+    usleep(20 * 1000);   // a pump may still be holding the last line it read
+    _exit((int)code);
+}
+
+// Runs in HotSpot's fatal-error path, possibly in a signal handler: no locks, no allocation.
+static void JNICALL jvm_abort_hook(void) {
+    static const char msg[] = "sklauncher: JVM abort (see hs_err_pid*.log)\n";
+    int fd = diag_fd;
+    if (fd >= 0) (void)!write(fd, msg, sizeof msg - 1);
+    __android_log_write(ANDROID_LOG_ERROR, LOG_TAG, "JVM abort (see hs_err_pid*.log in files/diag)");
+}
 
 // Known-benign third-party noise dropped from sk-stdout/sk-stderr. We can't silence
 // these at the source (closed SK jar, binary getdown-pro.jar, the LWJGL fork's Pojav
@@ -397,6 +496,7 @@ static void *stdio_pump(void *arg) {
                     } else {
                         dropping_stack = false;
                         __android_log_write(p->level, p->tag, line);
+                        diag_write(p->tag, line);
                     }
                 }
                 line_len = 0;
@@ -417,6 +517,8 @@ static void redirect_stdio_to_log(void) {
 
     int outp[2], errp[2];
     if (pipe(outp) || pipe(errp)) { LOGE("pipe() failed for stdio redirect"); return; }
+    stdio_read_fds[0] = outp[0];
+    stdio_read_fds[1] = errp[0];
     dup2(outp[1], STDOUT_FILENO); close(outp[1]);
     dup2(errp[1], STDERR_FILENO); close(errp[1]);
     setvbuf(stdout, NULL, _IOLBF, 0);
@@ -513,6 +615,33 @@ static void log_pending_exception(JNIEnv *env, const char *prefix) {
         LOGE("%s: <toString() unavailable>", prefix);
     }
     (*env)->DeleteLocalRef(env, thr_class);
+    // JNI turns a ClassNotFoundException into a NoClassDefFoundError and keeps the real
+    // reason (an unreadable jar, say) only as the cause, so walk it.
+    jclass throwable = (*env)->FindClass(env, "java/lang/Throwable");
+    jmethodID get_cause = throwable ? (*env)->GetMethodID(env, throwable, "getCause",
+                                                          "()Ljava/lang/Throwable;") : NULL;
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    if (throwable) (*env)->DeleteLocalRef(env, throwable);
+    jthrowable cur = t;
+    for (int depth = 0; get_cause && depth < 4; depth++) {
+        jthrowable cause = (jthrowable)(*env)->CallObjectMethod(env, cur, get_cause);
+        if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionClear(env); break; }
+        if (!cause) break;
+        jclass cc = (*env)->GetObjectClass(env, cause);
+        jmethodID ts = (*env)->GetMethodID(env, cc, "toString", "()Ljava/lang/String;");
+        jstring cd = (*env)->CallObjectMethod(env, cause, ts);
+        if ((*env)->ExceptionCheck(env)) { (*env)->ExceptionClear(env); cd = NULL; }
+        if (cd) {
+            const char *c = (*env)->GetStringUTFChars(env, cd, NULL);
+            LOGE("%s: caused by %s", prefix, c);
+            (*env)->ReleaseStringUTFChars(env, cd, c);
+            (*env)->DeleteLocalRef(env, cd);
+        }
+        (*env)->DeleteLocalRef(env, cc);
+        if (cur != t) (*env)->DeleteLocalRef(env, cur);
+        cur = cause;
+    }
+    if (cur != t) (*env)->DeleteLocalRef(env, cur);
     (*env)->DeleteLocalRef(env, t);
 }
 
@@ -528,6 +657,7 @@ static JavaVM   *g_art_vm;
 static jclass    g_nb_cls;            // NativeBridge, global ref
 static jmethodID g_nb_launch_status;  // onLaunchStatus(Ljava/lang/String;)V
 static jmethodID g_nb_render_ready;   // onRenderReady()V
+static jmethodID g_nb_boot_failed;    // onBootFailed(Ljava/lang/String;)V
 static jmethodID g_nb_keep_alive;     // steamKeepAlive(Z)V
 static jmethodID g_nb_prompt_device;  // promptForDeviceCode(Z)Ljava/lang/String;
 static jmethodID g_nb_prompt_email;   // promptForEmailCode(Ljava/lang/String;Z)Ljava/lang/String;
@@ -544,6 +674,8 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
         g_nb_launch_status = (*env)->GetStaticMethodID(env, cls, "onLaunchStatus",
                                                        "(Ljava/lang/String;)V");
         g_nb_render_ready  = (*env)->GetStaticMethodID(env, cls, "onRenderReady", "()V");
+        g_nb_boot_failed   = (*env)->GetStaticMethodID(env, cls, "onBootFailed",
+                                                       "(Ljava/lang/String;)V");
         g_nb_keep_alive    = (*env)->GetStaticMethodID(env, cls, "steamKeepAlive", "(Z)V");
         g_nb_prompt_device = (*env)->GetStaticMethodID(env, cls, "promptForDeviceCode",
                                                        "(Z)Ljava/lang/String;");
@@ -578,6 +710,17 @@ static void art_launch_status(const char *msg) {
     if (!env || !g_nb_cls || !g_nb_launch_status) return;
     jstring s = (*env)->NewStringUTF(env, msg ? msg : "");
     (*env)->CallStaticVoidMethod(env, g_nb_cls, g_nb_launch_status, s);
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    (*env)->DeleteLocalRef(env, s);
+}
+
+// The JVM thread gave up before the game started. Without this the boot overlay just sat on
+// "Starting Java runtime" forever, because nothing else tells the UI the thread has ended.
+static void art_boot_failed(const char *msg) {
+    JNIEnv *env = art_env();
+    if (!env || !g_nb_cls || !g_nb_boot_failed) return;
+    jstring s = (*env)->NewStringUTF(env, msg ? msg : "");
+    (*env)->CallStaticVoidMethod(env, g_nb_cls, g_nb_boot_failed, s);
     if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
     (*env)->DeleteLocalRef(env, s);
 }
@@ -653,6 +796,9 @@ static jstring JNICALL sk_native_prompt_email_code(JNIEnv *env, jclass thiz, jst
 
 static void *jvm_thread_main(void *arg) {
     (void)arg;
+    snprintf(diag_dir, sizeof diag_dir, "%s/diag", jvm.app_files);
+    mkdir(diag_dir, 0700);
+    diag_write("sklauncher", "---- game process start ----");
     redirect_stdio_to_log();
     LOGI("JVM thread: home=%s tid=%ld", jvm.jre_home, (long)pthread_self());
 
@@ -688,6 +834,7 @@ static void *jvm_thread_main(void *arg) {
     }
     if (gfx.surface == EGL_NO_SURFACE) {
         LOGE("JVM thread: EGL never came up; aborting");
+        art_boot_failed("The graphics surface never became ready. Close the game and try again.");
         return NULL;
     }
 
@@ -697,13 +844,25 @@ static void *jvm_thread_main(void *arg) {
     snprintf(libjvm_path, sizeof libjvm_path, "%s/lib/server/libjvm.so", jvm.jre_home);
 
     void *jli = dlopen(libjli_path, RTLD_NOW | RTLD_GLOBAL);
-    if (!jli) { LOGE("dlopen libjli.so failed: %s", dlerror()); return NULL; }
+    if (!jli) {
+        LOGE("dlopen libjli.so failed: %s", dlerror());
+        art_boot_failed("The Java runtime could not be loaded. Clearing the app's data reinstalls it.");
+        return NULL;
+    }
 
     void *jvm_lib = dlopen(libjvm_path, RTLD_NOW | RTLD_GLOBAL);
-    if (!jvm_lib) { LOGE("dlopen libjvm.so failed: %s", dlerror()); return NULL; }
+    if (!jvm_lib) {
+        LOGE("dlopen libjvm.so failed: %s", dlerror());
+        art_boot_failed("The Java runtime could not be loaded. Clearing the app's data reinstalls it.");
+        return NULL;
+    }
 
     JNI_CreateJavaVM_t JNI_CreateJavaVM_p = dlsym(jvm_lib, "JNI_CreateJavaVM");
-    if (!JNI_CreateJavaVM_p) { LOGE("dlsym JNI_CreateJavaVM failed: %s", dlerror()); return NULL; }
+    if (!JNI_CreateJavaVM_p) {
+        LOGE("dlsym JNI_CreateJavaVM failed: %s", dlerror());
+        art_boot_failed("The Java runtime could not be loaded. Clearing the app's data reinstalls it.");
+        return NULL;
+    }
 
     preload_libpath(jvm.lib_path);
     char serverdir[1300];
@@ -720,6 +879,8 @@ static void *jvm_thread_main(void *arg) {
     char opt_userhome[1400];
     char opt_prefs_user[1400];
     char opt_prefs_sys[1400];
+    char opt_errfile[1300];
+    char opt_gclog[1400];
     snprintf(opt_home,      sizeof opt_home,      "-Djava.home=%s",         jvm.jre_home);
     snprintf(opt_libpath,   sizeof opt_libpath,   "-Djava.library.path=%s", jvm.lib_path);
     snprintf(opt_classpath, sizeof opt_classpath, "-Djava.class.path=%s",   jvm.classpath);
@@ -737,6 +898,10 @@ static void *jvm_thread_main(void *arg) {
     snprintf(opt_userhome,   sizeof opt_userhome,   "-Duser.home=%s/home",                       jvm.app_files);
     snprintf(opt_prefs_user, sizeof opt_prefs_user, "-Djava.util.prefs.userRoot=%s/home/.userPrefs",   jvm.app_files);
     snprintf(opt_prefs_sys,  sizeof opt_prefs_sys,  "-Djava.util.prefs.systemRoot=%s/home/.systemPrefs", jvm.app_files);
+    // A fatal JVM error writes its report here (it used to be suppressed, so a native crash left
+    // nothing), and one line per GC lets a long session's memory behaviour be read afterwards.
+    snprintf(opt_errfile, sizeof opt_errfile, "-XX:ErrorFile=%s/hs_err_pid%%p.log", diag_dir);
+    snprintf(opt_gclog,   sizeof opt_gclog,   "-Xlog:gc:file=%s/gc.log:time,uptime:filecount=2,filesize=512k", diag_dir);
 
     // frenchpress Steam-login shim (optional): jar prepended to SK's classpath via
     // SkBootstrap (-Dfrenchpress.jar) so its froth/SteamAPI classes shadow projectx's.
@@ -818,7 +983,8 @@ static void *jvm_thread_main(void *arg) {
     ADD_OPT("--add-opens=java.base/java.util=ALL-UNNAMED");
     ADD_OPT("--enable-native-access=ALL-UNNAMED");
     ADD_OPT("-XX:-CreateCoredumpOnCrash");
-    ADD_OPT("-XX:+SuppressFatalErrorMessage");
+    ADD_OPT(opt_errfile);
+    ADD_OPT(opt_gclog);
 
     if (cacio) {
         ADD_OPT(opt_cacio_bootcp);
@@ -850,6 +1016,15 @@ static void *jvm_thread_main(void *arg) {
         LOGI("cacio AWT bridge enabled (dir=%s)", jvm.cacio_dir);
     }
     #undef ADD_OPT
+    // Hooks carry their function in extraInfo, which ADD_OPT leaves NULL.
+    if (nopt + 2 <= (int)(sizeof options / sizeof options[0])) {
+        options[nopt].optionString = "exit";
+        options[nopt].extraInfo = (void *)jvm_exit_hook;
+        nopt++;
+        options[nopt].optionString = "abort";
+        options[nopt].extraInfo = (void *)jvm_abort_hook;
+        nopt++;
+    }
 
     JavaVMInitArgs args = {
         .version            = JNI_VERSION_1_8,
@@ -862,7 +1037,13 @@ static void *jvm_thread_main(void *arg) {
     JNIEnv *env = NULL;
     LOGI("JVM thread: JNI_CreateJavaVM ...");
     jint rc = JNI_CreateJavaVM_p(&vm, (void **)&env, &args);
-    if (rc != JNI_OK) { LOGE("JNI_CreateJavaVM failed: rc=%d", rc); return NULL; }
+    if (rc != JNI_OK) {
+        LOGE("JNI_CreateJavaVM failed: rc=%d", rc);
+        char m[160];
+        snprintf(m, sizeof m, "The Java runtime failed to start (code %d). Lowering Max RAM may help.", (int)rc);
+        art_boot_failed(m);
+        return NULL;
+    }
     LOGI("JVM thread: JNI_CreateJavaVM OK");
 
     // Force Java to capture the environment variables into ProcessEnvironment
@@ -922,7 +1103,7 @@ static void *jvm_thread_main(void *arg) {
                                                   "(Ljava/lang/String;)Ljava/lang/String;");
     if (!getprop) { LOGE("GetStaticMethodID getProperty failed"); goto done; }
 
-    const char *keys[] = { "java.version", "java.vm.name", "java.home", "os.arch" };
+    const char *keys[] = { "java.version", "java.vm.name", "java.home", "os.arch", "java.class.path" };
     for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); i++) {
         jstring key = (*env)->NewStringUTF(env, keys[i]);
         jstring val = (jstring)(*env)->CallStaticObjectMethod(env, system, getprop, key);
@@ -959,11 +1140,13 @@ static void *jvm_thread_main(void *arg) {
         jclass boot = (*env)->FindClass(env, "com/skarm/launcher/bootstrap/SkBootstrap");
         if (!boot) {
             log_pending_exception(env, "FindClass SkBootstrap");
+            art_boot_failed("The game's files could not be loaded. Clearing the app's data repairs them; share the log if it persists.");
             goto done;
         }
         jmethodID main = (*env)->GetStaticMethodID(env, boot, "main", "([Ljava/lang/String;)V");
         if (!main) {
             log_pending_exception(env, "SkBootstrap.main lookup");
+            art_boot_failed("The game's files could not be loaded. Clearing the app's data repairs them; share the log if it persists.");
             goto done;
         }
 
@@ -977,6 +1160,7 @@ static void *jvm_thread_main(void *arg) {
         (*env)->CallStaticVoidMethod(env, boot, main, args);
         if ((*env)->ExceptionCheck(env)) {
             log_pending_exception(env, "SkBootstrap.main");
+            art_boot_failed("The game stopped while starting. Share the log if it keeps happening.");
         } else {
             LOGI("SkBootstrap.main returned");
         }

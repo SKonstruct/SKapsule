@@ -8,6 +8,8 @@ import android.hardware.input.InputManager
 import android.net.LocalServerSocket
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.Process
 import android.os.SystemClock
 import android.system.Os
@@ -58,6 +60,25 @@ class GameActivity :
     private var steamPass: String = ""
     private var dismissing = false
     private var guardDialog: AlertDialog? = null
+
+    // Boot failure handling. The overlay is dismissed only by SK's first frame, so a game that
+    // never starts used to leave it on the last status forever ("Starting Java runtime",
+    // "Validating 75%"). Either native reports the failure, or no status change for
+    // BOOT_STALL_MS does.
+    private var bootFailed = false
+    private var bootDialog: AlertDialog? = null
+    private val bootHandler = Handler(Looper.getMainLooper())
+    private val bootWatchdog = Runnable {
+        if (binding.bootOverlay.visibility != View.VISIBLE || dismissing || bootFailed) return@Runnable
+        // A Steam Guard prompt can legitimately sit unanswered.
+        if (guardDialog != null) kickBootWatchdog() else failBoot(getString(R.string.boot_timeout), stalled = true)
+    }
+    private val memoryLogger = object : Runnable {
+        override fun run() {
+            LogExporter.logMemory(this@GameActivity)
+            bootHandler.postDelayed(this, MEMORY_LOG_INTERVAL_MS)
+        }
+    }
 
     // xdg-open shim: PATH dir handed to the JVM, and the socket SK's link clicks
     // are relayed over. See setupUrlOpener().
@@ -432,6 +453,14 @@ class GameActivity :
             }
             return true
         }
+        // A mouse moving with no button down is a hover, which never reaches the overlay's
+        // touch handling; without this SK's cursor only follows the mouse while it is held.
+        if (event.isFromSource(InputDevice.SOURCE_MOUSE) &&
+            event.actionMasked == MotionEvent.ACTION_HOVER_MOVE
+        ) {
+            pushCursorTouch(MotionEvent.ACTION_MOVE, event.x, event.y, 0)
+            return true
+        }
         if (event.isFromSource(InputDevice.SOURCE_JOYSTICK) &&
             event.action == MotionEvent.ACTION_MOVE
         ) {
@@ -697,6 +726,12 @@ class GameActivity :
             // Tell the launcher there's now something worth sharing (cross-process
             // marker; the launcher enables its Share Logs button on next resume).
             LogExporter.markLaunchAttempted(this)
+            prelaunchProblem()?.let { problem ->
+                failBoot(problem)
+                return
+            }
+            kickBootWatchdog()
+            bootHandler.postDelayed(memoryLogger, MEMORY_LOG_INTERVAL_MS)
             // java.library.path / LD_LIBRARY_PATH = JRE's lib (libjvm, libGL via
             // gl4es) + LWJGL natives + the app's extracted nativeLibraryDir. The
             // last entry lets the exec'd jspawnhelper find libc++_shared.so and
@@ -782,6 +817,85 @@ class GameActivity :
         surface.holder.setFixedSize(targetW, targetH)
     }
 
+    /**
+     * Checks, and where possible repairs, what the JVM is about to load. HotSpot skips a
+     * classpath jar it cannot open without a word, and the first sign is then a
+     * NoClassDefFoundError and a game that never starts.
+     */
+    private fun prelaunchProblem(): String? {
+        // Always re-stage: an app update must replace it, and a copy killed halfway is a broken jar.
+        runCatching {
+            SkInstaller.stageBootstrapJar(this)
+            if (!SkInstaller.isUsableJar(SkInstaller.getdownJar(this))) SkInstaller.stageGetdownJar(this)
+        }.onFailure {
+            Log.e(TAG, "Could not stage the bootstrap jars", it)
+            return getString(R.string.boot_error_stage)
+        }
+        // Getdown trusts a resource's marker file and never re-hashes, so a damaged game jar or
+        // an empty unpacked tree is otherwise only found by the game dying in its config code.
+        SkInstaller.repairGameJars(this)
+        SkInstaller.repairUnpackedResources(this)
+        val lwjgl = LwjglInstaller.classpath(this)
+        val bad = SkInstaller.unusableJars(SkInstaller.bootstrapClasspath(this)) +
+            SkInstaller.unusableJars(lwjgl)
+        if (bad.isEmpty() && lwjgl.isNotEmpty()) return null
+        Log.e(TAG, "Unusable classpath jars: " + bad.joinToString { "${it.name} (${it.length()} bytes)" } +
+            if (lwjgl.isEmpty()) " [no LWJGL jars staged]" else "")
+        // The launcher unpacks LWJGL again the next time it starts.
+        LwjglInstaller.invalidate(this)
+        return getString(R.string.boot_error_files)
+    }
+
+    private fun kickBootWatchdog() {
+        bootHandler.removeCallbacks(bootWatchdog)
+        bootHandler.postDelayed(bootWatchdog, BOOT_STALL_MS)
+    }
+
+    /**
+     * Says why the game will not start, instead of leaving the overlay on its last status.
+     * [stalled] marks the watchdog case, where the boot may only be slow, so it can keep waiting.
+     */
+    private fun failBoot(message: String, stalled: Boolean = false) {
+        runOnUiThread {
+            if (bootFailed || isFinishing || isDestroyed) return@runOnUiThread
+            if (dismissing) {
+                // The game was already up, so this is not a boot failure.
+                Log.e(TAG, "Game stopped after starting: $message")
+                CrashReporting.report("game_stopped", message)
+                return@runOnUiThread
+            }
+            bootFailed = true
+            bootHandler.removeCallbacks(bootWatchdog)
+            Log.e(TAG, "Boot failed: $message")
+            binding.bootStatus.text = message
+            CrashReporting.report(if (stalled) "boot_timeout" else "boot_failed", message)
+            val builder = AlertDialog.Builder(this)
+                .setTitle(R.string.boot_failed_title)
+                .setMessage(message)
+                .setCancelable(false)
+                .setPositiveButton(R.string.share_logs, null)
+                .setNegativeButton(R.string.exit_confirm_yes) { _, _ -> shutdownGame() }
+            if (stalled) {
+                builder.setNeutralButton(R.string.boot_keep_waiting) { _, _ ->
+                    bootFailed = false
+                    kickBootWatchdog()
+                }
+            }
+            bootDialog = builder.create().also { dialog ->
+                dialog.show()
+                // Sharing must not dismiss the dialog, or the screen is left with nothing to tap.
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                    LogExporter.captureAndShare(this)
+                }
+            }
+        }
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        LogExporter.logMemory(this, "trim level=$level")
+    }
+
     override fun surfaceDestroyed(holder: SurfaceHolder) {
         NativeBridge.onSurfaceDestroyed()
     }
@@ -792,6 +906,7 @@ class GameActivity :
         }
         runCatching { urlServer?.close() }
         urlServer = null
+        bootHandler.removeCallbacksAndMessages(null)
         NativeBridge.setBootListener(null)
         NativeBridge.setCredentialListener(null)
         // Unblock any login thread parked on a dialog we're about to drop.
@@ -810,11 +925,14 @@ class GameActivity :
      */
     override fun onLaunchStatus(message: String) {
         runOnUiThread {
-            if (binding.bootOverlay.visibility == View.VISIBLE) {
+            if (binding.bootOverlay.visibility == View.VISIBLE && !bootFailed) {
                 binding.bootStatus.text = message
+                kickBootWatchdog()
             }
         }
     }
+
+    override fun onBootFailed(message: String) = failBoot(message)
 
     /**
      * SK produced its first frame: dismiss the boot overlay so the game shows
@@ -825,6 +943,12 @@ class GameActivity :
             // Slide overlay out to left and mark GONE when done to prevent touch stealing.
             if (dismissing || binding.bootOverlay.visibility != View.VISIBLE) return@runOnUiThread
             dismissing = true
+            bootHandler.removeCallbacks(bootWatchdog)
+            // A slow boot that the watchdog gave up on can still finish; the game is up, so the
+            // dialog has nothing left to say.
+            bootDialog?.dismiss()
+            bootDialog = null
+            bootFailed = false
             binding.bootOverlay.animate()
                 .translationX(-binding.bootOverlay.width.toFloat())
                 .setDuration(resources.getInteger(android.R.integer.config_mediumAnimTime).toLong())
@@ -922,6 +1046,10 @@ class GameActivity :
 
     companion object {
         const val TAG = "GameActivity"
+
+        // No boot status change for this long means the game is not starting.
+        private const val BOOT_STALL_MS = 180_000L
+        private const val MEMORY_LOG_INTERVAL_MS = 60_000L
 
         // Abstract-namespace socket the xdg-open shim relays URLs over. Must match
         // SOCK_NAME in cpp/xdgopen.c byte-for-byte.

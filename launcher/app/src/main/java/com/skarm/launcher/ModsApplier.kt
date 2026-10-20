@@ -8,6 +8,9 @@ import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
+import java.security.MessageDigest
+import java.net.URL
+import java.net.HttpURLConnection
 import java.util.Properties
 import java.util.jar.JarEntry
 import java.util.jar.JarInputStream
@@ -19,6 +22,9 @@ import java.util.zip.ZipInputStream
 object ModsApplier {
     private const val TAG = "ModsApplier"
 
+    // Paths are matched case-insensitively against archive entries, as KnightLauncher does.
+    // Kept in step with KnightLauncher's ModManager.FILTER_LIST: configs that very often
+    // collide with game updates, so a mod is not allowed to replace them.
     private val PROTECTED_FILES = setOf(
         "config/accessory.dat", "config/accessory.xml",
         "config/actor.dat", "config/actor.xml",
@@ -62,12 +68,13 @@ object ModsApplier {
         "config/shader.dat", "config/shader.xml",
         "config/sounder.dat", "config/sounder.xml",
         "config/status_condition.dat", "config/status_condition.xml",
-        "config/status_effect.dat", "config/status_effect.xml",
-        "config/tileset.dat", "config/tileset.xml",
-        "config/toy.dat", "config/toy.xml",
-        "config/vfx.dat", "config/vfx.xml",
-        "config/view.dat", "config/view.xml",
-        "config/weapon.dat", "config/weapon.xml",
+        "config/style.dat", "config/style.xml",
+        "config/texture.dat", "config/texture.xml",
+        "config/tile.dat", "config/tile.xml",
+        "config/tile_replacement.dat", "config/tile_replacement.xml",
+        "config/uplink.dat", "config/uplink.xml",
+        "config/variant.dat", "config/variant.xml",
+        "config/wall.dat", "config/wall.xml",
     )
 
     data class ApplyStats(
@@ -117,6 +124,12 @@ object ModsApplier {
 
         val gameVersion = getGameVersion(gameHome)
         Log.i(TAG, "Current game version: $gameVersion")
+
+        // Start the code jars from the game's own copies, as KnightLauncher does on every
+        // mount: merging into last run's output keeps changes from mods since removed. First,
+        // so a failure (offline, with modded jars) leaves the install as it was.
+        onProgress("Restoring original code jars…", 0, 0)
+        restorePristineCodeJars(gameHome)
 
         // Step 1: Rebuild resources (unpack jar bundles)
         purgeDirectory(rsrcDir)
@@ -182,7 +195,7 @@ object ModsApplier {
                     }
                 } else if (metadata.isClassMod()) {
                     if (isClassModCompatible(metadata, gameVersion)) {
-                        extractZipToDirectory(modFile, classChangesDir, false)
+                        extractZipToDirectory(modFile, classChangesDir, true)
                         stats.classModsApplied++
                         hasClassMods = true
                     } else {
@@ -191,7 +204,7 @@ object ModsApplier {
                         stats.warnings.add(warning)
                     }
                 } else {
-                    extractZipToDirectory(modFile, rsrcDir, false)
+                    extractZipToDirectory(modFile, rsrcDir, true)
                     stats.resourceModsApplied++
                 }
 
@@ -306,8 +319,115 @@ object ModsApplier {
         if (!rsrcDir.exists()) {
             throw IOException("Game not installed. Please launch the game first.")
         }
+        // Class and locale mods live in the code jars, not rsrc/.
+        onProgress("Restoring original code jars…", 0, 0)
+        restorePristineCodeJars(gameHome)
         purgeDirectory(rsrcDir)
         rebuildResources(rsrcDir, onProgress)
+    }
+
+    private val CODE_JARS = listOf("config.jar", "projectx-config.jar")
+    private const val MAX_CODE_JAR_BYTES = 64L * 1024 * 1024
+
+    /**
+     * Puts the game's own `code/config.jar` and `code/projectx-config.jar` back, which is
+     * where class and locale mods are merged. "The game's own" means matching the install's
+     * getdown `digest2.txt`; a jar that does not is re-fetched for the installed version and
+     * only swapped in once it matches too, so the cleartext-era host cannot hand us anything
+     * else. Untouched jars need no network.
+     */
+    private fun restorePristineCodeJars(gameHome: File) {
+        val digests = readGetdown(File(gameHome, "digest2.txt"))
+        val getdown = readGetdown(File(gameHome, "getdown.txt"))
+        for (name in CODE_JARS) {
+            val path = "code/$name"
+            val expected = digests[path] ?: throw IOException("No digest for $path; launch the game once, then try again.")
+            val jar = File(gameHome, path)
+            val pristine = File(jar.parentFile, "$name.pristine")
+            // An unreadable jar (say, a merge interrupted mid-write) is simply not pristine.
+            fun matches(f: File) = f.exists() && runCatching { getdownDigest(f) }.getOrNull() == expected
+            // Keep a verified copy before mods touch the jar, so later applies and removes
+            // can restore it offline; the download below is only the fallback.
+            if (matches(jar)) {
+                if (!matches(pristine)) jar.copyTo(pristine, overwrite = true)
+                continue
+            }
+            if (matches(pristine)) {
+                pristine.copyTo(jar, overwrite = true)
+                continue
+            }
+
+            val version = getdown["version"]
+            val appbase = getdown["appbase"]
+            if (version == null || appbase == null) throw IOException("Can't find the game server to restore $path.")
+            val url = appbase.replace("%VERSION%", version).replaceFirst("http://", "https://") + "/" + path
+            val tmp = File(jar.parentFile, "$name.download")
+            try {
+                download(url, tmp)
+                if (runCatching { getdownDigest(tmp) }.getOrNull() != expected) {
+                    throw IOException("The original $path failed verification.")
+                }
+                tmp.copyTo(pristine, overwrite = true)
+                if (!tmp.renameTo(jar)) throw IOException("Couldn't replace $path.")
+                Log.i(TAG, "Restored original $path")
+            } finally {
+                tmp.delete()
+            }
+        }
+    }
+
+    /** `key = value` lines, as getdown writes getdown.txt and digest2.txt. */
+    private fun readGetdown(file: File): Map<String, String> =
+        if (!file.exists()) emptyMap() else file.readLines().mapNotNull { line ->
+            val i = line.indexOf(" = ")
+            if (i <= 0 || line.startsWith("#")) null else line.substring(0, i).trim() to line.substring(i + 3).trim()
+        }.toMap()
+
+    /**
+     * Getdown's version-2 jar digest: SHA-256 over every entry's contents in name order,
+     * so it identifies the contents regardless of how the archive was written.
+     */
+    internal fun getdownDigest(jar: File): String {
+        val md = MessageDigest.getInstance("SHA-256")
+        val buffer = ByteArray(8192)
+        ZipFile(jar).use { zip ->
+            for (entry in zip.entries().toList().sortedBy { it.name }) {
+                zip.getInputStream(entry).use { input ->
+                    while (true) {
+                        val n = input.read(buffer)
+                        if (n < 0) break
+                        md.update(buffer, 0, n)
+                    }
+                }
+            }
+        }
+        return md.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    private fun download(url: String, dest: File) {
+        val conn = URL(url).openConnection() as HttpURLConnection
+        conn.connectTimeout = 15_000
+        conn.readTimeout = 30_000
+        try {
+            if (conn.responseCode != 200) throw IOException("HTTP ${conn.responseCode} fetching $url")
+            // Verified against the digest afterwards, but bound it so a bad response cannot
+            // fill storage first. The real jars are a few MB.
+            conn.inputStream.use { input ->
+                dest.outputStream().use { out ->
+                    val buffer = ByteArray(16 * 1024)
+                    var total = 0L
+                    while (true) {
+                        val n = input.read(buffer)
+                        if (n < 0) break
+                        total += n
+                        if (total > MAX_CODE_JAR_BYTES) throw IOException("Unexpectedly large download from $url")
+                        out.write(buffer, 0, n)
+                    }
+                }
+            }
+        } finally {
+            conn.disconnect()
+        }
     }
 
     private fun purgeDirectory(dir: File) {
@@ -342,7 +462,8 @@ object ModsApplier {
                     continue
                 }
 
-                if (checkProtected && PROTECTED_FILES.contains(entryName)) {
+                val key = entryName.lowercase()
+                if (checkProtected && key in PROTECTED_FILES) {
                     Log.w(TAG, "Skipping protected file: $entryName")
                     zis.closeEntry()
                     continue

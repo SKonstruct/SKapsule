@@ -60,4 +60,62 @@ class ModsApplierTest {
         assertEquals("test mod", name)
         assertEquals("class", type)
     }
+
+    private fun zipOf(vararg entries: Pair<String, String>): File {
+        val f = File.createTempFile("mod", ".zip").apply { deleteOnExit() }
+        ZipOutputStream(FileOutputStream(f)).use { z ->
+            for ((name, body) in entries) {
+                z.putNextEntry(ZipEntry(name)); z.write(body.toByteArray()); z.closeEntry()
+            }
+        }
+        return f
+    }
+
+    @Test
+    fun getdownDigestHashesEveryEntryInNameOrder() {
+        // Written out of order, with META-INF, which the v2 digest includes.
+        val jar = zipOf("b.txt" to "B", "META-INF/MANIFEST.MF" to "M", "a.txt" to "A")
+        val expected = java.security.MessageDigest.getInstance("SHA-256")
+            .digest("MAB".toByteArray()).joinToString("") { "%02x".format(it) }
+        assertEquals(expected, ModsApplier.getdownDigest(jar))
+    }
+
+    @Test
+    fun modsNeverReplaceProtectedFiles() {
+        val mod = zipOf(
+            "config/Wall.dat" to "protected, matched case-insensitively",
+            "texture/ok.png" to "ordinary",
+        )
+        val out = kotlin.io.path.createTempDirectory("rsrc").toFile().apply { deleteOnExit() }
+        val extract = ModsApplier::class.java.getDeclaredMethod(
+            "extractZipToDirectory", File::class.java, File::class.java, Boolean::class.javaPrimitiveType,
+        ).apply { isAccessible = true }
+        extract.invoke(ModsApplier, mod, out, true)
+
+        assertFalse(File(out, "config/Wall.dat").exists())
+        assertTrue(File(out, "texture/ok.png").exists())
+    }
+
+    @Test
+    fun restoresModdedCodeJarsFromTheLocalPristineCopyOffline() {
+        val home = kotlin.io.path.createTempDirectory("sk").toFile().apply { deleteOnExit() }
+        val code = File(home, "code").apply { mkdirs() }
+        val digests = listOf("config.jar", "projectx-config.jar").joinToString("\n") { name ->
+            val jar = zipOf("rsrc/$name.txt" to "vanilla $name")
+            jar.copyTo(File(code, name))
+            "code/$name = ${ModsApplier.getdownDigest(jar)}"
+        }
+        File(home, "digest2.txt").writeText(digests + "\n")
+        // Unreachable server: any download fails, so success proves the local path.
+        File(home, "getdown.txt").writeText("version = 1\nappbase = http://127.0.0.1:9/%VERSION%\n")
+
+        val restore = ModsApplier::class.java.getDeclaredMethod("restorePristineCodeJars", File::class.java)
+            .apply { isAccessible = true }
+        restore.invoke(ModsApplier, home)                       // pristine: snapshot taken
+        File(code, "config.jar").writeText("modded")            // a merge, or a torn write
+        restore.invoke(ModsApplier, home)                       // must restore without network
+
+        val expected = digests.lines().first().substringAfter(" = ")
+        assertEquals(expected, ModsApplier.getdownDigest(File(code, "config.jar")))
+    }
 }

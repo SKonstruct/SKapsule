@@ -24,8 +24,8 @@ body:
     id: version
     attributes:
       label: SKapsule version
-      description: The launcher's title reads `SKapsule v2.3.0`. If you built it yourself, give the commit.
-      placeholder: "2.3.0"
+      description: The launcher's title reads `SKapsule v2.4.0`. If you built it yourself, give the commit.
+      placeholder: "2.4.0"
     validations:
       required: true
 
@@ -46,6 +46,16 @@ body:
       placeholder: "Pixel 7a (Tensor G2)"
     validations:
       required: true
+
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU and graphics settings
+      description: >
+        Optional, but needed for visual bugs (corrupted models, wrong textures, black screens).
+        The GPU is on the `gl4es GL_RENDERER` line of the shared log. Also say what the game's
+        graphics quality is set to, and whether you changed it.
+      placeholder: "Adreno 740, quality Low (default)"
 
   - type: dropdown
     id: install
@@ -104,8 +114,8 @@ body:
       label: Logs
       description: |
         Options sidebar → **Share Logs**, then attach the file or paste it here.
-        A crash without a log is usually not actionable. Logs are scrubbed of
-        credentials and account emails, but do read before posting.
+        A crash without a log is usually not actionable. Logs are not scrubbed and can
+        contain your account name, so read before posting.
       render: text
     validations:
       required: true

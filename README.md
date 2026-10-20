@@ -125,8 +125,9 @@ emits an _unsigned_ APK. Provide `storeFile`/`storePassword`/`keyAlias`/`keyPass
 (env) to produce a signed `skapsule-vX.X.X.apk`. See `keystore.properties.template`.
 
 In CI, the keystore is supplied via the `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`,
-`KEY_ALIAS`, and `KEY_PASSWORD` repo secrets. A push of a `v*` tag with signing
-secrets present publishes a GitHub Release with the signed APK attached.
+`KEY_ALIAS`, and `KEY_PASSWORD` repo secrets. The **Release APK** workflow (run manually,
+with a version) builds and signs the APK and, only if that succeeds, creates the tag and a
+GitHub Release with the APK attached.
 
 ---
 
@@ -206,13 +207,14 @@ reachable. All four can be dragged while the editor is open.
 
 ## News card
 
-The home screen shows the current in-game announcement — the same feed the desktop
-[KnightLauncher](https://github.com/lucasluqui/KnightLauncher) renders, so both show the
-same thing at the same time. Tapping the card opens the announcement thread. If there is
-nothing running, or the service is unreachable, the card simply is not shown.
+The home screen shows the current in-game events — the same feed the desktop
+[KnightLauncher](https://github.com/lucasluqui/KnightLauncher) renders, chosen the same way:
+running and upcoming events, or the default event when none are left. With more than one,
+the card rotates through them every 8 seconds, starting at a random one; a chip counts down
+to the start or end, and turns amber in an event's last two days. Tapping the card opens the
+event's page. If there is nothing to show, or the service is unreachable, the card is hidden.
 
-Two things about the feed are normal, not bugs: it rotates, so consecutive launches can show
-different announcements, and most entries carry no expiry — those show no countdown.
+Most default events carry no expiry; those show no countdown, which is normal.
 
 ## Crash reporting
 

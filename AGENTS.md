@@ -108,6 +108,16 @@ list the user-visible effect, and call out anything reviewers should double-chec
 
 ---
 
+## Changelog & releasing
+
+- Every user-visible change goes into `CHANGELOG.md` under `## Unreleased` (Added / Changed /
+  Fixed) in the same change. It becomes the release notes, so write it for players.
+- To release: rename `## Unreleased` to `## <version>` (no `v`) and merge, then Actions →
+  **Release APK** → Run workflow, with the version. It builds and signs the APK from `main`
+  and, only if that succeeds, creates the `v<version>` tag and the release, with that
+  changelog section followed by GitHub's generated notes. Never push the tag yourself: a
+  failed build leaves nothing behind, so just run it again. Nothing commits automatically.
+
 ## Code style
 
 ### Kotlin / Java (launcher)

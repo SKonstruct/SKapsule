@@ -1,7 +1,60 @@
 # Changelog
 
 Notable changes per release. Versions are the git tags the APKs are built from
-(`v2.3.0` → `skapsule-v2.3.0.apk`).
+(`v2.4.0` → `skapsule-v2.4.0.apk`).
+
+## 2.4.0
+
+### Added
+
+- **Donate button** on the home screen, in Buy Me a Coffee's yellow with its cup glyph,
+  opening the project's page. Entirely optional.
+- **Game Mode**: the app declares itself a game, so Android 12+ shows the Game Dashboard
+  and applies its game optimisations. The platform's resolution downscaling is opted out
+  of, because it resizes the backbuffer behind the app and Spiral Knights' UI stops laying
+  out below ~578 px of surface height; FPS override stays on.
+- **Crash diagnostics.** Share Logs now includes what Android's log forgets within minutes: the
+  game's output (kept across sessions), JVM crash reports (`hs_err`), garbage-collection and
+  memory logs, and why Android last ended each process (Android 11+). The game's JVM now logs
+  its exit code and leaves cleanly.
+- **Boot failures are shown.** If the game cannot start, or its start-up status does not change
+  for three minutes, a message appears with Share Logs and Exit (and Keep waiting, for a boot that
+  is only slow), instead of the overlay staying on its last status forever.
+- Steam sign-in tells you what it is doing ("Connecting to Steam…", "Signed in to Steam") and
+  when it gave up.
+- The bug report form asks for the GPU and graphics settings.
+
+### Fixed
+
+- **Controls jumped after being moved** in Edit Controls (reported on a Galaxy Fold 5): the
+  position was applied twice, once while dragging and again at the next layout, so a button
+  moved away from where it was dropped and could not be grabbed until a layout reset.
+- **A mouse only moved the cursor while a button was held.** Hovering now moves it.
+- **The on-screen buttons could take keyboard focus**, so Space or Enter on a hardware keyboard
+  could press the gear instead of reaching the game.
+- **The game could hang on "Starting Java runtime" with no explanation** when its files were
+  damaged or out of date. The startup jars are checked and repaired before every launch,
+  `sk-bootstrap.jar` is replaced on every launch, and damaged files send you back to the
+  launcher to be repaired. A damaged game config jar is re-downloaded, and unpacked game
+  resources that have gone missing are extracted again, which are the usual reasons for a game
+  that stalls on "Validating".
+- **Quitting could end in a native abort** that Android reported as a crash (the JVM's exit
+  ran while the graphics threads were still alive). The exit now leaves the process cleanly.
+- **Steam sign-in gave up while you were fetching your phone**: the whole attempt had only 60
+  seconds, including connecting. It now has 45 more for connecting, and the key that protects
+  your saved Steam login is saved immediately, so closing the game right after approving no
+  longer loses it.
+- **News card vanished again** when the feed added an `events` list: the service writes a
+  trailing comma in each event, which Android's JSON parser rejects outright (KnightLauncher's
+  tolerates it). The card now reads the feed as KnightLauncher 2.8 does — running and
+  upcoming events, or the default event — and rotates through them every 8 seconds.
+- **Removed class and locale mods stayed in the game.** They are merged into
+  `code/config.jar` and `code/projectx-config.jar`, which were never reset. Both are now
+  restored to the game's own copies, verified against the install's getdown digest, before
+  mods are applied and when they are removed.
+- **Standalone mods could replace protected configs.** The filter only ran for mods inside a
+  modpack. The protected list now matches KnightLauncher's (it was missing seven configs the
+  game ships and listed six it does not).
 
 ## 2.3.0
 
@@ -18,10 +71,6 @@ Notable changes per release. Versions are the git tags the APKs are built from
   and the logcat dump is scrubbed of credentials and account emails.
 - Player count now includes the Preview server; tapping the subtitle explains how the
   estimate is calculated.
-- **Game Mode**: the app declares itself a game, so Android 12+ shows the Game Dashboard
-  and applies its game optimisations. The platform's resolution downscaling is opted out
-  of, because it resizes the backbuffer behind the app and Spiral Knights' UI stops laying
-  out below ~578 px of surface height; FPS override stays on.
 - Mouse scroll wheel now reaches the game — `EV_SCROLL` had no producer, so inventory and
   chat lists could not be scrolled. Right and middle clicks are no longer reported as left
   clicks.

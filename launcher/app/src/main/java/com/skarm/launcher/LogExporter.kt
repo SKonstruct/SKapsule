@@ -1,12 +1,15 @@
 package com.skarm.launcher
 
+import android.app.ActivityManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.util.Log
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import java.io.File
+import java.io.RandomAccessFile
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -56,6 +59,8 @@ object LogExporter {
             .start()
         out.outputStream().use { sink -> process.inputStream.copyTo(sink) }
         process.waitFor()
+        runCatching { appendDiagnostics(context, out) }
+            .onFailure { Log.w(TAG, "could not append diagnostics", it) }
         prune(context)
         if (out.length() > 0L) {
             out
@@ -66,6 +71,91 @@ object LogExporter {
     } catch (t: Throwable) {
         Log.e(TAG, "logcat capture failed", t)
         null
+    }
+
+    // --- persisted diagnostics (written by the :game process; logcat rotates in minutes) ---
+
+    /** files/diag: game stdout/stderr and JVM exit lines, hs_err reports, GC and memory logs. */
+    fun diagDir(context: Context): File = File(context.filesDir, "diag").apply { mkdirs() }
+
+    /** Appends one process-memory line to diag/mem.log; the file is reset when it grows past 256 KB. */
+    fun logMemory(context: Context, event: String = "") {
+        runCatching {
+            val status = File("/proc/self/status").readLines()
+            fun field(key: String) = status.firstOrNull { it.startsWith("$key:") }
+                ?.substringAfter(':')?.trim() ?: "?"
+            val mi = ActivityManager.MemoryInfo()
+            context.getSystemService(ActivityManager::class.java)?.getMemoryInfo(mi)
+            val line = "${timestamp()} rss=${field("VmRSS")} swap=${field("VmSwap")} " +
+                "threads=${field("Threads")} avail=${mi.availMem shr 20}MB " +
+                "lowMemory=${mi.lowMemory} $event".trimEnd()
+            Log.i(TAG, "mem $line")
+            val file = File(diagDir(context), "mem.log")
+            if (file.length() > 256 * 1024) file.delete()
+            file.appendText(line + "\n")
+        }
+    }
+
+    private fun tail(file: File, maxBytes: Long): String = RandomAccessFile(file, "r").use { f ->
+        val start = (f.length() - maxBytes).coerceAtLeast(0L)
+        f.seek(start)
+        ByteArray((f.length() - start).toInt()).also { f.readFully(it) }.toString(Charsets.UTF_8)
+    }
+
+    /** Adds what logcat no longer has, so one shared file is enough for a bug report. */
+    private fun appendDiagnostics(context: Context, out: File) {
+        out.appendText("\n\n===== process exit reasons =====\n")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val reasons = context.getSystemService(ActivityManager::class.java)
+                ?.getHistoricalProcessExitReasons(null, 0, 8).orEmpty()
+            for (r in reasons) {
+                out.appendText(
+                    "${Date(r.timestamp)} process=${r.processName} reason=${exitReasonName(r.reason)} " +
+                        "status=${r.status} importance=${r.importance} rss=${r.rss}KB " +
+                        "desc=${r.description}\n",
+                )
+            }
+            if (reasons.isEmpty()) out.appendText("(none recorded)\n")
+        } else {
+            out.appendText("(needs Android 11)\n")
+        }
+        val dir = diagDir(context)
+        val parts = buildList {
+            add("game-stdio.old.log" to 256L)
+            add("game-stdio.log" to 256L)
+            add("gc.log" to 64L)
+            add("gc.log.0" to 64L)
+            add("gc.log.1" to 64L)
+            add("mem.log" to 32L)
+            // Every crash writes a new file; keep the newest few so they cannot pile up.
+            val reports = dir.listFiles { f -> f.name.startsWith("hs_err_pid") }
+                ?.sortedByDescending { it.lastModified() }.orEmpty()
+            reports.drop(3).forEach { it.delete() }
+            reports.take(2).forEach { add(it.name to 128L) }
+        }
+        for ((name, kb) in parts) {
+            val f = File(dir, name)
+            if (f.isFile && f.length() > 0) {
+                out.appendText("\n===== $name (last ${kb}KB) =====\n" + tail(f, kb * 1024) + "\n")
+            }
+        }
+    }
+
+    private fun exitReasonName(reason: Int): String = when (reason) {
+        1 -> "EXIT_SELF"
+        2 -> "SIGNALED"
+        3 -> "LOW_MEMORY"
+        4 -> "CRASH"
+        5 -> "CRASH_NATIVE"
+        6 -> "ANR"
+        7 -> "INITIALIZATION_FAILURE"
+        8 -> "PERMISSION_CHANGE"
+        9 -> "EXCESSIVE_RESOURCE_USAGE"
+        10 -> "USER_REQUESTED"
+        11 -> "USER_STOPPED"
+        12 -> "DEPENDENCY_DIED"
+        13 -> "OTHER"
+        else -> "UNKNOWN($reason)"
     }
 
     /** Fires the system share sheet for a captured [file]. */

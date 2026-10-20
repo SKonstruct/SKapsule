@@ -5,6 +5,14 @@ import android.util.Log
 import androidx.annotation.Keep
 import com.google.gson.Gson
 
+/**
+ * The saved centre, as a fraction of [total], for a control dragged so that [touch] plus the
+ * [grabOffset] taken at touch-down is its new top-left edge. Kept inside the screen, like the
+ * editor shows it.
+ */
+internal fun dragPercent(touch: Float, grabOffset: Float, size: Float, total: Float): Float =
+    ((touch + grabOffset).coerceIn(0f, maxOf(0f, total - size)) + size / 2f) / total
+
 enum class ControlType {
     BUTTON,
     JOYSTICK_LEFT,

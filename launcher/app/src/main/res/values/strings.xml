@@ -16,6 +16,11 @@
     <string name="boot_starting">Starting Java runtime…</string>
     <string name="boot_updating">Updating before launch…</string>
     <string name="boot_steam_auth">Waiting for Steam authorization…</string>
+    <string name="boot_failed_title">Couldn\'t start the game</string>
+    <string name="boot_keep_waiting">Keep waiting</string>
+    <string name="boot_timeout">The game has shown no progress for three minutes. It may just be slow; otherwise share the log so it can be diagnosed.</string>
+    <string name="boot_error_files">The game\'s files are damaged. Go back to the launcher to repair them, and share the log if it happens again.</string>
+    <string name="boot_error_stage">The game\'s startup files could not be written. Check that the device has free storage.</string>
     <string name="steam_guard_title">Steam Guard</string>
     <string name="steam_guard_hint">Code</string>
     <string name="steam_guard_device_message">Enter the Steam Guard code from your authenticator app.</string>
@@ -52,6 +57,7 @@
     <string name="news_starts_in">Starts in %1$s</string>
     <string name="news_ends_in">Ends in %1$s</string>
     <string name="news_ended">Ended</string>
+    <string name="donate_description">Support SKapsule on Buy Me a Coffee</string>
     <string name="news_image_description">Announcement banner</string>
     <string name="chrome_edit_layout">Edit layout</string>
     <string name="chrome_toggle_buttons">Show or hide buttons</string>

@@ -93,6 +93,9 @@ object NativeBridge {
     interface BootListener {
         fun onLaunchStatus(message: String)
         fun onRenderReady()
+
+        /** The JVM thread gave up before the game started; [message] says why, for users. */
+        fun onBootFailed(message: String)
     }
 
     @Volatile
@@ -106,6 +109,12 @@ object NativeBridge {
     @JvmStatic
     fun onLaunchStatus(message: String) {
         bootListener?.onLaunchStatus(message)
+    }
+
+    /** Native -> the JVM could not start or died before the game did. */
+    @JvmStatic
+    fun onBootFailed(message: String) {
+        bootListener?.onBootFailed(message)
     }
 
     /** Native -> SK has produced its first frame; the overlay can be dismissed. */

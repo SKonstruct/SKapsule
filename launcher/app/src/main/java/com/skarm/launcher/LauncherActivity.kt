@@ -19,6 +19,11 @@ import androidx.core.view.GravityCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
+import kotlin.random.Random
+import kotlinx.coroutines.delay
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.Lifecycle
+import android.graphics.Bitmap
 import com.google.android.material.progressindicator.CircularProgressIndicatorSpec
 import com.google.android.material.progressindicator.IndeterminateDrawable
 import com.skarm.launcher.databinding.ActivityLauncherBinding
@@ -54,6 +59,8 @@ class LauncherActivity : AppCompatActivity() {
             "1.0.0"
         }
         binding.title.text = "SKapsule v$ver"
+
+        binding.btnDonate.setOnClickListener { openUrl(DONATE_URL) }
 
         // Open options sidebar
         binding.btnOptions.setOnClickListener {
@@ -203,6 +210,9 @@ class LauncherActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         setLaunchButtonLoading(false)
+        // The game process can have found damaged files and invalidated them; repair before
+        // the next Play rather than failing the same way again.
+        ensureRuntime()
         val hasLogs = LogExporter.wasLaunchAttempted(this) || LogExporter.latestCrash(this) != null
         binding.sidebarBtnShareLogs.isEnabled = hasLogs
 
@@ -298,7 +308,10 @@ class LauncherActivity : AppCompatActivity() {
             .show()
     }
 
+    private var installingRuntime = false
+
     private fun ensureRuntime() {
+        if (installingRuntime) return
         val jreReady = JreInstaller.isInstalled(this)
         val lwjglReady = LwjglInstaller.isInstalled(this)
         val skBootstrapped = SkInstaller.isBootstrapped(this)
@@ -311,6 +324,7 @@ class LauncherActivity : AppCompatActivity() {
         setButtonsEnabled(false)
         binding.setupGroup.visibility = View.VISIBLE
         binding.setupStatus.text = getString(R.string.setup_starting)
+        installingRuntime = true
 
         lifecycleScope.launch {
             try {
@@ -328,6 +342,8 @@ class LauncherActivity : AppCompatActivity() {
                 Log.e(TAG, "Runtime install failed", t)
                 CrashReporting.report("runtime_install_failed", t.toString())
                 binding.setupStatus.text = "Runtime setup failed: ${t.message}"
+            } finally {
+                installingRuntime = false
             }
         }
     }
@@ -516,27 +532,91 @@ class LauncherActivity : AppCompatActivity() {
     }
 
     /**
-     * Loads the current announcement into the home-screen card. The card stays
-     * gone unless the feed carries one, so a quiet week or an unreachable service
-     * leaves the screen exactly as it was.
+     * Fills the home-screen card from the feed and, when it carries more than one
+     * event, rotates through them as KnightLauncher does: a random first event, then
+     * the next every [NewsFeed.ROTATE_INTERVAL_MS]. The card stays gone when there is
+     * nothing to show, so a quiet week or an unreachable service leaves the screen as
+     * it was. Rotation only runs while the screen is started.
      */
     private fun fetchNews() {
         lifecycleScope.launch {
-            val news = NewsFeed.fetch(this@LauncherActivity) ?: return@launch
-            val status = NewsFeed.statusLabel(this@LauncherActivity, news.startsAt, news.endsAt)
-            binding.newsEndsIn.text = status
-            // Evergreen announcements carry no window; drop the chip rather than
-            // inventing a countdown for one.
-            binding.newsEndsIn.visibility = if (status != null) View.VISIBLE else View.GONE
-            binding.newsTitle.text = news.title
-            binding.newsBody.text = news.body
-            binding.newsCard.setOnClickListener { openUrl(news.link) }
+            val events = NewsFeed.fetch(this@LauncherActivity)
+            if (events.isEmpty()) return@launch
             binding.newsCard.visibility = View.VISIBLE
 
+            // Each banner is requested once per feed load, in this scope rather than the
+            // rotation's so a stop/start does not abandon it, and a failing one is not
+            // retried every rotation. Text never waits on it.
+            val scope = this
             val width = binding.newsCard.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
-            NewsFeed.image(this@LauncherActivity, news.imageUrl, width)?.let {
-                binding.newsImage.setImageBitmap(it)
+            val loaded = HashMap<String, Bitmap?>()
+            val requested = HashSet<String>()
+            var current: NewsFeed.Event? = null
+            fun request(url: String) {
+                if (!requested.add(url)) return
+                scope.launch {
+                    loaded[url] = NewsFeed.image(this@LauncherActivity, url, width)
+                    if (current?.imageUrl == url) binding.newsImage.setImageBitmap(loaded[url])
+                }
             }
+
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                var index = Random.nextInt(events.size)
+                var first = true
+                while (true) {
+                    val event = events[index]
+                    current = event
+                    // Read the banner when it is applied, not now: one finishing mid-fade
+                    // would otherwise be replaced by a stale null.
+                    val bitmap = { event.imageUrl?.let { loaded[it] } }
+                    if (first) {
+                        // A restart can land mid-fade; drop it so it cannot apply an old event.
+                        binding.newsCard.animate().cancel()
+                        binding.newsCard.alpha = 1f
+                        showNews(event, bitmap())
+                    } else {
+                        crossfadeNews(event, bitmap)
+                    }
+                    event.imageUrl?.let(::request)
+                    first = false
+                    if (events.size == 1) break
+                    index = (index + 1) % events.size
+                    // Have the next banner ready by the time we rotate to it.
+                    events[index].imageUrl?.let(::request)
+                    delay(NewsFeed.ROTATE_INTERVAL_MS)
+                }
+            }
+        }
+    }
+
+    private fun crossfadeNews(event: NewsFeed.Event, bitmap: () -> Bitmap?) {
+        val card = binding.newsCard
+        card.animate().cancel()
+        card.animate().alpha(0f).setDuration(NEWS_FADE_MS).withEndAction {
+            showNews(event, bitmap())
+            card.animate().alpha(1f).setDuration(NEWS_FADE_MS).start()
+        }.start()
+    }
+
+    private fun showNews(event: NewsFeed.Event, bitmap: Bitmap?) {
+        val status = NewsFeed.statusLabel(this, event.startsAt, event.endsAt)
+        // Evergreen events carry no window; drop the chip rather than inventing a countdown.
+        binding.newsEndsIn.visibility = if (status != null) View.VISIBLE else View.GONE
+        binding.newsEndsIn.text = status
+        val endingSoon = event.isEndingSoon()
+        binding.newsEndsIn.backgroundTintList =
+            if (endingSoon) ColorStateList.valueOf(NEWS_ENDING_SOON_COLOR) else null
+        binding.newsEndsIn.setTextColor(if (endingSoon) NEWS_ENDING_SOON_TEXT else Color.WHITE)
+        binding.newsTitle.text = event.title
+        binding.newsBody.text = event.body
+        binding.newsBody.visibility = if (event.body.isEmpty()) View.GONE else View.VISIBLE
+        binding.newsImage.setImageBitmap(bitmap)
+        val link = event.link
+        if (link != null) {
+            binding.newsCard.setOnClickListener { openUrl(link) }
+        } else {
+            binding.newsCard.setOnClickListener(null)
+            binding.newsCard.isClickable = false
         }
     }
 
@@ -744,6 +824,11 @@ class LauncherActivity : AppCompatActivity() {
     enum class LoginMode { Web, Steam }
 
     companion object {
+        private const val DONATE_URL = "https://buymeacoffee.com/sirdankk"
+        private const val NEWS_FADE_MS = 180L
+        // KnightLauncher's CustomColors.WARNING, with dark text as on its badge.
+        private const val NEWS_ENDING_SOON_COLOR = 0xFFFBC65B.toInt()
+        private const val NEWS_ENDING_SOON_TEXT = 0xFF202020.toInt()
         private const val TAG = "LauncherActivity"
         const val EXTRA_LOGIN_MODE = "com.skarm.launcher.LOGIN_MODE"
         /** Scales a Steam-only count to an estimated total including standalone players. */

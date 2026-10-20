@@ -27,6 +27,21 @@
             app:layout_constraintEnd_toEndOf="parent"
             app:tint="#FFFFFF" />
 
+        <!-- Donate: Buy Me a Coffee, in its brand yellow. Sits left of the gear. -->
+        <ImageButton
+            android:id="@+id/btn_donate"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginTop="2dp"
+            android:layout_marginEnd="12dp"
+            android:background="@drawable/bg_donate"
+            android:contentDescription="@string/donate_description"
+            android:padding="10dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_buymeacoffee"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintEnd_toStartOf="@id/btn_options" />
+
         <!-- Update notification banner -->
         <LinearLayout
             android:id="@+id/update_banner"
@@ -42,7 +57,7 @@
             android:focusable="true"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toStartOf="@id/btn_options">
+            app:layout_constraintEnd_toStartOf="@id/btn_donate">
 
             <ImageView
                 android:id="@+id/update_icon"

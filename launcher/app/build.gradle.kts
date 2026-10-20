@@ -44,7 +44,7 @@ val skVersionName: String = System.getenv("SK_VERSION_NAME")
             null
         }
     }.getOrNull()?.takeIf { it.isNotEmpty() }
-    ?: "2.3.0"
+    ?: "2.4.0"
 
 android {
     namespace = "com.skarm.launcher"
@@ -104,6 +104,9 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+        // VectorPathDataTest reads the drawable XML, which Gradle would not otherwise notice
+        // changing, leaving a stale "passed" result after an icon is edited.
+        unitTests.all { it.inputs.dir("src/main/res").withPropertyName("res") }
     }
 
     compileOptions {

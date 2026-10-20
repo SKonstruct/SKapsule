@@ -32,6 +32,7 @@
         android:scaleType="fitCenter"
         android:src="@drawable/ic_settings"
         android:alpha="0.55"
+        android:focusable="false"
         android:contentDescription="@string/chrome_edit_layout" />
 
     <ImageButton
@@ -44,6 +45,7 @@
         android:scaleType="fitCenter"
         android:src="@drawable/ic_keyboard"
         android:alpha="0.55"
+        android:focusable="false"
         android:contentDescription="@string/keyboard" />
 
     <ImageButton
@@ -56,6 +58,7 @@
         android:scaleType="fitCenter"
         android:src="@drawable/ic_eye"
         android:alpha="0.55"
+        android:focusable="false"
         android:contentDescription="@string/chrome_toggle_buttons" />
 
     <!-- Invisible focusable view that hosts the soft-keyboard InputConnection and

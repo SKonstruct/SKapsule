@@ -29,6 +29,11 @@ object LwjglInstaller {
         return stamp.readText().trim() == stampValue(context)
     }
 
+    /** Forgets the install, so the launcher unpacks LWJGL again the next time it starts. */
+    fun invalidate(context: Context) {
+        File(homeDir(context), STAMP_NAME).delete()
+    }
+
     private fun stampValue(context: Context): String = "$VERSION+${appStamp(context)}"
 
     /**
