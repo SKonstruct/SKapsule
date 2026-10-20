@@ -1,7 +1,22 @@
 # Changelog
 
 Notable changes per release. Versions are the git tags the APKs are built from
-(`v2.4.0` → `skapsule-v2.4.0.apk`).
+(`v2.4.1` → `skapsule-v2.4.1.apk`).
+
+## 2.4.1
+
+### Added
+
+- **Check for Updates** in the options sidebar asks GitHub right away (the automatic check can
+  be up to six hours old) and always answers: update available, up to date, or couldn't check.
+
+### Fixed
+
+- **2.4.0 could not be installed over an existing install** ("INSTALL_FAILED_VERSION_DOWNGRADE"):
+  its internal version number came from a CI run counter that restarted at 1, below 2.3.0's 44.
+  The number is now derived from the version itself (2.4.1 is 20401), so it can only go up, and
+  the release workflow refuses a version that is not newer than the latest release. If you
+  installed 2.4.0 fresh, 2.4.1 updates it normally.
 
 ## 2.4.0
 

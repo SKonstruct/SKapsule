@@ -405,6 +405,20 @@
                 app:iconSize="20dp"
                 app:iconPadding="12dp" />
 
+            <!-- Check for Updates Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/sidebar_btn_check_updates"
+                style="@style/Widget.Material3.Button.TextButton.Icon"
+                android:layout_width="match_parent"
+                android:layout_height="50dp"
+                android:gravity="start|center_vertical"
+                android:text="@string/sidebar_check_updates"
+                android:textColor="#FFFFFF"
+                app:icon="@drawable/ic_update"
+                app:iconTint="#FFFFFF"
+                app:iconSize="20dp"
+                app:iconPadding="12dp" />
+
             <!-- GitHub Button -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/sidebar_btn_github"

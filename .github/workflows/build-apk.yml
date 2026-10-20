@@ -53,6 +53,11 @@ jobs:
           [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "Version must look like 1.2.3, without a leading v."
           [ "$GITHUB_REF" = refs/heads/main ] || fail "Releases are made from main."
           [ -n "$KEYSTORE_BASE64" ] || fail "KEYSTORE_BASE64 is not set: a release must be signed."
+          # The versionCode comes from the version, so a version that does not go up is an APK
+          # Android refuses to install over the last one.
+          latest=$(gh release list -R "$GITHUB_REPOSITORY" --limit 1 --json tagName --jq '.[0].tagName // ""')
+          [ -z "$latest" ] || [ "$(printf '%s\n%s\n' "${latest#v}" "$VERSION" | sort -V | tail -1)" = "$VERSION" ] \
+            || fail "Version $VERSION must be newer than the latest release ($latest)."
           ! gh release view "v$VERSION" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || fail "Release v$VERSION already exists."
           ! gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$VERSION" >/dev/null 2>&1 \
             || fail "Tag v$VERSION already exists without a release. Delete it (git push origin :refs/tags/v$VERSION) or pick a new version."
@@ -150,7 +155,6 @@ jobs:
         working-directory: launcher
         env:
           JAVA_HOME: ${{ env.JAVA_HOME_25_X64 }} # Gradle 9 runs on JDK 25
-          SK_VERSION_CODE: ${{ github.run_number }} # monotonic; bumps versionCode per CI build
           SK_VERSION_NAME: ${{ env.SK_VERSION_NAME }}
           SK_KEYSTORE_FILE: ${{ steps.keystore.outputs.file }}
           SK_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}

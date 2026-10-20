@@ -117,6 +117,9 @@ list the user-visible effect, and call out anything reviewers should double-chec
   and, only if that succeeds, creates the `v<version>` tag and the release, with that
   changelog section followed by GitHub's generated notes. Never push the tag yourself: a
   failed build leaves nothing behind, so just run it again. Nothing commits automatically.
+- Versions only go up: the APK's versionCode is derived from the version (`2.4.1` → 20401), and
+  Android refuses to install a lower one over a higher one. The release workflow rejects a version
+  that is not newer than the latest release.
 
 ## Code style
 

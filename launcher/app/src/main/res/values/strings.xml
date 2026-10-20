@@ -43,6 +43,11 @@
     <string name="sidebar_share_logs">Share Logs</string>
     <string name="sidebar_open_folder">Open Folder</string>
     <string name="sidebar_github">GitHub</string>
+    <string name="sidebar_check_updates">Check for Updates</string>
+    <string name="update_checking">Checking for updates…</string>
+    <string name="update_check_failed">Couldn\'t check for updates. Check your connection and try again.</string>
+    <string name="update_up_to_date">You\'re up to date (v%1$s).</string>
+    <string name="update_dev_build">You\'re on a development build (v%1$s); the latest release is v%2$s.</string>
     <string name="sidebar_discord">Discord</string>
     <string name="sidebar_logout">Logout</string>
     <string name="logout_confirm_message">Sign out of Steam? Your saved session will be cleared.</string>

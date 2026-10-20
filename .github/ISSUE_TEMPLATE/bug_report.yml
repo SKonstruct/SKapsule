@@ -24,8 +24,8 @@ body:
     id: version
     attributes:
       label: SKapsule version
-      description: The launcher's title reads `SKapsule v2.4.0`. If you built it yourself, give the commit.
-      placeholder: "2.4.0"
+      description: The launcher's title reads `SKapsule v2.4.1`. If you built it yourself, give the commit.
+      placeholder: "2.4.1"
     validations:
       required: true
 

@@ -157,6 +157,7 @@ class LauncherActivity : AppCompatActivity() {
         binding.sidebarBtnRemoveMods.setOnClickListener { removeMods() }
         binding.sidebarBtnOpenFolder.setOnClickListener { openFolder() }
         binding.sidebarBtnEditControls.setOnClickListener { openControlsEditor() }
+        binding.sidebarBtnCheckUpdates.setOnClickListener { checkForUpdateNow() }
         binding.sidebarBtnGithub.setOnClickListener { openUrl("https://github.com/SKonstruct/SKapsule") }
         binding.sidebarBtnDiscord.setOnClickListener { openUrl("https://dankware.alwaysdata.net/discord") }
         binding.sidebarBtnLogout.setOnClickListener { onLogout() }
@@ -497,14 +498,52 @@ class LauncherActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun localVersion(): String = try {
+        packageManager.getPackageInfo(packageName, 0).versionName ?: "0.0.0"
+    } catch (e: Exception) {
+        "0.0.0"
+    }
+
+    /**
+     * The sidebar's Check for Updates: asks GitHub now instead of trusting the six-hour cache, and
+     * always answers, unlike the quiet check at startup. Choosing it again also forgets a
+     * "skip this version", since the user is plainly asking for the update.
+     */
+    private fun checkForUpdateNow() {
+        val button = binding.sidebarBtnCheckUpdates
+        button.isEnabled = false
+        Toast.makeText(this, R.string.update_checking, Toast.LENGTH_SHORT).show()
+        lifecycleScope.launch {
+            val release = AppUpdater.fetchLatest(this@LauncherActivity, force = true)
+            button.isEnabled = true
+            if (release == null) {
+                Toast.makeText(this@LauncherActivity, R.string.update_check_failed, Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            val localVer = localVersion()
+            val cmp = compareVersions(localVer, release.version)
+            when {
+                cmp < 0 -> {
+                    AppUpdater.clearSkippedVersion(this@LauncherActivity)
+                    binding.drawerLayout.closeDrawer(GravityCompat.END)
+                    showUpdateBanner(release)
+                    showUpdateDialog(release)
+                }
+                cmp == 0 -> Toast.makeText(
+                    this@LauncherActivity, getString(R.string.update_up_to_date, localVer), Toast.LENGTH_LONG,
+                ).show()
+                else -> Toast.makeText(
+                    this@LauncherActivity, getString(R.string.update_dev_build, localVer, release.version),
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
+    }
+
     private fun checkForUpdate() {
         lifecycleScope.launch {
             val release = AppUpdater.fetchLatest(this@LauncherActivity) ?: return@launch
-            val localVer = try {
-                packageManager.getPackageInfo(packageName, 0).versionName ?: "0.0.0"
-            } catch (e: Exception) {
-                "0.0.0"
-            }
+            val localVer = localVersion()
 
             when {
                 compareVersions(localVer, release.version) < 0 -> {

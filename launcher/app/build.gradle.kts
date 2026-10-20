@@ -23,11 +23,6 @@ val ksKeyPass = signingSecret("keyPassword", "SK_KEY_PASSWORD")
 val hasReleaseSigning = ksStoreFile != null && ksStorePass != null &&
     ksKeyAlias != null && ksKeyPass != null
 
-// versionCode must monotonically increase for over-the-top updates. Overridable for
-// CI/publish via the SK_VERSION_CODE env var (CI passes github.run_number); local dev
-// builds default to 1.
-val skVersionCode = System.getenv("SK_VERSION_CODE")?.toIntOrNull() ?: 1
-
 // versionName derives from the latest reachable git tag (v1.4.0 -> "1.4.0") so it can't
 // drift from releases the way the old hard-coded string did. Override with SK_VERSION_NAME
 // for CI / shallow clones with no tags; falls back to a literal if git or tags are absent.
@@ -44,7 +39,18 @@ val skVersionName: String = System.getenv("SK_VERSION_NAME")
             null
         }
     }.getOrNull()?.takeIf { it.isNotEmpty() }
-    ?: "2.4.0"
+    ?: "2.4.1"
+
+// versionCode must only ever go up, or Android refuses the update with
+// INSTALL_FAILED_VERSION_DOWNGRADE. It is derived from the version, MAJOR*10000 + MINOR*100 +
+// PATCH (2.4.1 -> 20401), so it cannot depend on a CI counter. It used to be github.run_number,
+// which restarts at 1 for every new workflow file: the first run of the Release workflow gave
+// 2.4.0 a versionCode of 1, below 2.3.0's 44, and no existing install could update to it.
+// SK_VERSION_CODE still overrides it for one-off builds. Falls back to 1 without a x.y.z name.
+val skVersionCode: Int = System.getenv("SK_VERSION_CODE")?.toIntOrNull()
+    ?: Regex("""^(\d+)\.(\d+)\.(\d+)""").find(skVersionName)?.destructured
+        ?.let { (major, minor, patch) -> major.toInt() * 10000 + minor.toInt() * 100 + patch.toInt() }
+    ?: 1
 
 android {
     namespace = "com.skarm.launcher"

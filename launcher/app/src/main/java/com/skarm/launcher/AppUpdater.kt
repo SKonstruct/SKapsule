@@ -44,16 +44,22 @@ object AppUpdater {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getString(KEY_SKIPPED_VERSION, null)
 
+    fun clearSkippedVersion(context: Context) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().remove(KEY_SKIPPED_VERSION).apply()
+    }
+
     fun skipVersion(context: Context, version: String) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit().putString(KEY_SKIPPED_VERSION, version).apply()
     }
 
-    suspend fun fetchLatest(context: Context): Release? = withContext(Dispatchers.IO) {
+    /** [force] skips the six-hour cache, for when the user asks to check. */
+    suspend fun fetchLatest(context: Context, force: Boolean = false): Release? = withContext(Dispatchers.IO) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val cached = prefs.getString(KEY_CACHE_JSON, null)
         val age = System.currentTimeMillis() - prefs.getLong(KEY_CACHE_TIME, 0L)
-        val body = if (cached != null && age in 0 until CACHE_TTL_MS) {
+        val body = if (!force && cached != null && age in 0 until CACHE_TTL_MS) {
             cached
         } else {
             val fetched = try {
