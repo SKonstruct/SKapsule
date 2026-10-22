@@ -114,8 +114,8 @@ body:
       label: Logs
       description: |
         Options sidebar → **Share Logs**, then attach the file or paste it here.
-        A crash without a log is usually not actionable. Logs are not scrubbed and can
-        contain your account name, so read before posting.
+        A crash without a log is usually not actionable. Credentials and emails are removed
+        from the log, but it can still mention your account name, so read before posting.
       render: text
     validations:
       required: true
