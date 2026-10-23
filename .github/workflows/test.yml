@@ -1,10 +1,16 @@
 name: Test
 
-# Unit tests only, on every pull request and on demand. The APK is built by Build APK / Release APK.
+# Unit tests only, on every push and pull request, and on demand. The APK is built by Build APK / Release APK.
 
 on:
+  push:
   pull_request:
   workflow_dispatch:
+
+# A pushed branch with an open pull request triggers both; only the newest run is kept.
+concurrency:
+  group: test-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -19,8 +25,11 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          submodules: recursive
           persist-credentials: false
+
+      # Only the bootstrap module is part of the Gradle build; the native forks are not needed.
+      - name: Fetch the bootstrap submodule
+        run: git submodule update --init external/bootstrap
 
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with: { distribution: zulu, java-version: "25", cache: gradle }
@@ -32,11 +41,16 @@ jobs:
           yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
           yes | "$SDKMANAGER" "ndk;${NDK_VERSION}" "cmake;${CMAKE_VERSION}" >/dev/null
 
-      # Separate invocations: the app and bootstrap test tasks do not validate together.
+      # The Gradle build checks for staged native assets that only the full native build produces
+      # (see Build APK), and the unit tests need none of them. An empty stand-in for
+      # the LWJGL zip satisfies that check, and the bootstrap jar they would be staged into is
+      # skipped. Bootstrap's own tests compile against the real LWJGL jars, so they run locally
+      # (`./gradlew :bootstrap:test`), not here.
+      - name: Stand in for the staged LWJGL zip
+        run: |
+          mkdir -p launcher/app/src/main/assets/lwjgl
+          python3 -c "import zipfile; zipfile.ZipFile('launcher/app/src/main/assets/lwjgl/lwjgl-3.4.1-android-modules.zip', 'w').close()"
+
       - name: App unit tests
         working-directory: launcher
-        run: ./gradlew :app:testDebugUnitTest --no-daemon
-
-      - name: Bootstrap unit tests
-        working-directory: launcher
-        run: ./gradlew :bootstrap:test --no-daemon
+        run: ./gradlew :app:testDebugUnitTest -x :app:stageBootstrapJar --no-daemon

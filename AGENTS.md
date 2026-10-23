@@ -176,7 +176,8 @@ genuinely useful; many are noise. Before opening one:
 - Unit tests live under `launcher/app/src/test/`. Add tests when adding non-trivial
   pure logic (parsing, fallback decisions, state machines). Don't add tests that
   exercise the Android framework or require an emulator — those don't run in CI.
-  The **Test** workflow runs `:app:testDebugUnitTest` and `:bootstrap:test` on every pull request.
+  The **Test** workflow runs `:app:testDebugUnitTest` on every push and pull request; `:bootstrap:test`
+  needs the built LWJGL jars, so run it locally.
 - Don't delete or weaken existing tests to make a change pass. If a test is wrong,
   say so in the PR and fix it deliberately.
 
