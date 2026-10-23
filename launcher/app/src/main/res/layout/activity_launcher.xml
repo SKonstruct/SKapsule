@@ -64,7 +64,7 @@
                 android:layout_width="24dp"
                 android:layout_height="24dp"
                 android:src="@drawable/ic_download"
-                app:tint="#ab4a81"
+                app:tint="@color/sk_pink"
                 android:layout_marginEnd="12dp" />
 
             <LinearLayout
@@ -86,7 +86,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Tap to view release"
-                    android:textColor="#808080"
+                    android:textColor="#A6A6A6"
                     android:textSize="12sp" />
             </LinearLayout>
         </LinearLayout>
@@ -175,7 +175,7 @@
             android:textSize="18sp"
             android:textStyle="bold"
             android:textColor="#FFFFFF"
-            app:backgroundTint="#ab4a81"
+            app:backgroundTint="@color/sk_pink"
             app:cornerRadius="26dp"
             app:icon="@android:drawable/ic_media_play"
             app:iconGravity="textStart"
@@ -203,7 +203,7 @@
                 android:layout_width="24dp"
                 android:layout_height="24dp"
                 android:indeterminate="true"
-                android:indeterminateTint="#ab4a81"
+                android:indeterminateTint="@color/sk_pink"
                 android:layout_marginEnd="12dp" />
 
             <TextView
@@ -227,7 +227,7 @@
             app:cardBackgroundColor="#F01E1E1E"
             app:cardCornerRadius="12dp"
             app:cardElevation="0dp"
-            app:strokeColor="#33ab4a81"
+            app:strokeColor="@color/sk_pink_stroke"
             app:strokeWidth="1dp"
             app:layout_constraintTop_toBottomOf="@id/setupGroup"
             app:layout_constraintBottom_toBottomOf="parent"
@@ -391,6 +391,20 @@
                 app:iconSize="20dp"
                 app:iconPadding="12dp" />
 
+            <!-- Saved web account -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/sidebar_btn_web_account"
+                style="@style/Widget.Material3.Button.TextButton.Icon"
+                android:layout_width="match_parent"
+                android:layout_height="50dp"
+                android:gravity="start|center_vertical"
+                android:text="@string/sidebar_web_account"
+                android:textColor="#FFFFFF"
+                app:icon="@drawable/ic_account"
+                app:iconTint="#FFFFFF"
+                app:iconSize="20dp"
+                app:iconPadding="12dp" />
+
             <!-- Edit Controls Button -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/sidebar_btn_edit_controls"
@@ -497,10 +511,12 @@
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_ram_minus"
                     style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="34dp"
-                    android:layout_height="30dp"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:insetLeft="7dp"
+                    android:insetRight="7dp"
+                    android:insetTop="9dp"
+                    android:insetBottom="9dp"
                     android:minWidth="0dp"
                     android:minHeight="0dp"
                     android:padding="0dp"
@@ -519,10 +535,12 @@
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_ram_plus"
                     style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="34dp"
-                    android:layout_height="30dp"
-                    android:insetTop="0dp"
-                    android:insetBottom="0dp"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:insetLeft="7dp"
+                    android:insetRight="7dp"
+                    android:insetTop="9dp"
+                    android:insetBottom="9dp"
                     android:minWidth="0dp"
                     android:minHeight="0dp"
                     android:padding="0dp"

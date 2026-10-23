@@ -58,6 +58,8 @@ class GameActivity :
     private lateinit var loginMode: LauncherActivity.LoginMode
     private var steamUser: String = ""
     private var steamPass: String = ""
+    private var webUser: String = ""
+    private var webPass: String = ""
     private var dismissing = false
     private var guardDialog: AlertDialog? = null
 
@@ -172,7 +174,16 @@ class GameActivity :
 
         surface = binding.gameSurface
 
-        // Handle "Avoid screen edges" to prevent display cutout / rounded corners overlap
+        // Recreated over a running game: SK's first frame has already happened and will not be
+        // announced again, so the overlay would otherwise stay up for good.
+        if (NativeBridge.renderReady) {
+            binding.bootOverlay.visibility = View.GONE
+            dismissing = true
+        }
+
+        // "Avoid screen edges" keeps the game clear of the camera cutout and rounded corners on
+        // the left and right only. The game keeps the full height: the system bars are hidden in
+        // immersive mode, and cropping vertically would shrink the playfield for no benefit.
         val launcherPrefs = getSharedPreferences("launcher_prefs", MODE_PRIVATE)
         val avoidEdges = launcherPrefs.getBoolean("avoid_screen_edges", false)
         if (avoidEdges) {
@@ -180,9 +191,7 @@ class GameActivity :
                 val cutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
                 val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
                 var left = maxOf(cutout.left, systemBars.left)
-                var top = maxOf(cutout.top, systemBars.top)
                 var right = maxOf(cutout.right, systemBars.right)
-                var bottom = maxOf(cutout.bottom, systemBars.bottom)
 
                 // API 31+: also account for rounded display corners
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
@@ -200,14 +209,12 @@ class GameActivity :
                         val br = (bottomRight?.radius ?: 0) / 3
 
                         left = maxOf(left, maxOf(tl, bl))
-                        top = maxOf(top, maxOf(tl, tr))
                         right = maxOf(right, maxOf(tr, br))
-                        bottom = maxOf(bottom, maxOf(bl, br))
                     }
                 }
 
                 val lp = view.layoutParams as android.widget.FrameLayout.LayoutParams
-                lp.setMargins(left, top, right, bottom)
+                lp.setMargins(left, 0, right, 0)
                 view.layoutParams = lp
                 insets
             }
@@ -293,6 +300,8 @@ class GameActivity :
         // Threaded into the JVM as FRENCHPRESS_STEAM_USER/PASS env vars (sklauncher.c).
         steamUser = intent.getStringExtra(LauncherActivity.EXTRA_STEAM_USER).orEmpty()
         steamPass = intent.getStringExtra(LauncherActivity.EXTRA_STEAM_PASS).orEmpty()
+        webUser = intent.getStringExtra(LauncherActivity.EXTRA_WEB_USER).orEmpty()
+        webPass = intent.getStringExtra(LauncherActivity.EXTRA_WEB_PASS).orEmpty()
     }
 
     /**
@@ -451,6 +460,15 @@ class GameActivity :
             if (ticks != 0f) {
                 NativeBridge.onScroll(if (ticks > 0) ceil(ticks).toInt() else floor(ticks).toInt())
             }
+            return true
+        }
+        // A button pressed or released while another is held is not a touch event; it is the
+        // only place the second button of a held pair shows up.
+        if (event.isFromSource(InputDevice.SOURCE_MOUSE) &&
+            (event.actionMasked == MotionEvent.ACTION_BUTTON_PRESS ||
+                event.actionMasked == MotionEvent.ACTION_BUTTON_RELEASE)
+        ) {
+            binding.touchOverlay.onMouseButtonChange(event.buttonState, event.x, event.y)
             return true
         }
         // A mouse moving with no button down is a hover, which never reaches the overlay's
@@ -661,7 +679,15 @@ class GameActivity :
                     break
                 }
                 try {
-                    val url = client.inputStream.bufferedReader().readLine()?.trim().orEmpty()
+                    // The abstract socket namespace has no permissions, so any app could connect:
+                    // accept only our own uid, never wait on a silent client, and bound the line.
+                    if (client.peerCredentials.uid != Process.myUid()) {
+                        Log.w(TAG, "xdg-open relay: rejected a connection from another uid")
+                        continue
+                    }
+                    client.soTimeout = URL_RELAY_TIMEOUT_MS
+                    val url = readBoundedLine(client.inputStream.bufferedReader(), URL_RELAY_MAX_CHARS)
+                        ?.trim().orEmpty()
                     if (url.isNotEmpty()) openUrl(url)
                 } catch (e: IOException) {
                     Log.w(TAG, "xdg-open relay read failed", e)
@@ -720,8 +746,14 @@ class GameActivity :
         currentBufferWidth = width
         currentBufferHeight = height
         NativeBridge.onSurfaceChanged(width, height)
+        if (!jvmKicked && NativeBridge.jvmStarted) {
+            // The JVM outlived the previous Activity; starting it again is a no-op and re-staging
+            // the jars under it is not.
+            jvmKicked = true
+        }
         if (!jvmKicked) {
             jvmKicked = true
+            NativeBridge.jvmStarted = true
             Log.i(TAG, "Launching SK (loginMode=$loginMode)")
             // Tell the launcher there's now something worth sharing (cross-process
             // marker; the launcher enables its Share Logs button on next resume).
@@ -780,6 +812,7 @@ class GameActivity :
             val metrics = resources.displayMetrics
             val sw = metrics.widthPixels
             val sh = metrics.heightPixels
+            if (webUser.isNotEmpty() && webPass.isNotEmpty()) NativeBridge.setWebLogin(webUser, webPass)
             NativeBridge.startJvm(
                 jreHome = JreInstaller.homeDir(this).absolutePath,
                 classpath = classpath,
@@ -999,14 +1032,6 @@ class GameActivity :
         }
     }
 
-    /** Auth finished (any outcome) — drop a lingering dialog and release the latch. */
-    override fun onPromptDismiss() {
-        runOnUiThread {
-            guardDialog?.dismiss()
-            guardDialog = null
-        }
-    }
-
     /**
      * Builds the single-field Steam Guard dialog. Both OK and cancel/back MUST
      * reach submitCode() exactly once so the parked login thread never hangs:
@@ -1046,6 +1071,21 @@ class GameActivity :
 
     companion object {
         const val TAG = "GameActivity"
+
+        private const val URL_RELAY_TIMEOUT_MS = 2_000
+        private const val URL_RELAY_MAX_CHARS = 2_048
+
+        /** One line of at most [max] chars, or null if it is longer or the stream ends first. */
+        internal fun readBoundedLine(reader: java.io.Reader, max: Int): String? {
+            val line = StringBuilder()
+            while (true) {
+                val c = reader.read()
+                if (c < 0) return line.toString().takeIf { it.isNotEmpty() }
+                if (c == '\n'.code) return line.toString()
+                if (line.length >= max) return null
+                line.append(c.toChar())
+            }
+        }
 
         // No boot status change for this long means the game is not starting.
         private const val BOOT_STALL_MS = 180_000L

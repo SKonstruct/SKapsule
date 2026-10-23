@@ -517,7 +517,7 @@ object ModsApplier {
      * Entry names are attacker-controlled — mod archives come from a third-party GitHub
      * repo — and nothing in the zip format stops one being "../../../shared_prefs/x.xml".
      */
-    private fun safeDestination(targetDir: File, entryName: String): File? {
+    internal fun safeDestination(targetDir: File, entryName: String): File? {
         val dest = File(targetDir, entryName)
         val rootPath = targetDir.canonicalPath
         val destPath = dest.canonicalPath
@@ -574,11 +574,11 @@ object ModsApplier {
             var entry: JarEntry?
             while (jis.nextJarEntry.also { entry = it } != null) {
                 val e = entry!!
+                val destFile = safeDestination(localeChangesDir, e.name) ?: continue
                 if (e.isDirectory) {
-                    File(localeChangesDir, e.name).mkdirs()
+                    destFile.mkdirs()
                     continue
                 }
-                val destFile = File(localeChangesDir, e.name)
                 destFile.parentFile?.mkdirs()
                 FileOutputStream(destFile).use { fos ->
                     var len: Int
@@ -592,8 +592,11 @@ object ModsApplier {
 
         // Apply properties overrides
         changes.forEach { (bundlePath, overrides) ->
-            val propsFile = File(localeChangesDir, "rsrc/i18n/$bundlePath")
-            if (propsFile.exists()) {
+            // The key comes from a mod's mod.json: it must name a file inside rsrc/i18n, not climb out.
+            val propsFile = safeDestination(File(localeChangesDir, "rsrc/i18n"), bundlePath)
+            if (propsFile == null) {
+                Log.w(TAG, "Ignored locale bundle outside rsrc/i18n: $bundlePath")
+            } else if (propsFile.exists()) {
                 val props = Properties()
                 FileInputStream(propsFile).use { props.load(it) }
                 overrides.forEach { (key, value) ->
@@ -620,6 +623,9 @@ object ModsApplier {
                 oldJar.renameTo(projectxConfig)
                 throw IOException("Failed to rename projectx-config-new.jar")
             }
+        } else {
+            newJar.delete()
+            throw IOException("Failed to move projectx-config.jar aside; locale changes were not applied")
         }
         deleteDirectory(localeChangesDir)
     }

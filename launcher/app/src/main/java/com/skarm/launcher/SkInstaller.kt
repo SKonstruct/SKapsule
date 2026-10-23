@@ -14,9 +14,10 @@ object SkInstaller {
 
     private const val TAG = "SkInstaller"
     private const val DIR_NAME = "sk"
+    private const val MANIFEST_MAX_BYTES = 64 * 1024
     private const val GETDOWN_PRO_ASSET = "sk/getdown-pro.jar"
     private const val SK_BOOTSTRAP_ASSET = "sk/sk-bootstrap.jar"
-    private const val MANIFEST_URL = "http://gamemedia2.spiralknights.com/spiral/latest/getdown.txt"
+    private const val MANIFEST_URL = "https://gamemedia2.spiralknights.com/spiral/latest/getdown.txt"
 
     fun homeDir(context: Context): File = File(context.filesDir, DIR_NAME)
     fun codeDir(context: Context): File = File(homeDir(context), "code")
@@ -153,10 +154,27 @@ object SkInstaller {
             if (conn.responseCode !in 200..299) {
                 error("manifest fetch failed: HTTP ${conn.responseCode}")
             }
-            conn.inputStream.use { input ->
-                manifest(context).outputStream().use { out -> input.copyTo(out) }
+            // Read through a size cap, check it is a manifest at all (a captive portal's page is not,
+            // and would pass isFile() forever), then publish it by rename.
+            // InputStream.readNBytes is API 33; this app ships to 26.
+            val bytes = conn.inputStream.use { input ->
+                val out = java.io.ByteArrayOutputStream()
+                val buf = ByteArray(4096)
+                while (out.size() <= MANIFEST_MAX_BYTES) {
+                    val n = input.read(buf)
+                    if (n < 0) break
+                    out.write(buf, 0, n)
+                }
+                out.toByteArray()
             }
-            Log.i(TAG, "Fetched getdown.txt (${manifest(context).length()} bytes) from $MANIFEST_URL")
+            check(bytes.size <= MANIFEST_MAX_BYTES) { "manifest is implausibly large" }
+            check(Regex("(?m)^\\s*appbase\\s*=").containsMatchIn(bytes.toString(Charsets.UTF_8))) {
+                "response is not a getdown manifest"
+            }
+            val tmp = File(manifest(context).path + ".part")
+            tmp.writeBytes(bytes)
+            check(tmp.renameTo(manifest(context))) { "could not store the manifest" }
+            Log.i(TAG, "Fetched getdown.txt (${bytes.size} bytes) from $MANIFEST_URL")
         } finally {
             conn.disconnect()
         }

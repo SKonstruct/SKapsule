@@ -31,6 +31,6 @@
         android:layout_margin="16dp"
         android:text="@string/editor_done"
         android:textColor="#FFFFFF"
-        app:backgroundTint="#ab4a81"
+        app:backgroundTint="@color/sk_pink"
         app:cornerRadius="12dp" />
 </FrameLayout>

@@ -1,7 +1,60 @@
 # Changelog
 
 Notable changes per release. Versions are the git tags the APKs are built from
-(`v2.4.1` → `skapsule-v2.4.1.apk`).
+(`vX.Y.Z` → `skapsule-vX.Y.Z.apk`).
+
+## 2.4.2
+
+### Added
+
+- **Web account**: save your Spiral Knights username and password (Settings → Web account) and web
+  launches sign in automatically. It is stored encrypted with a key in the Android Keystore, never
+  in plain text; Remove deletes it. Your own `-Dusername=` / `-Dpassword=` lines in `sk/extra.txt`
+  are honoured too (only `-D` properties can still apply once the game's Java is running).
+
+### Security
+
+- **Mod archives can no longer write outside the game folder.** Locale bundle names from a mod's
+  `mod.json` are confined like file entries, and a failed jar swap now stops the apply instead of
+  being skipped.
+- **The Files-app folder is limited to your mods.** The document provider only exposes `sk/mods`
+  (not the login token, home or code folders), and rejects names with `/`, `.` or `..`.
+- **The game downloads over HTTPS.** The launcher fetches Getdown's manifest and rewrites its
+  `appbase` to `https://`; the game's digest is still not signature-checked (no signing certificate
+  is published).
+- **Modpack files are verified.** Each download is checked against the listing's SHA, only
+  `raw.githubusercontent.com` is accepted, and a sync removes only files an earlier sync added.
+- **Update links are only followed when they point at github.com over HTTPS.** The link-opening
+  relay between the game and the launcher checks the caller, line length and scheme.
+- **Share Logs and crash reports are scrubbed** (tokens, `Authorization`, session ids, paths, emails)
+  in log text and exception messages. The wording no longer calls the reports anonymous.
+- Release workflows pin every action to a commit, drop credentials after checkout, delete the
+  keystore as soon as the APK is signed, and the Gradle wrapper is checksum-verified.
+
+### Fixed
+
+- **Mouse buttons are tracked separately.** Releasing the left button and quickly pressing the right
+  used to be delayed or wrong, because a mouse is a single pointer and the second button never
+  arrived as a press of its own. Charging an attack, letting go and shielding now registers each
+  button as it happens.
+- **Avoid screen edges no longer crops the top and bottom.** It keeps the game clear of the camera
+  cutout and rounded corners on the left and right only.
+- **A hardware keyboard, fold or font change no longer restarts the game screen** while the game
+  runs, and the game screen is not re-staged when the game is already up.
+- **A stalled or failed game start says so.** The launcher shows the reason with Share Logs and
+  Keep waiting, instead of staying on "Validating". A crash dialog appears once per crash.
+- **Installing the game or mods while the game is running is refused**, and a second install
+  cannot start while one is in progress.
+- A damaged game jar is detected and repaired instead of failing at launch.
+- `getdown.txt` is written atomically and checked, so a killed launch cannot leave a broken one.
+- **A timed-out or offline Steam sign-in no longer discards your saved login.** Only Steam
+  rejecting the token does.
+- Version comparison ignores suffixes such as `-rc1`.
+
+- **A fresh update could show in yellow as a "development build"** (`SKapsule v2.4.1-dev`). The launcher
+  remembers GitHub's latest release for six hours, and kept the old answer across an update, so
+  right after installing a new release it could still believe an older one was the latest. The
+  remembered answer now belongs to the installed version, and Check for Updates repaints the title.
 
 ## 2.4.1
 

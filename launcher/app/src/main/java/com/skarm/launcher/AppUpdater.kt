@@ -29,6 +29,7 @@ object AppUpdater {
     private const val PREFS_NAME = "launcher_prefs"
     private const val KEY_CACHE_JSON = "update_cache_json"
     private const val KEY_CACHE_TIME = "update_cache_time"
+    private const val KEY_CACHE_APP_VERSION = "update_cache_app_version"
     private const val KEY_SKIPPED_VERSION = "update_skipped_version"
     private const val CACHE_TTL_MS = 6 * 60 * 60 * 1000L
     private const val INSTALL_ACTION = "com.skarm.launcher.INSTALL_RESULT"
@@ -44,6 +45,12 @@ object AppUpdater {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getString(KEY_SKIPPED_VERSION, null)
 
+    private fun installedVersion(context: Context): String? = try {
+        context.packageManager.getPackageInfo(context.packageName, 0).versionName
+    } catch (e: Exception) {
+        null
+    }
+
     fun clearSkippedVersion(context: Context) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .edit().remove(KEY_SKIPPED_VERSION).apply()
@@ -54,36 +61,65 @@ object AppUpdater {
             .edit().putString(KEY_SKIPPED_VERSION, version).apply()
     }
 
-    /** [force] skips the six-hour cache, for when the user asks to check. */
+    /**
+     * The newest release, or null when it cannot be read. [force] skips the six-hour cache, for
+     * when the user asks to check.
+     *
+     * A cached answer belongs to the version that fetched it: after an update the old answer was
+     * written when "latest" was something else, so the launcher called a fresh install a
+     * development build for up to six hours. For the same reason it is also the only fallback when
+     * the network fails, and never for a forced check, which must be able to say it failed.
+     */
     suspend fun fetchLatest(context: Context, force: Boolean = false): Release? = withContext(Dispatchers.IO) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val cached = prefs.getString(KEY_CACHE_JSON, null)
         val age = System.currentTimeMillis() - prefs.getLong(KEY_CACHE_TIME, 0L)
-        val body = if (!force && cached != null && age in 0 until CACHE_TTL_MS) {
-            cached
-        } else {
-            val fetched = try {
-                fetchReleaseJson()
-            } catch (e: Exception) {
-                Log.w(TAG, "Update check failed", e)
-                null
-            }
-            if (fetched != null) {
-                prefs.edit()
-                    .putString(KEY_CACHE_JSON, fetched)
-                    .putLong(KEY_CACHE_TIME, System.currentTimeMillis())
-                    .apply()
-            }
-            // Fall back to a stale cache so an offline start still knows the last result.
-            fetched ?: cached
-        } ?: return@withContext null
+        val installed = installedVersion(context)
+        val cacheIsCurrent = prefs.getString(KEY_CACHE_APP_VERSION, null) == installed
+        val cacheUsable = cacheIsCurrent && cached != null
 
-        try {
-            parseRelease(body)
+        if (!force && cacheUsable && age in 0 until CACHE_TTL_MS) {
+            parseOrNull(cached!!)?.let { return@withContext it }
+        }
+
+        val fetched = try {
+            fetchReleaseJson()
         } catch (e: Exception) {
-            Log.w(TAG, "Malformed release payload", e)
+            Log.w(TAG, "Update check failed", e)
             null
         }
+        // Parsed before it is cached: a captive portal's 200 is not a release and must not
+        // evict a good answer.
+        val release = fetched?.let(::parseOrNull)
+        if (release != null) {
+            prefs.edit()
+                .putString(KEY_CACHE_JSON, fetched)
+                .putLong(KEY_CACHE_TIME, System.currentTimeMillis())
+                .putString(KEY_CACHE_APP_VERSION, installed)
+                .apply()
+            return@withContext release
+        }
+        if (!force && cacheUsable) parseOrNull(cached!!) else null
+    }
+
+    private fun parseOrNull(body: String): Release? = try {
+        parseRelease(body)
+    } catch (e: Exception) {
+        Log.w(TAG, "Malformed release payload", e)
+        null
+    }
+
+    /** Numeric parts of two versions compared left to right; a suffix such as "-rc1" is ignored. */
+    fun compareVersions(a: String, b: String): Int {
+        fun parts(v: String) = v.split(".").map { it.takeWhile(Char::isDigit).toIntOrNull() ?: 0 }
+        val ap = parts(a)
+        val bp = parts(b)
+        for (i in 0 until maxOf(ap.size, bp.size)) {
+            val av = ap.getOrElse(i) { 0 }
+            val bv = bp.getOrElse(i) { 0 }
+            if (av != bv) return if (av < bv) -1 else 1
+        }
+        return 0
     }
 
     private fun fetchReleaseJson(): String? {
@@ -101,17 +137,24 @@ object AppUpdater {
         }
     }
 
-    private fun parseRelease(body: String): Release? {
+    /** Release links are opened and downloaded, so only GitHub over https is believed. */
+    private fun isGitHubUrl(url: String): Boolean {
+        val uri = try { java.net.URI(url) } catch (e: Exception) { return false }
+        return uri.scheme == "https" && uri.host == "github.com"
+    }
+
+    internal fun parseRelease(body: String): Release? {
         val json = JSONObject(body)
         // optString returns "" (never null) for a missing key, so check emptiness.
         val tag = json.optString("tag_name").ifEmpty { return null }
         val htmlUrl = json.optString("html_url").ifEmpty { return null }
+        if (!isGitHubUrl(htmlUrl)) return null
         val assets = json.optJSONArray("assets")
         var apkUrl: String? = null
         for (i in 0 until (assets?.length() ?: 0)) {
             val asset = assets!!.optJSONObject(i) ?: continue
             if (asset.optString("name").endsWith(".apk", ignoreCase = true)) {
-                apkUrl = asset.optString("browser_download_url").ifEmpty { null }
+                apkUrl = asset.optString("browser_download_url").ifEmpty { null }?.takeIf(::isGitHubUrl)
                 if (apkUrl != null) break
             }
         }
@@ -130,8 +173,16 @@ object AppUpdater {
         val apkUrl = release.apkUrl ?: throw IOException("Release has no APK asset")
         val apk = File(context.cacheDir, "update-${release.version}.apk")
         withContext(Dispatchers.IO) {
-            download(apkUrl, apk, onProgress)
-            install(context, apk)
+            // An earlier attempt's APK (or its .part, from a full disk or a kill) is 90 MB of dead weight.
+            context.cacheDir.listFiles { f -> f.name.startsWith("update-") }?.forEach { it.delete() }
+            try {
+                download(apkUrl, apk, onProgress)
+                install(context, apk)
+            } finally {
+                // The installer session holds its own copy once install() returns.
+                apk.delete()
+                File(apk.path + ".part").delete()
+            }
         }
     }
 

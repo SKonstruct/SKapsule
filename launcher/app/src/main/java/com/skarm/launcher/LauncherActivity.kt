@@ -103,7 +103,7 @@ class LauncherActivity : AppCompatActivity() {
             if (isChecked) {
                 button.textSize = 15f
                 button.setTypeface(null, android.graphics.Typeface.BOLD)
-                button.setBackgroundColor(android.graphics.Color.parseColor("#ab4a81"))
+                button.setBackgroundColor(getColor(R.color.sk_pink))
                 button.setTextColor(android.graphics.Color.WHITE)
                 val mode = if (checkedId == R.id.btn_mode_steam) "Steam" else "Web"
                 launcherPrefs.edit().putString("login_mode", mode).apply()
@@ -121,7 +121,7 @@ class LauncherActivity : AppCompatActivity() {
             binding.modeToggleGroup.check(R.id.btn_mode_steam)
             binding.btnModeSteam.textSize = 15f
             binding.btnModeSteam.setTypeface(null, android.graphics.Typeface.BOLD)
-            binding.btnModeSteam.setBackgroundColor(android.graphics.Color.parseColor("#ab4a81"))
+            binding.btnModeSteam.setBackgroundColor(getColor(R.color.sk_pink))
             binding.btnModeSteam.setTextColor(android.graphics.Color.WHITE)
             binding.btnModeWeb.textSize = 13f
             binding.btnModeWeb.setTypeface(null, android.graphics.Typeface.NORMAL)
@@ -131,7 +131,7 @@ class LauncherActivity : AppCompatActivity() {
             binding.modeToggleGroup.check(R.id.btn_mode_web)
             binding.btnModeWeb.textSize = 15f
             binding.btnModeWeb.setTypeface(null, android.graphics.Typeface.BOLD)
-            binding.btnModeWeb.setBackgroundColor(android.graphics.Color.parseColor("#ab4a81"))
+            binding.btnModeWeb.setBackgroundColor(getColor(R.color.sk_pink))
             binding.btnModeWeb.setTextColor(android.graphics.Color.WHITE)
             binding.btnModeSteam.textSize = 13f
             binding.btnModeSteam.setTypeface(null, android.graphics.Typeface.NORMAL)
@@ -161,6 +161,7 @@ class LauncherActivity : AppCompatActivity() {
         binding.sidebarBtnGithub.setOnClickListener { openUrl("https://github.com/SKonstruct/SKapsule") }
         binding.sidebarBtnDiscord.setOnClickListener { openUrl("https://dankware.alwaysdata.net/discord") }
         binding.sidebarBtnLogout.setOnClickListener { onLogout() }
+        binding.sidebarBtnWebAccount.setOnClickListener { editWebAccount() }
 
         // Avoid screen edges switch
         val avoidEdgesSwitch = binding.switchAvoidEdges
@@ -182,7 +183,8 @@ class LauncherActivity : AppCompatActivity() {
 
         // If the previous session crashed, the handler auto-saved a dump. Offer to
         // share it right away (once per launch); the button stays available too.
-        LogExporter.latestCrash(this)?.let { crash ->
+        LogExporter.unseenCrash(this)?.let { crash ->
+            LogExporter.markCrashSeen(this, crash)
             AlertDialog.Builder(this)
                 .setMessage(R.string.share_logs_crash_found)
                 .setPositiveButton(R.string.share_logs) { _, _ -> LogExporter.share(this, crash) }
@@ -293,6 +295,62 @@ class LauncherActivity : AppCompatActivity() {
         }
     }
 
+    /** Save, change or remove the web account that web launches sign in with. */
+    private fun editWebAccount() {
+        val saved = WebAccountStore.load(this)
+        val pad = (resources.displayMetrics.density * 20).toInt()
+        val limit = android.text.InputFilter.LengthFilter(WebAccountStore.MAX_LENGTH)
+        val userField = EditText(this).apply {
+            hint = getString(R.string.web_account_username)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            filters = arrayOf(limit)
+            setText(saved?.username.orEmpty())
+        }
+        val passField = EditText(this).apply {
+            hint = getString(
+                if (saved != null) R.string.web_account_password_saved else R.string.web_account_password,
+            )
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            filters = arrayOf(limit)
+        }
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(pad, pad / 2, pad, 0)
+            addView(userField)
+            addView(passField)
+        }
+        val builder = AlertDialog.Builder(this)
+            .setTitle(R.string.web_account_title)
+            .setMessage(R.string.web_account_message)
+            .setView(layout)
+            .setPositiveButton(R.string.web_account_save, null)
+            .setNegativeButton(android.R.string.cancel, null)
+        if (saved != null) {
+            builder.setNeutralButton(R.string.web_account_clear) { _, _ ->
+                WebAccountStore.clear(this)
+                Toast.makeText(this, R.string.web_account_removed, Toast.LENGTH_SHORT).show()
+            }
+        }
+        val dialog = builder.show()
+        // Overridden after show() so a missing field keeps the dialog open.
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val user = userField.text.toString().trim()
+            val typed = passField.text.toString()
+            val pass = typed.ifEmpty { saved?.password.orEmpty() }
+            if (user.isEmpty() || pass.isEmpty()) {
+                Toast.makeText(this, R.string.web_account_incomplete, Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            val ok = WebAccountStore.save(this, WebAccountStore.Account(user, pass))
+            Toast.makeText(
+                this,
+                if (ok) R.string.web_account_saved else R.string.web_account_save_failed,
+                Toast.LENGTH_SHORT,
+            ).show()
+            if (ok) dialog.dismiss()
+        }
+    }
+
     private fun onLogout() {
         AlertDialog.Builder(this)
             .setMessage(R.string.logout_confirm_message)
@@ -309,10 +367,18 @@ class LauncherActivity : AppCompatActivity() {
             .show()
     }
 
-    private var installingRuntime = false
-
     private fun ensureRuntime() {
-        if (installingRuntime) return
+        if (installingRuntime) {
+            // Another instance of this screen (recreated mid-install) owns the job. Wait for it
+            // instead of starting a second extraction over the same directory.
+            setButtonsEnabled(false)
+            binding.setupGroup.visibility = View.VISIBLE
+            lifecycleScope.launch {
+                while (installingRuntime) delay(500)
+                ensureRuntime()
+            }
+            return
+        }
         val jreReady = JreInstaller.isInstalled(this)
         val lwjglReady = LwjglInstaller.isInstalled(this)
         val skBootstrapped = SkInstaller.isBootstrapped(this)
@@ -340,6 +406,8 @@ class LauncherActivity : AppCompatActivity() {
                 binding.setupGroup.visibility = View.GONE
                 setButtonsEnabled(true)
             } catch (t: Throwable) {
+                // The screen going away is not a failed install; the work itself ran to the end.
+                if (t is kotlinx.coroutines.CancellationException) throw t
                 Log.e(TAG, "Runtime install failed", t)
                 CrashReporting.report("runtime_install_failed", t.toString())
                 binding.setupStatus.text = "Runtime setup failed: ${t.message}"
@@ -433,6 +501,12 @@ class LauncherActivity : AppCompatActivity() {
                     putExtra(EXTRA_STEAM_USER, steamUser)
                     putExtra(EXTRA_STEAM_PASS, steamPass)
                 }
+                if (mode == LoginMode.Web) {
+                    WebAccountStore.load(this@LauncherActivity)?.let {
+                        putExtra(EXTRA_WEB_USER, it.username)
+                        putExtra(EXTRA_WEB_PASS, it.password)
+                    }
+                }
             },
         )
     }
@@ -521,7 +595,7 @@ class LauncherActivity : AppCompatActivity() {
                 return@launch
             }
             val localVer = localVersion()
-            val cmp = compareVersions(localVer, release.version)
+            val cmp = AppUpdater.compareVersions(localVer, release.version)
             when {
                 cmp < 0 -> {
                     AppUpdater.clearSkippedVersion(this@LauncherActivity)
@@ -529,9 +603,14 @@ class LauncherActivity : AppCompatActivity() {
                     showUpdateBanner(release)
                     showUpdateDialog(release)
                 }
-                cmp == 0 -> Toast.makeText(
-                    this@LauncherActivity, getString(R.string.update_up_to_date, localVer), Toast.LENGTH_LONG,
-                ).show()
+                cmp == 0 -> {
+                    // A stale answer may have painted the title as a development build.
+                    binding.title.text = "SKapsule v$localVer"
+                    binding.title.setTextColor(Color.WHITE)
+                    Toast.makeText(
+                        this@LauncherActivity, getString(R.string.update_up_to_date, localVer), Toast.LENGTH_LONG,
+                    ).show()
+                }
                 else -> Toast.makeText(
                     this@LauncherActivity, getString(R.string.update_dev_build, localVer, release.version),
                     Toast.LENGTH_LONG,
@@ -546,29 +625,17 @@ class LauncherActivity : AppCompatActivity() {
             val localVer = localVersion()
 
             when {
-                compareVersions(localVer, release.version) < 0 -> {
+                AppUpdater.compareVersions(localVer, release.version) < 0 -> {
                     if (AppUpdater.skippedVersion(this@LauncherActivity) != release.version) {
                         showUpdateBanner(release)
                     }
                 }
-                compareVersions(localVer, release.version) > 0 ->
-                    showDevBuildIndicator(localVer, release.version)
+                AppUpdater.compareVersions(localVer, release.version) > 0 ->
+                    showDevBuildIndicator(localVer)
             }
         }
     }
 
-    private fun compareVersions(a: String, b: String): Int {
-        val aParts = a.split(".").mapNotNull { it.toIntOrNull() }
-        val bParts = b.split(".").mapNotNull { it.toIntOrNull() }
-        val maxLen = maxOf(aParts.size, bParts.size)
-        for (i in 0 until maxLen) {
-            val av = aParts.getOrElse(i) { 0 }
-            val bv = bParts.getOrElse(i) { 0 }
-            if (av < bv) return -1
-            if (av > bv) return 1
-        }
-        return 0
-    }
 
     /**
      * Fills the home-screen card from the feed and, when it carries more than one
@@ -720,7 +787,7 @@ class LauncherActivity : AppCompatActivity() {
         }
     }
 
-    private fun showDevBuildIndicator(localVer: String, remoteVer: String) {
+    private fun showDevBuildIndicator(localVer: String) {
         binding.title.text = "SKapsule v$localVer-dev"
         binding.title.setTextColor(Color.parseColor("#F2BF3A"))
     }
@@ -739,12 +806,17 @@ class LauncherActivity : AppCompatActivity() {
         }
         val statusText = TextView(this).apply {
             text = initialText
-            setTextColor(Color.WHITE)
+            // The dialog follows the system light/dark theme; fixed white was unreadable in light mode.
+            setTextColor(
+                com.google.android.material.color.MaterialColors.getColor(
+                    this, com.google.android.material.R.attr.colorOnSurface, Color.WHITE,
+                ),
+            )
             textSize = 16f
         }
         val progressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
             isIndeterminate = true
-            progressTintList = ColorStateList.valueOf(Color.parseColor("#ab4a81"))
+            progressTintList = ColorStateList.valueOf(getColor(R.color.sk_pink))
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -802,7 +874,15 @@ class LauncherActivity : AppCompatActivity() {
         }
     }
 
+    /** Mods rewrite the code jars the running game has open; changing them under it corrupts it. */
+    private fun refuseWhileGameRuns(): Boolean {
+        if (!isGameProcessRunning()) return false
+        Toast.makeText(this, R.string.mods_game_running, Toast.LENGTH_LONG).show()
+        return true
+    }
+
     private fun applyMods() {
+        if (refuseWhileGameRuns()) return
         val progressInfo = showProgressDialog(R.string.mod_apply_title, "Starting apply…")
 
         lifecycleScope.launch {
@@ -836,6 +916,7 @@ class LauncherActivity : AppCompatActivity() {
     }
 
     private fun removeMods() {
+        if (refuseWhileGameRuns()) return
         val progressInfo = showProgressDialog(R.string.mod_remove_title, "Starting remove…")
 
         lifecycleScope.launch {
@@ -863,6 +944,9 @@ class LauncherActivity : AppCompatActivity() {
     enum class LoginMode { Web, Steam }
 
     companion object {
+        /** Process-wide: a recreated screen must not start a second install over the first. */
+        @Volatile private var installingRuntime = false
+
         private const val DONATE_URL = "https://buymeacoffee.com/sirdankk"
         private const val NEWS_FADE_MS = 180L
         // KnightLauncher's CustomColors.WARNING, with dark text as on its badge.
@@ -878,6 +962,8 @@ class LauncherActivity : AppCompatActivity() {
         const val EXTRA_MAX_HEAP_MB = "com.skarm.launcher.MAX_HEAP_MB"
         const val EXTRA_STEAM_USER = "com.skarm.launcher.STEAM_USER"
         const val EXTRA_STEAM_PASS = "com.skarm.launcher.STEAM_PASS"
+        const val EXTRA_WEB_USER = "com.skarm.launcher.WEB_USER"
+        const val EXTRA_WEB_PASS = "com.skarm.launcher.WEB_PASS"
     }
 
     private fun stepRam(deltaMb: Int) {

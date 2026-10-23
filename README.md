@@ -43,7 +43,7 @@ stick made every button unpressable).
 
 ## Installing (players)
 
-1. Grab the latest signed `skapsule-vX.X.X.apk` from the
+1. Grab the latest signed `skapsule-vX.Y.Z.apk` from the
    [Releases](../../releases) page.
 2. Copy it to your arm64 Android device (Android 8.0 / API 26 or newer) and install,
    allowing installation from unknown sources if prompted.
@@ -114,7 +114,7 @@ JAVA_HOME=/path/to/jdk-25 ./gradlew :app:assembleRelease
 ```
 
 The output lands in `launcher/app/build/outputs/apk/release/`. Without signing
-configured (below) this is `skapsule-vX.X.X-unsigned.apk`.
+configured (below) this is `skapsule-vX.Y.Z-unsigned.apk`.
 
 ### Signing (optional)
 
@@ -122,7 +122,7 @@ Release signing reads, in order, a gitignored `launcher/keystore.properties` the
 environment variables. With neither present, `assembleRelease` still succeeds and
 emits an _unsigned_ APK. Provide `storeFile`/`storePassword`/`keyAlias`/`keyPassword`
 (props) or `SK_KEYSTORE_FILE`/`SK_KEYSTORE_PASSWORD`/`SK_KEY_ALIAS`/`SK_KEY_PASSWORD`
-(env) to produce a signed `skapsule-vX.X.X.apk`. See `keystore.properties.template`.
+(env) to produce a signed `skapsule-vX.Y.Z.apk`. See `keystore.properties.template`.
 
 In CI, the keystore is supplied via the `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`,
 `KEY_ALIAS`, and `KEY_PASSWORD` repo secrets. The **Release APK** workflow (run manually,

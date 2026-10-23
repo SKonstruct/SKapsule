@@ -117,8 +117,8 @@ list the user-visible effect, and call out anything reviewers should double-chec
   and, only if that succeeds, creates the `v<version>` tag and the release, with that
   changelog section followed by GitHub's generated notes. Never push the tag yourself: a
   failed build leaves nothing behind, so just run it again. Nothing commits automatically.
-- Versions only go up: the APK's versionCode is derived from the version (`2.4.1` → 20401), and
-  Android refuses to install a lower one over a higher one. The release workflow rejects a version
+- Versions only go up: the APK's versionCode is derived from the version (`X.Y.Z` →
+  `X*10000 + Y*100 + Z`), and Android refuses to install a lower one over a higher one. The release workflow rejects a version
   that is not newer than the latest release.
 
 ## Code style
@@ -176,6 +176,7 @@ genuinely useful; many are noise. Before opening one:
 - Unit tests live under `launcher/app/src/test/`. Add tests when adding non-trivial
   pure logic (parsing, fallback decisions, state machines). Don't add tests that
   exercise the Android framework or require an emulator — those don't run in CI.
+  The **Test** workflow runs `:app:testDebugUnitTest` and `:bootstrap:test` on every pull request.
 - Don't delete or weaken existing tests to make a change pass. If a test is wrong,
   say so in the PR and fix it deliberately.
 

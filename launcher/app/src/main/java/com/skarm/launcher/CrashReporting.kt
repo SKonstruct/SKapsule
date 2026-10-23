@@ -90,6 +90,7 @@ object CrashReporting {
             options.maxBreadcrumbs = 50
             options.beforeSend = SentryOptions.BeforeSendCallback { event, _ ->
                 event.message?.let { it.formatted = it.formatted?.let(::scrub) }
+                event.exceptions?.forEach { it.value = it.value?.let(::scrub) }
                 event
             }
         }
@@ -107,12 +108,5 @@ object CrashReporting {
      * Applied to anything we compose; attachments are the logcat dump, which is
      * already what "Share Logs" exports.
      */
-    private fun scrub(text: String): String = text
-        .replace(SECRET, "$1=[redacted]")
-        .replace(EMAIL, "[redacted-email]")
-
-    private val SECRET = Regex(
-        "(?i)(FRENCHPRESS_STEAM_USER|FRENCHPRESS_STEAM_PASS|pass(?:word|wd)?|token|session|auth|cookie|ticket|secret)\\s*[=:]\\s*\\S+"
-    )
-    private val EMAIL = Regex("[\\w.+-]+@[\\w-]+\\.[\\w.]{2,}")
+    private fun scrub(text: String): String = LogScrubber.scrub(text)
 }

@@ -25,7 +25,8 @@ val hasReleaseSigning = ksStoreFile != null && ksStorePass != null &&
 
 // versionName derives from the latest reachable git tag (v1.4.0 -> "1.4.0") so it can't
 // drift from releases the way the old hard-coded string did. Override with SK_VERSION_NAME
-// for CI / shallow clones with no tags; falls back to a literal if git or tags are absent.
+// for CI / shallow clones with no tags; with neither it is 0.0.1, which no release ever is, so
+// it never needs updating for a release.
 // NOTE: reads the latest tag, so tag BEFORE building or the APK reports the prior version.
 val skVersionName: String = System.getenv("SK_VERSION_NAME")
     ?: runCatching {
@@ -39,11 +40,11 @@ val skVersionName: String = System.getenv("SK_VERSION_NAME")
             null
         }
     }.getOrNull()?.takeIf { it.isNotEmpty() }
-    ?: "2.4.1"
+    ?: "0.0.1"
 
 // versionCode must only ever go up, or Android refuses the update with
 // INSTALL_FAILED_VERSION_DOWNGRADE. It is derived from the version, MAJOR*10000 + MINOR*100 +
-// PATCH (2.4.1 -> 20401), so it cannot depend on a CI counter. It used to be github.run_number,
+// PATCH (X.Y.Z -> X*10000 + Y*100 + Z), so it cannot depend on a CI counter. It used to be github.run_number,
 // which restarts at 1 for every new workflow file: the first run of the Release workflow gave
 // 2.4.0 a versionCode of 1, below 2.3.0's 44, and no existing install could update to it.
 // SK_VERSION_CODE still overrides it for one-off builds. Falls back to 1 without a x.y.z name.

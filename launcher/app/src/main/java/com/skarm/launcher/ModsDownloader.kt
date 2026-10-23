@@ -16,6 +16,19 @@ object ModsDownloader {
     private const val TAG = "ModsDownloader"
     private const val GITHUB_API_URL = "https://api.github.com/repos/SirDank/Spiral-Knights-Modpack/contents/mods"
 
+    /** Names this app downloaded last time, so a sync removes only what it put there itself. */
+    private const val SYNCED_MANIFEST = ".modpack-synced"
+
+    /** A mod's file name: one path component, no traversal. The listing is remote data. */
+    internal fun isSafeModName(name: String): Boolean =
+        name.isNotEmpty() && name != "." && name != ".." && '/' !in name && '\\' !in name && '\u0000' !in name
+
+    /** The contents API serves files from raw.githubusercontent.com; anything else is not believed. */
+    internal fun isTrustedDownloadUrl(url: String): Boolean {
+        val uri = try { java.net.URI(url) } catch (e: Exception) { return false }
+        return uri.scheme == "https" && uri.host == "raw.githubusercontent.com"
+    }
+
     data class SyncStats(
         var downloaded: Int = 0,
         var skipped: Int = 0,
@@ -46,13 +59,18 @@ object ModsDownloader {
 
         val remoteModsMap = remoteMods.associateBy { it.name }
 
-        // Delete local files not in remote
+        // Remove mods the modpack has dropped, but only ones this app downloaded earlier: the player
+        // keeps their own mods in this folder too (Open Folder invites it).
         onProgress("Checking local files to remove…", 0, 0)
-        modsDir.listFiles()?.forEach { file ->
-            if (file.isFile && !remoteModsMap.containsKey(file.name)) {
-                Log.i(TAG, "Deleting removed mod: ${file.name}")
-                if (file.delete()) {
-                    stats.deleted++
+        val manifest = File(modsDir, SYNCED_MANIFEST)
+        val previouslySynced = runCatching { manifest.readLines().filter { it.isNotBlank() }.toSet() }
+            .getOrDefault(emptySet())
+        previouslySynced.forEach { name ->
+            if (isSafeModName(name) && !remoteModsMap.containsKey(name)) {
+                val file = File(modsDir, name)
+                if (file.isFile) {
+                    Log.i(TAG, "Deleting removed mod: $name")
+                    if (file.delete()) stats.deleted++
                 }
             }
         }
@@ -77,10 +95,12 @@ object ModsDownloader {
             }
 
             onProgress("[$current/$total] ${mod.name}", current, total)
-            downloadFile(mod.downloadUrl, destFile)
+            downloadFile(mod.downloadUrl, destFile, mod.sha)
             stats.downloaded++
         }
 
+        runCatching { manifest.writeText(remoteMods.joinToString("\n") { it.name }) }
+            .onFailure { Log.w(TAG, "could not record the synced mods", it) }
         stats
     }
 
@@ -120,9 +140,12 @@ object ModsDownloader {
                         }
                     }
                     reader.endObject()
-                    if (type == "file") {
-                        mods.add(ModFile(name, downloadUrl, sha))
+                    if (type != "file") continue
+                    if (!isSafeModName(name) || !isTrustedDownloadUrl(downloadUrl)) {
+                        Log.w(TAG, "Ignoring listing entry with an unexpected name or URL: $name")
+                        continue
                     }
+                    mods.add(ModFile(name, downloadUrl, sha))
                 }
                 reader.endArray()
             }
@@ -132,7 +155,7 @@ object ModsDownloader {
         }
     }
 
-    private fun downloadFile(urlString: String, destFile: File) {
+    private fun downloadFile(urlString: String, destFile: File, expectedSha: String) {
         val url = URL(urlString)
         val conn = url.openConnection() as HttpURLConnection
         conn.connectTimeout = 15_000
@@ -151,6 +174,12 @@ object ModsDownloader {
                 tmp.outputStream().use { output ->
                     input.copyTo(output)
                 }
+            }
+            // The listing carries each file's git blob hash: a captive portal's page or a truncated
+            // transfer must not become a mod.
+            if (expectedSha.isNotEmpty() && calculateGitBlobSha(tmp) != expectedSha) {
+                tmp.delete()
+                throw IOException("${destFile.name} did not match its published hash")
             }
             destFile.delete()
             if (!tmp.renameTo(destFile)) {

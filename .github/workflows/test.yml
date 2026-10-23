@@ -1,0 +1,42 @@
+name: Test
+
+# Unit tests only, on every pull request and on demand. The APK is built by Build APK / Release APK.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      # Must match launcher/app/build.gradle.kts ndkVersion + cmake version.
+      NDK_VERSION: "30.0.14904198"
+      CMAKE_VERSION: "3.22.1"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with: { distribution: zulu, java-version: "25", cache: gradle }
+
+      # The Android plugin resolves the NDK it is configured with even for a test-only run.
+      - name: Install matching NDK + CMake via sdkmanager
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
+          yes | "$SDKMANAGER" "ndk;${NDK_VERSION}" "cmake;${CMAKE_VERSION}" >/dev/null
+
+      # Separate invocations: the app and bootstrap test tasks do not validate together.
+      - name: App unit tests
+        working-directory: launcher
+        run: ./gradlew :app:testDebugUnitTest --no-daemon
+
+      - name: Bootstrap unit tests
+        working-directory: launcher
+        run: ./gradlew :bootstrap:test --no-daemon

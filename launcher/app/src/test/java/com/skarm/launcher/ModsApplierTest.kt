@@ -72,6 +72,22 @@ class ModsApplierTest {
     }
 
     @Test
+    fun destinationsStayInsideTheirRoot() {
+        val root = java.nio.file.Files.createTempDirectory("mods-root").toFile()
+        val i18n = File(root, "rsrc/i18n").also { it.mkdirs() }
+        assertNotNull(ModsApplier.safeDestination(i18n, "messages.properties"))
+        assertNotNull(ModsApplier.safeDestination(i18n, "sub/dir/messages.properties"))
+        assertNull(ModsApplier.safeDestination(i18n, "../../../steam.creds"))
+        assertNull(ModsApplier.safeDestination(i18n, "../../../../outside.properties"))
+        // An absolute name is re-rooted under the directory by File(parent, child), not honoured.
+        val rerooted = ModsApplier.safeDestination(i18n, "/etc/passwd")!!
+        assertTrue(rerooted.canonicalPath.startsWith(i18n.canonicalPath + File.separator))
+        // A sibling sharing the root's name as a prefix is not inside it.
+        assertNull(ModsApplier.safeDestination(i18n, "../i18n-evil/x"))
+        root.deleteRecursively()
+    }
+
+    @Test
     fun getdownDigestHashesEveryEntryInNameOrder() {
         // Written out of order, with META-INF, which the v2 digest includes.
         val jar = zipOf("b.txt" to "B", "META-INF/MANIFEST.MF" to "M", "a.txt" to "A")

@@ -63,7 +63,7 @@
             android:name=".GameActivity"
             android:exported="false"
             android:process=":game"
-            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|density|uiMode"
+            android:configChanges="orientation|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation|screenLayout|density|uiMode|fontScale|layoutDirection|locale"
             android:screenOrientation="sensorLandscape"
             android:launchMode="singleTask"
             android:resizeableActivity="false"

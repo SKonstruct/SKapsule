@@ -2,8 +2,8 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <style name="Theme.SKLauncher" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="27">shortEdges</item>
-        <item name="colorPrimary">#ab4a81</item>
-        <item name="colorSecondary">#ab4a81</item>
+        <item name="colorPrimary">@color/sk_pink</item>
+        <item name="colorSecondary">@color/sk_pink</item>
         <item name="colorOnPrimary">#FFFFFF</item>
         <!-- Dark backgrounds and text for a premium game launcher vibe -->
         <item name="android:windowBackground">@android:color/black</item>

@@ -41,6 +41,14 @@ class TouchControlOverlay @JvmOverloads constructor(
     /** Latched at DOWN: buttonState reads 0 by the time the release arrives. */
     private var cursorButton = 0
 
+    // A mouse is one pointer however many buttons it has: the second button never gets a DOWN
+    // of its own, and releasing the first while the second is held never gets an UP. So a mouse
+    // cursor is driven by diffing buttonState (below), not by pointer events.
+    private var cursorIsMouse = false
+    private var mouseButtons = 0
+    private var cursorX = 0f
+    private var cursorY = 0f
+
     // Edit state
     private var selectedView: BaseTouchControl? = null
     private var dX = 0f
@@ -562,8 +570,16 @@ class TouchControlOverlay @JvmOverloads constructor(
                     pointerTargets.put(id, target)
                 } else if (cursorPointerId == MotionEvent.INVALID_POINTER_ID) {
                     cursorPointerId = id
-                    cursorButton = glfwButton(event)
-                    cursorTouchListener?.invoke(MotionEvent.ACTION_DOWN, x, y, cursorButton)
+                    cursorX = x
+                    cursorY = y
+                    cursorIsMouse = event.getToolType(index) == MotionEvent.TOOL_TYPE_MOUSE
+                    if (cursorIsMouse) {
+                        mouseButtons = 0
+                        syncMouseButtons(event.buttonState, x, y)
+                    } else {
+                        cursorButton = glfwButton(event)
+                        cursorTouchListener?.invoke(MotionEvent.ACTION_DOWN, x, y, cursorButton)
+                    }
                 }
                 // Always claim the gesture: a miss must not hand it to the SurfaceView,
                 // or the fingers that follow could never reach a control.
@@ -577,6 +593,11 @@ class TouchControlOverlay @JvmOverloads constructor(
                     if (target != null) {
                         dispatchToControl(target, MotionEvent.ACTION_MOVE, event, index)
                     } else if (id == cursorPointerId) {
+                        cursorX = event.getX(index)
+                        cursorY = event.getY(index)
+                        if (cursorIsMouse) {
+                            syncMouseButtons(event.buttonState, event.getX(index), event.getY(index))
+                        }
                         cursorTouchListener?.invoke(
                             MotionEvent.ACTION_MOVE, event.getX(index), event.getY(index),
                             cursorButton,
@@ -595,22 +616,23 @@ class TouchControlOverlay @JvmOverloads constructor(
                     dispatchToControl(target, MotionEvent.ACTION_UP, event, index)
                 } else if (id == cursorPointerId) {
                     cursorPointerId = MotionEvent.INVALID_POINTER_ID
-                    cursorTouchListener?.invoke(
-                        MotionEvent.ACTION_UP, event.getX(index), event.getY(index),
-                        cursorButton,
-                    )
+                    if (cursorIsMouse) {
+                        // The last button up ends the gesture; anything still held is released.
+                        syncMouseButtons(0, event.getX(index), event.getY(index))
+                        cursorIsMouse = false
+                    } else {
+                        cursorTouchListener?.invoke(
+                            MotionEvent.ACTION_UP, event.getX(index), event.getY(index),
+                            cursorButton,
+                        )
+                    }
                 }
                 return true
             }
 
             MotionEvent.ACTION_CANCEL -> {
                 cancelActivePointers()
-                if (cursorPointerId != MotionEvent.INVALID_POINTER_ID) {
-                    cursorPointerId = MotionEvent.INVALID_POINTER_ID
-                    cursorTouchListener?.invoke(
-                        MotionEvent.ACTION_UP, event.x, event.y, cursorButton,
-                    )
-                }
+                // cancelActivePointers has already released the cursor.
                 return true
             }
         }
@@ -647,7 +669,40 @@ class TouchControlOverlay @JvmOverloads constructor(
         // also be mid-press from a touch the platform delivered directly.
         controlViews.forEach { dispatchCancel(it) }
         pointerTargets.clear()
-        cursorPointerId = MotionEvent.INVALID_POINTER_ID
+        if (cursorPointerId != MotionEvent.INVALID_POINTER_ID) {
+            cursorPointerId = MotionEvent.INVALID_POINTER_ID
+            if (cursorIsMouse) {
+                syncMouseButtons(0, cursorX, cursorY)
+                cursorIsMouse = false
+            } else {
+                cursorTouchListener?.invoke(MotionEvent.ACTION_UP, cursorX, cursorY, cursorButton)
+            }
+        }
+    }
+
+    /**
+     * Mouse button changes that arrive outside the touch stream (a button pressed or released
+     * while another is held is a generic motion event). Ignored unless the mouse is the cursor.
+     */
+    fun onMouseButtonChange(buttonState: Int, x: Float, y: Float) {
+        if (cursorIsMouse) syncMouseButtons(buttonState, x, y)
+    }
+
+    /** Sends a press or release for each mouse button whose state differs from the last call. */
+    private fun syncMouseButtons(buttonState: Int, x: Float, y: Float) {
+        cursorX = x
+        cursorY = y
+        val now = mouseButtonMask(buttonState)
+        val (pressed, released) = mouseButtonChanges(mouseButtons, now)
+        mouseButtons = now
+        for (button in 0..2) {
+            if (released and (1 shl button) != 0) {
+                cursorTouchListener?.invoke(MotionEvent.ACTION_UP, x, y, button)
+            }
+            if (pressed and (1 shl button) != 0) {
+                cursorTouchListener?.invoke(MotionEvent.ACTION_DOWN, x, y, button)
+            }
+        }
     }
 
     private fun dispatchCancel(view: BaseTouchControl) {
@@ -725,3 +780,16 @@ class TouchControlOverlay @JvmOverloads constructor(
             (((scale - MIN_RENDER_SCALE) / (1f - MIN_RENDER_SCALE)) * 100f).toInt().coerceIn(0, 100)
     }
 }
+
+/** Android's mouse button bits as GLFW button bits: bit 0 left, 1 right, 2 middle. */
+internal fun mouseButtonMask(buttonState: Int): Int {
+    var mask = 0
+    if (buttonState and MotionEvent.BUTTON_PRIMARY != 0) mask = mask or 1
+    if (buttonState and MotionEvent.BUTTON_SECONDARY != 0) mask = mask or 2
+    if (buttonState and MotionEvent.BUTTON_TERTIARY != 0) mask = mask or 4
+    return mask
+}
+
+/** The (newly pressed, newly released) button masks going from [previous] to [now]. */
+internal fun mouseButtonChanges(previous: Int, now: Int): Pair<Int, Int> =
+    Pair(now and previous.inv(), previous and now.inv())

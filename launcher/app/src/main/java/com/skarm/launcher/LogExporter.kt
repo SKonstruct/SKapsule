@@ -5,7 +5,10 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
+import android.view.InputDevice
 import android.widget.Toast
 import androidx.core.content.FileProvider
 import java.io.File
@@ -61,6 +64,10 @@ object LogExporter {
         process.waitFor()
         runCatching { appendDiagnostics(context, out) }
             .onFailure { Log.w(TAG, "could not append diagnostics", it) }
+        // Last, so the diagnostics are covered too.
+        runCatching {
+            out.writeText(LogScrubber.scrub(out.readText(), listOf(context.applicationInfo.dataDir, "/data/data/${context.packageName}")))
+        }.onFailure { Log.w(TAG, "could not scrub the log", it) }
         prune(context)
         if (out.length() > 0L) {
             out
@@ -104,7 +111,10 @@ object LogExporter {
 
     /** Adds what logcat no longer has, so one shared file is enough for a bug report. */
     private fun appendDiagnostics(context: Context, out: File) {
-        out.appendText("\n\n===== process exit reasons =====\n")
+        out.appendText("\n\n===== device & input =====\n")
+        runCatching { out.appendText(deviceSummary(context)) }
+            .onFailure { out.appendText("(could not read: ${it.javaClass.simpleName})\n") }
+        out.appendText("\n===== process exit reasons =====\n")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             val reasons = context.getSystemService(ActivityManager::class.java)
                 ?.getHistoricalProcessExitReasons(null, 0, 8).orEmpty()
@@ -141,6 +151,34 @@ object LogExporter {
         }
     }
 
+    /**
+     * The settings and hardware that decide whether input reaches the game: bug reports of "the
+     * character will not move" cannot otherwise be told apart (controls off, hidden, a pad or
+     * keyboard attached, an odd display).
+     */
+    private fun deviceSummary(context: Context): String = buildString {
+        val prefs = context.getSharedPreferences("launcher_prefs", Context.MODE_PRIVATE)
+        val metrics = context.resources.displayMetrics
+        appendLine("device: ${Build.MANUFACTURER} ${Build.MODEL} (Android ${Build.VERSION.RELEASE}, API ${Build.VERSION.SDK_INT})")
+        appendLine("display: ${metrics.widthPixels}x${metrics.heightPixels} @ ${metrics.densityDpi}dpi")
+        appendLine("login mode: ${prefs.getString("login_mode", "Web")}, avoid screen edges: ${prefs.getBoolean("avoid_screen_edges", false)}")
+        val layout = com.skarm.launcher.touch.TouchControlManager.loadLayout(context)
+        appendLine(
+            "touch controls: enabled=${layout.controlsEnabled} opacity=${layout.globalOpacity} " +
+                "renderScale=${layout.renderScale} nodes=${layout.nodes.size}",
+        )
+        val ids = InputDevice.getDeviceIds()
+        appendLine("input devices (${ids.size}):")
+        for (id in ids) {
+            val d = InputDevice.getDevice(id) ?: continue
+            if (d.isVirtual) continue
+            appendLine("  ${d.name}: sources=0x${Integer.toHexString(d.sources)} external=${deviceIsExternal(d)}")
+        }
+    }
+
+    private fun deviceIsExternal(d: InputDevice): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q && d.isExternal
+
     private fun exitReasonName(reason: Int): String = when (reason) {
         1 -> "EXIT_SELF"
         2 -> "SIGNALED"
@@ -175,12 +213,17 @@ object LogExporter {
 
     /** Capture + share in one step, toasting if there's nothing to send. */
     fun captureAndShare(context: Context) {
-        val file = capture(context)
-        if (file == null) {
-            Toast.makeText(context, R.string.share_logs_empty, Toast.LENGTH_SHORT).show()
-            return
-        }
-        share(context, file)
+        // logcat plus about a megabyte of files: not for the main thread.
+        Thread({
+            val file = capture(context)
+            Handler(Looper.getMainLooper()).post {
+                if (file == null) {
+                    Toast.makeText(context, R.string.share_logs_empty, Toast.LENGTH_SHORT).show()
+                } else {
+                    share(context, file)
+                }
+            }
+        }, "log-export").start()
     }
 
     // --- launch-attempt marker (cross-process via a file in filesDir) ---
@@ -207,6 +250,20 @@ object LogExporter {
     fun latestCrash(context: Context): File? =
         logDir(context).listFiles { f -> f.name.startsWith("$CRASH_PREFIX-") }
             ?.maxByOrNull { it.lastModified() }
+
+    /**
+     * The newest crash dump the player has not been asked about yet. Without this the dialog came
+     * back on every cold start until eight newer logs pushed the dump out.
+     */
+    fun unseenCrash(context: Context): File? = latestCrash(context)?.takeIf {
+        it.lastModified() > context.getSharedPreferences("launcher_prefs", Context.MODE_PRIVATE)
+            .getLong("crash_seen", 0L)
+    }
+
+    fun markCrashSeen(context: Context, crash: File) {
+        context.getSharedPreferences("launcher_prefs", Context.MODE_PRIVATE).edit()
+            .putLong("crash_seen", crash.lastModified()).apply()
+    }
 
     /** Keep only the most recent [KEEP_FILES] dumps to bound cache growth. */
     private fun prune(context: Context) {

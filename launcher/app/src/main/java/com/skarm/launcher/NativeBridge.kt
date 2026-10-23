@@ -30,6 +30,18 @@ object NativeBridge {
      * @param binDir directory prepended to the JVM's PATH; holds the xdg-open shim symlink so
      *   SK's Runtime.exec("xdg-open <url>") resolves to it. Empty to leave PATH untouched.
      */
+    /**
+     * Process-wide, because the JVM is: a GameActivity that is destroyed and recreated while the
+     * game runs (a configuration change, say) must neither start it again nor show the boot
+     * overlay over a game that is already drawing.
+     */
+    @Volatile var jvmStarted = false
+
+    @Volatile var renderReady = false
+
+    /** The saved web account, handed to the game as its login. Call before [startJvm]. */
+    external fun setWebLogin(user: String, pass: String)
+
     external fun startJvm(
         jreHome: String,
         classpath: String,
@@ -45,9 +57,6 @@ object NativeBridge {
         screenHeight: Int,
         maxHeapMb: Int,
     )
-
-    /** Launches Spiral Knights inside the running JVM. (Stub) */
-    external fun launchGame(gameDir: String, loginMode: String)
 
     /**
      * Forwards a touch as a mouse event into the native input queue.
@@ -120,6 +129,7 @@ object NativeBridge {
     /** Native -> SK has produced its first frame; the overlay can be dismissed. */
     @JvmStatic
     fun onRenderReady() {
+        renderReady = true
         bootListener?.onRenderReady()
     }
 
@@ -171,9 +181,6 @@ object NativeBridge {
 
         /** Ask for a Steam Guard email code sent to [email]. */
         fun onPromptEmailCode(email: String, prevWrong: Boolean)
-
-        /** The auth attempt ended (success/fail/timeout); tear down any open dialog. */
-        fun onPromptDismiss()
     }
 
     @Volatile

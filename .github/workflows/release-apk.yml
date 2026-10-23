@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to release, e.g. 2.4.0 (CHANGELOG.md needs a '## 2.4.0' section)"
+        description: "Version to release, e.g. X.Y.Z (CHANGELOG.md needs a '## X.Y.Z' section)"
         required: true
         type: string
 
@@ -22,6 +22,10 @@ jobs:
     uses: ./.github/workflows/build-apk.yml
     with:
       version: ${{ inputs.version }}
-    secrets: inherit
+    secrets:
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+      KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
     permissions:
       contents: write

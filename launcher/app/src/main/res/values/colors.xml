@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- SKapsule's accent. The launcher icon background (#AC4B82) is its own, slightly warmer tone. -->
+    <color name="sk_pink">#AB4A81</color>
+    <color name="sk_pink_stroke">#33AB4A81</color>
+    <color name="sk_pink_chip">#CCAB4A81</color>
+</resources>

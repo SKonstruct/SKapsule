@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SKapsule</string>
-    <string name="play_web">Play (Web)</string>
-    <string name="play_steam">Play (Steam)</string>
     <string name="keyboard">Keyboard</string>
     <string name="exit_confirm_message">Exit Spiral Knights?</string>
     <string name="exit_confirm_yes">Exit</string>
@@ -14,8 +12,6 @@
     <string name="steam_password">Steam password</string>
     <string name="steam_login_ok">Sign in</string>
     <string name="boot_starting">Starting Java runtime…</string>
-    <string name="boot_updating">Updating before launch…</string>
-    <string name="boot_steam_auth">Waiting for Steam authorization…</string>
     <string name="boot_failed_title">Couldn\'t start the game</string>
     <string name="boot_keep_waiting">Keep waiting</string>
     <string name="boot_timeout">The game has shown no progress for three minutes. It may just be slow; otherwise share the log so it can be diagnosed.</string>
@@ -32,7 +28,6 @@
     <string name="share_logs_chooser">Share diagnostic log</string>
     <string name="share_logs_subject">SKapsule diagnostic log</string>
     <string name="share_logs_empty">No logs to share yet.</string>
-    <string name="share_logs_failed">Couldn\'t capture logs: %1$s</string>
     <string name="share_logs_crash_found">The last session crashed. Share the log so it can be diagnosed?</string>
     <string name="steam_login_channel_name">Steam sign-in</string>
     <string name="steam_login_notif_title">Signing in to Steam</string>
@@ -44,12 +39,25 @@
     <string name="sidebar_open_folder">Open Folder</string>
     <string name="sidebar_github">GitHub</string>
     <string name="sidebar_check_updates">Check for Updates</string>
+    <string name="mods_game_running">Close the game first: mods change files it has open.</string>
     <string name="update_checking">Checking for updates…</string>
     <string name="update_check_failed">Couldn\'t check for updates. Check your connection and try again.</string>
     <string name="update_up_to_date">You\'re up to date (v%1$s).</string>
     <string name="update_dev_build">You\'re on a development build (v%1$s); the latest release is v%2$s.</string>
     <string name="sidebar_discord">Discord</string>
     <string name="sidebar_logout">Logout</string>
+    <string name="sidebar_web_account">Web account</string>
+    <string name="web_account_title">Web account</string>
+    <string name="web_account_message">Saved on this device, encrypted. Web launches sign in with it automatically.</string>
+    <string name="web_account_username">Username</string>
+    <string name="web_account_password">Password</string>
+    <string name="web_account_password_saved">New password (blank keeps it)</string>
+    <string name="web_account_save">Save</string>
+    <string name="web_account_clear">Remove</string>
+    <string name="web_account_saved">Web account saved</string>
+    <string name="web_account_removed">Web account removed</string>
+    <string name="web_account_save_failed">Couldn\'t save the account on this device</string>
+    <string name="web_account_incomplete">Enter both a username and a password</string>
     <string name="logout_confirm_message">Sign out of Steam? Your saved session will be cleared.</string>
     <string name="logout_confirm_yes">Sign out</string>
     <string name="pref_avoid_edges">Avoid screen edges</string>
@@ -72,7 +80,7 @@
     <string name="editor_game_running_message">Spiral Knights is still open in the background and keeps its own copy of the control layout, so whichever closes last overwrites the other. Exit the game first to be safe.</string>
     <string name="editor_edit_anyway">Edit anyway</string>
     <string name="pref_crash_reporting">Send crash reports</string>
-    <string name="pref_crash_reporting_note">Anonymous: device model, Android version, app build and the crash log.</string>
+    <string name="pref_crash_reporting_note">Device model, Android version, app build and the crash log, with credentials and emails removed.</string>
     <string name="pref_max_ram">Max RAM</string>
     <string name="ram_decrease">\u2212</string>
     <string name="ram_increase">+</string>
@@ -87,6 +95,5 @@
     <string name="mod_remove_title">Removing Mods</string>
     <string name="mod_completed">Operation completed successfully.</string>
     <string name="mod_removed">Mods removed successfully!\nUnpacked %1$d resources.</string>
-    <string name="mod_failed">Operation failed: %1$s</string>
     <string name="update_downloading">Updating SKapsule</string>
 </resources>

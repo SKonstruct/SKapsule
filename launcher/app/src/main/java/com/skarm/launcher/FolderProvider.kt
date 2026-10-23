@@ -52,7 +52,7 @@ class FolderProvider : DocumentsProvider() {
         val parent = getFileForDocId(parentDocumentId)
         val children = parent.listFiles() ?: throw FileNotFoundException("Cannot list directory")
         for (child in children) {
-            includeFile(result, null, child)
+            if (!isHidden(child.canonicalPath)) includeFile(result, null, child)
         }
         return result
     }
@@ -73,7 +73,9 @@ class FolderProvider : DocumentsProvider() {
         displayName: String,
     ): String {
         val parent = getFileForDocId(parentDocumentId)
+        if (!isSafeName(displayName)) throw FileNotFoundException("Invalid name: $displayName")
         val newFile = File(parent, displayName)
+        if (isHidden(newFile.canonicalPath)) throw FileNotFoundException("Invalid name: $displayName")
         if (Document.MIME_TYPE_DIR == mimeType) {
             if (!newFile.mkdir()) throw FileNotFoundException("Failed to create directory")
         } else {
@@ -97,7 +99,10 @@ class FolderProvider : DocumentsProvider() {
     override fun renameDocument(documentId: String, displayName: String): String {
         val file = getFileForDocId(documentId)
         val parent = file.parentFile ?: throw FileNotFoundException("Cannot rename root")
+        if (!isSafeName(displayName)) throw FileNotFoundException("Invalid name: $displayName")
         val dest = File(parent, displayName)
+        // renameTo replaces an existing file, which would destroy it without a prompt.
+        if (dest.exists() || isHidden(dest.canonicalPath)) throw FileNotFoundException("Cannot rename to $displayName")
         if (!file.renameTo(dest)) throw FileNotFoundException("Failed to rename file")
         return getDocIdForFile(dest)
     }
@@ -121,8 +126,16 @@ class FolderProvider : DocumentsProvider() {
         if (path != root && !path.startsWith(root + File.separator)) {
             throw FileNotFoundException("Document is outside the provider root: $docId")
         }
-        if (!file.exists()) throw FileNotFoundException("File not found: $docId")
+        if (!file.exists() || isHidden(path)) throw FileNotFoundException("File not found: $docId")
         return file
+    }
+
+    override fun isChildDocument(parentDocumentId: String, documentId: String): Boolean {
+        // Tree grants ask this to decide whether a document is reachable from the granted folder;
+        // the default says no, which breaks every sub-folder grant.
+        val parent = File(parentDocumentId).canonicalPath
+        val child = File(documentId).canonicalPath
+        return child == parent || child.startsWith(parent + File.separator)
     }
 
     private fun getMimeType(file: File): String {
@@ -156,6 +169,18 @@ class FolderProvider : DocumentsProvider() {
     }
 
     companion object {
+        /** A single file name: no separators, not "." or "..", no NUL. */
+        internal fun isSafeName(name: String): Boolean =
+            name.isNotEmpty() && name != "." && name != ".." &&
+                '/' !in name && '\u0000' !in name
+
+        /**
+         * Files other apps must not see even with a folder grant: the saved Steam login and the key
+         * that decrypts it (java.util.prefs, node co/frenchpress).
+         */
+        internal fun isHidden(canonicalPath: String): Boolean =
+            "/frenchpress" in canonicalPath || canonicalPath.endsWith(".creds")
+
         private val DEFAULT_ROOT_PROJECTION = arrayOf(
             Root.COLUMN_ROOT_ID,
             Root.COLUMN_MIME_TYPES,

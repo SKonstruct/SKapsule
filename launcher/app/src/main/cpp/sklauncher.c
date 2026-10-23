@@ -79,6 +79,8 @@ static struct {
     char cred_file[1024];        // FRENCHPRESS_CRED_FILE (Steam refresh-token store)
     char steam_user[256];        // FRENCHPRESS_STEAM_USER (first login only); empty = web
     char steam_pass[256];        // FRENCHPRESS_STEAM_PASS
+    char web_user[256];          // SK_WEB_USER: saved web account, passed to the game as its login
+    char web_pass[256];          // SK_WEB_PASS
     char bin_dir[1024];          // prepended to PATH so SK's Runtime.exec finds our xdg-open shim
     int initial_screen_width;
     int initial_screen_height;
@@ -690,15 +692,31 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
     return JNI_VERSION_1_6;
 }
 
-// ART JNIEnv for the calling thread, attaching if needed. The long-lived HotSpot
-// threads that call this (render, jvm-main) are left attached for process life;
-// they don't exit before teardown, so we skip the matching detach.
+// ART aborts the process ("Native thread exited without calling DetachCurrentThread") when a
+// thread it knows about exits, so every thread art_env() attaches is detached again by this
+// thread-exit destructor. Short-lived HotSpot threads reach here too (the Steam callback pump
+// shows the Guard prompt and is shut down afterwards).
+static pthread_key_t g_art_detach_key;
+static pthread_once_t g_art_detach_once = PTHREAD_ONCE_INIT;
+
+static void art_detach_thread(void *attached) {
+    (void)attached;
+    if (g_art_vm) (*g_art_vm)->DetachCurrentThread(g_art_vm);
+}
+
+static void art_detach_key_init(void) {
+    pthread_key_create(&g_art_detach_key, art_detach_thread);
+}
+
+// ART JNIEnv for the calling thread, attaching if needed.
 static JNIEnv *art_env(void) {
     if (!g_art_vm) return NULL;
     JNIEnv *env = NULL;
     jint rc = (*g_art_vm)->GetEnv(g_art_vm, (void **)&env, JNI_VERSION_1_6);
     if (rc == JNI_EDETACHED) {
         if ((*g_art_vm)->AttachCurrentThread(g_art_vm, &env, NULL) != JNI_OK) return NULL;
+        pthread_once(&g_art_detach_once, art_detach_key_init);
+        pthread_setspecific(g_art_detach_key, (void *)1);
     } else if (rc != JNI_OK) {
         return NULL;
     }
@@ -751,6 +769,17 @@ static void JNICALL sk_native_steam_keep_alive(JNIEnv *env, jclass thiz, jboolea
 static void JNICALL sk_native_launch_status(JNIEnv *env, jclass thiz, jstring msg) {
     const char *c = msg ? (*env)->GetStringUTFChars(env, msg, NULL) : NULL;
     art_launch_status(c ? c : "");
+    if (c) (*env)->ReleaseStringUTFChars(env, msg, c);
+}
+
+// HotSpot-registered native: SkBootstrap.nativeBootFailed(String) tells the ART UI the game cannot
+// start (getdown stalled or stopped, SK's main threw), so it shows the reason instead of the last
+// getdown status.
+static void JNICALL sk_native_boot_failed(JNIEnv *env, jclass thiz, jstring msg) {
+    (void)thiz;
+    const char *c = msg ? (*env)->GetStringUTFChars(env, msg, NULL) : NULL;
+    LOGE("boot failed: %s", c ? c : "");
+    art_boot_failed(c ? c : "The game could not start.");
     if (c) (*env)->ReleaseStringUTFChars(env, msg, c);
 }
 
@@ -816,6 +845,11 @@ static void *jvm_thread_main(void *arg) {
     if (jvm.cred_file[0])  setenv("FRENCHPRESS_CRED_FILE",  jvm.cred_file,  1);
     if (jvm.steam_user[0]) setenv("FRENCHPRESS_STEAM_USER", jvm.steam_user, 1);
     if (jvm.steam_pass[0]) setenv("FRENCHPRESS_STEAM_PASS", jvm.steam_pass, 1);
+    // A saved web account: SkBootstrap hands these to SK's main() as its username/password.
+    if (jvm.web_user[0] && jvm.web_pass[0]) {
+        setenv("SK_WEB_USER", jvm.web_user, 1);
+        setenv("SK_WEB_PASS", jvm.web_pass, 1);
+    }
 
     // Prepend bin dir to PATH so SK's Runtime.exec() calls resolve what we expect.
     if (jvm.bin_dir[0]) {
@@ -1046,8 +1080,10 @@ static void *jvm_thread_main(void *arg) {
     }
     LOGI("JVM thread: JNI_CreateJavaVM OK");
 
-    // Force Java to capture the environment variables into ProcessEnvironment
-    // so we can unset them and remove sensitive credentials from /proc/self/environ.
+    // Force Java to snapshot the environment (ProcessEnvironment) before the C-level copy is
+    // unset below; frenchpress reads the credentials from that snapshot. Unsetting only keeps
+    // them out of anything the process starts natively. Java's snapshot, and so any Runtime.exec
+    // child and any mod code, can still read them for the life of the JVM.
     {
         jclass system_class = (*env)->FindClass(env, "java/lang/System");
         if (system_class) {
@@ -1062,11 +1098,15 @@ static void *jvm_thread_main(void *arg) {
         unsetenv("FRENCHPRESS_CRED_FILE");
         unsetenv("FRENCHPRESS_STEAM_USER");
         unsetenv("FRENCHPRESS_STEAM_PASS");
+        unsetenv("SK_WEB_USER");
+        unsetenv("SK_WEB_PASS");
 
         // Scrub the global struct buffers to prevent memory snooping
         memset(jvm.cred_file, 0, sizeof(jvm.cred_file));
         memset(jvm.steam_user, 0, sizeof(jvm.steam_user));
         memset(jvm.steam_pass, 0, sizeof(jvm.steam_pass));
+        memset(jvm.web_user, 0, sizeof(jvm.web_user));
+        memset(jvm.web_pass, 0, sizeof(jvm.web_pass));
     }
 
     {
@@ -1079,6 +1119,8 @@ static void *jvm_thread_main(void *arg) {
                   (void *)Java_com_skarm_launcher_bootstrap_SkBootstrap_registerGlfwNatives },
                 { "nativeLaunchStatus", "(Ljava/lang/String;)V",
                   (void *)sk_native_launch_status },
+                { "nativeBootFailed", "(Ljava/lang/String;)V",
+                  (void *)sk_native_boot_failed },
                 { "nativeSteamKeepAlive", "(Z)V",
                   (void *)sk_native_steam_keep_alive },
                 { "nativePromptDeviceCode", "(Z)Ljava/lang/String;",
@@ -1385,6 +1427,24 @@ Java_com_skarm_launcher_NativeBridge_onSurfaceDestroyed(JNIEnv *env, jobject thi
     egl_release_surface();
 }
 
+// The saved web account, set before startJvm. Both or neither: a half login would only
+// prefill the game's dialog with something wrong.
+JNIEXPORT void JNICALL
+Java_com_skarm_launcher_NativeBridge_setWebLogin(JNIEnv *env, jobject thiz,
+                                                 jstring user, jstring pass) {
+    const char *u = (*env)->GetStringUTFChars(env, user, NULL);
+    const char *p = (*env)->GetStringUTFChars(env, pass, NULL);
+    if (u && p && u[0] && p[0] && strlen(u) < sizeof(jvm.web_user) && strlen(p) < sizeof(jvm.web_pass)) {
+        snprintf(jvm.web_user, sizeof(jvm.web_user), "%s", u);
+        snprintf(jvm.web_pass, sizeof(jvm.web_pass), "%s", p);
+        LOGI("web login supplied");
+    } else {
+        LOGW("web login ignored (empty or too long)");
+    }
+    if (u) (*env)->ReleaseStringUTFChars(env, user, u);
+    if (p) (*env)->ReleaseStringUTFChars(env, pass, p);
+}
+
 JNIEXPORT void JNICALL
 Java_com_skarm_launcher_NativeBridge_startJvm(JNIEnv *env, jobject thiz,
                                               jstring jreHome, jstring classpath,
@@ -1427,12 +1487,6 @@ Java_com_skarm_launcher_NativeBridge_startJvm(JNIEnv *env, jobject thiz,
     (*env)->ReleaseStringUTFChars(env, steamUser, su);
     (*env)->ReleaseStringUTFChars(env, steamPass, sp);
     (*env)->ReleaseStringUTFChars(env, binDir,    bd);
-}
-
-JNIEXPORT void JNICALL
-Java_com_skarm_launcher_NativeBridge_launchGame(JNIEnv *env, jobject thiz,
-                                                jstring gameDir, jstring loginMode) {
-    LOGI("launchGame (stub)");
 }
 
 // Touch -> mouse. action: 0=down, 1=move, 2=up. x,y in framebuffer pixels
