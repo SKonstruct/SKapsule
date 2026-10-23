@@ -134,4 +134,18 @@ class ModsApplierTest {
         val expected = digests.lines().first().substringAfter(" = ")
         assertEquals(expected, ModsApplier.getdownDigest(File(code, "config.jar")))
     }
+
+    @Test
+    fun trailingCommasBeforeAClosingBraceAreDropped() {
+        val json = "{\r\n  \"mod\": {\r\n    \"name\": \"A\",\r\n    \"version\": \"1.0\",\r\n  }\r\n}"
+        val parsed = org.json.JSONObject(ModsApplier.stripTrailingCommas(json))
+        assertEquals("A", parsed.getJSONObject("mod").getString("name"))
+    }
+
+    @Test
+    fun commasInsideStringsAndBetweenValuesAreKept() {
+        val json = """{"a": "x, }", "b": [1, 2,], "c": "q\", ]"}"""
+        val out = ModsApplier.stripTrailingCommas(json)
+        assertEquals("""{"a": "x, }", "b": [1, 2], "c": "q\", ]"}""", out)
+    }
 }

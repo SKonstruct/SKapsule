@@ -194,6 +194,9 @@ genuinely useful; many are noise. Before opening one:
 - Introduce new third-party dependencies, license-incompatible code, or anything
   that would change the licensing story in [README §License](README.md#license).
 - Commit secrets, keystores, or `keystore.properties`.
+- Edit anything Getdown digests in the game folder (`getdown.txt`, the code jars) outside the mod
+  apply path. Getdown fails its own check, refetches, clears every validation marker and reverts
+  what mods changed; 2.4.2 did this with an https rewrite of `getdown.txt` and broke every mod.
 
 ---
 

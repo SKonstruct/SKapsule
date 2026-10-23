@@ -3,6 +3,20 @@
 Notable changes per release. Versions are the git tags the APKs are built from
 (`vX.Y.Z` → `skapsule-vX.Y.Z.apk`).
 
+## 2.4.3
+
+### Fixed
+
+- **Mods were undone every time the game started** (a 2.4.2 regression). 2.4.2 edited the game's
+  `getdown.txt` to use https, and that file is checked against a published hash: the check failed on
+  every launch, the game's updater refetched its files and re-downloaded or re-unpacked everything a
+  mod had changed. The file is left as the server wrote it again. After updating, press Apply Mods
+  once more.
+- **The https change in 2.4.2 is withdrawn.** It did not keep the updater on https after its first
+  check (downloads went over http either way), so it protected nothing, and it caused the bug above.
+- **Mods whose `mod.json` ends with a trailing comma** (several in the modpack) are read again, so
+  their name and type are no longer lost.
+
 ## 2.4.2
 
 ### Added

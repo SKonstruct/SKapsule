@@ -252,6 +252,36 @@ object ModsApplier {
         }
     }
 
+    /**
+     * Drops a comma that directly precedes a closing brace or bracket, outside strings. Mod
+     * authors write `"version": "1.0",` before the final `}` and the desktop launcher's JSON
+     * library accepts it; Android's rejects it, which lost those mods' metadata.
+     */
+    internal fun stripTrailingCommas(json: String): String {
+        val out = StringBuilder(json.length)
+        var inString = false
+        var escaped = false
+        var i = 0
+        while (i < json.length) {
+            val c = json[i]
+            when {
+                inString -> {
+                    out.append(c)
+                    if (escaped) escaped = false else if (c == '\\') escaped = true else if (c == '"') inString = false
+                }
+                c == '"' -> { inString = true; out.append(c) }
+                c == ',' -> {
+                    var j = i + 1
+                    while (j < json.length && json[j].isWhitespace()) j++
+                    if (j >= json.length || (json[j] != '}' && json[j] != ']')) out.append(c)
+                }
+                else -> out.append(c)
+            }
+            i++
+        }
+        return out.toString()
+    }
+
     private fun parseModMetadata(modFile: File): ModMetadata {
         val metadata = ModMetadata(name = modFile.name)
         try {
@@ -260,7 +290,7 @@ object ModsApplier {
                 if (entry != null) {
                     zipFile.getInputStream(entry).use { inputStream ->
                         val content = inputStream.bufferedReader().readText()
-                        val json = JSONObject(content)
+                        val json = JSONObject(stripTrailingCommas(content))
                         val modObj = json.optJSONObject("mod") ?: json
 
                         metadata.name = modObj.optString("name", modFile.name)
