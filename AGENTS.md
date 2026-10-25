@@ -27,6 +27,8 @@ either a native-component submodule or a build/CI script.
 
 Don't blind-edit. Before claiming a change works, build the affected component:
 
+- **Everything:** `./scripts/build.sh [debug|release] [--natives] [--test] [--install]` builds missing natives,
+  stages the assets and assembles the APK, with the right JDKs found for you (`--help`).
 - **Launcher / Kotlin / Java (`launcher/`):** `cd launcher && ./gradlew :app:assembleDebug`
   (or `assembleRelease`). Use JDK 25 as `JAVA_HOME`. A successful compile is the
   minimum bar; for behavior changes, also run the relevant unit tests
@@ -42,6 +44,9 @@ Don't blind-edit. Before claiming a change works, build the affected component:
 - **CI is the canonical recipe.** [.github/workflows/build-apk.yml](.github/workflows/build-apk.yml)
   is the source of truth for the from-source build. If your change requires a build
   step that isn't in CI, that's a red flag — surface it.
+- **Dependabot** ([.github/dependabot.yml](.github/dependabot.yml)) proposes weekly updates to the
+  pinned actions and the Gradle wrapper, plugins and libraries. The `Test` workflow runs on its
+  PRs; an AGP, Kotlin or NDK bump still needs an emulator launch before merging.
 
 If you cannot run the build in your sandbox, say so explicitly in the PR. Do **not**
 claim a change is verified when it isn't.

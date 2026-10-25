@@ -1,0 +1,20 @@
+version: 2
+updates:
+  # Workflow actions are pinned to commit SHAs; Dependabot bumps the SHA and its "# vN" comment.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # The Gradle wrapper, the plugins and the app's libraries. Minor and patch updates arrive as
+  # one PR; majors (AGP, Sentry, ...) get their own so each can be tested on its own.
+  - package-ecosystem: gradle
+    directory: /launcher
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
