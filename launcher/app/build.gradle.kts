@@ -168,7 +168,7 @@ dependencies {
     // running in this same process.
     implementation("io.sentry:sentry-android-core:8.61.1")
     testImplementation("junit:junit:4.13.2")
-    testImplementation("org.json:json:20231013")
+    testImplementation("org.json:json:20260814")
 }
 
 val stageBootstrapJar by tasks.registering(Copy::class) {
