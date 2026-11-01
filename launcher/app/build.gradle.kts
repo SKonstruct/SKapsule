@@ -162,11 +162,11 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("org.apache.commons:commons-compress:1.28.0")
     implementation("org.tukaani:xz:1.12")
-    implementation("com.google.code.gson:gson:2.14.0")
+    implementation("com.google.code.gson:gson:2.15.0")
     // sentry-android-core, NOT sentry-android: the umbrella artifact pulls
     // sentry-android-ndk, whose signal handlers would fight the bundled HotSpot
     // running in this same process.
-    implementation("io.sentry:sentry-android-core:8.61.1")
+    implementation("io.sentry:sentry-android-core:8.62.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20260814")
 }
