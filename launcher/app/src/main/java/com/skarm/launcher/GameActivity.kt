@@ -879,6 +879,12 @@ class GameActivity :
         return getString(R.string.boot_error_files)
     }
 
+    private fun isOnline(): Boolean {
+        val cm = getSystemService(android.net.ConnectivityManager::class.java) ?: return true
+        val caps = cm.getNetworkCapabilities(cm.activeNetwork ?: return false) ?: return false
+        return caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
     private fun kickBootWatchdog() {
         bootHandler.removeCallbacks(bootWatchdog)
         bootHandler.postDelayed(bootWatchdog, BOOT_STALL_MS)
@@ -901,7 +907,8 @@ class GameActivity :
             bootHandler.removeCallbacks(bootWatchdog)
             Log.e(TAG, "Boot failed: $message")
             binding.bootStatus.text = message
-            CrashReporting.report(if (stalled) "boot_timeout" else "boot_failed", message)
+            // A stall with no connection is the user's network, not a fault in the game's updater.
+            if (!stalled || isOnline()) CrashReporting.report(if (stalled) "boot_timeout" else "boot_failed", message)
             val builder = AlertDialog.Builder(this)
                 .setTitle(R.string.boot_failed_title)
                 .setMessage(message)

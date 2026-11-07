@@ -25,6 +25,13 @@ either a native-component submodule or a build/CI script.
 
 ## Build & verification
 
+Test emulator: AVD `pixel_9_pro` is Android 17 / API 37 (`system-images;android-37.0;google_apis`, 4 KB pages),
+which boots the game to the logon screen. `pixel_9_pro_16k` (API 37.2, 16 KB pages) is kept to check
+page-size support: the app's own libraries are 16 KB aligned, but the bundled JRE (`assets/jre25`) is
+not (33 of its 34 libraries are 4 KB aligned), so the JVM fails to start there (`libjli.so` ... "program
+alignment (4096) cannot be smaller than system page size (16384)"). A 16 KB-aligned JRE build is needed
+before 16 KB-page devices work.
+
 Don't blind-edit. Before claiming a change works, build the affected component:
 
 - **Everything:** `./scripts/build.sh [debug|release] [--natives] [--test] [--install]` builds missing natives,

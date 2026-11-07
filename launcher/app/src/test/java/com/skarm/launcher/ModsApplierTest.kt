@@ -148,4 +148,23 @@ class ModsApplierTest {
         val out = ModsApplier.stripTrailingCommas(json)
         assertEquals("""{"a": "x, }", "b": [1, 2], "c": "q\", ]"}""", out)
     }
+
+    @Test
+    fun userFixableProblemsAreNotReportedAsFailures() {
+        val home = java.nio.file.Files.createTempDirectory("skhome").toFile()
+        try {
+            val noGame = assertThrows(UserActionException::class.java) {
+                kotlinx.coroutines.runBlocking { ModsApplier.apply(home) { _, _, _ -> } }
+            }
+            assertTrue(noGame is GameNotInstalledException)
+
+            File(home, "rsrc").mkdirs()
+            val noMods = assertThrows(UserActionException::class.java) {
+                kotlinx.coroutines.runBlocking { ModsApplier.apply(home) { _, _, _ -> } }
+            }
+            assertTrue(noMods is NoModsException)
+        } finally {
+            home.deleteRecursively()
+        }
+    }
 }

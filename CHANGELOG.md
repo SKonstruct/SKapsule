@@ -3,6 +3,26 @@
 Notable changes per release. Versions are the git tags the APKs are built from
 (`vX.Y.Z` → `skapsule-vX.Y.Z.apk`).
 
+## 2.4.4
+
+### Changed
+
+- **Built for Android 17** (target and compile SDK 37, up from 35) and the latest AndroidX libraries.
+
+### Fixed
+
+- **Mods can no longer replace the behavior, spawn table and variant table configs** (`config/behavior`,
+  `spawn_table`, `variant_table`, `.dat` and `.xml`). The protected list was still six entries short of
+  KnightLauncher's.
+- **Apply Mods and Remove Mods before the game's first launch, or with no mods downloaded,** explain
+  what to do first and no longer send an error report for it.
+- **Applying or removing mods could crash** if the screen was recreated (for example by rotating) while
+  it ran: the progress dialog was dismissed after its window was gone.
+- **A stalled game start with no connection** is no longer sent as an error report; the message to
+  check the connection stays.
+- **A runtime that cannot be unpacked because a bundled file is unreadable** now suggests
+  reinstalling, and the report records the device's CPU architectures.
+
 ## 2.4.3
 
 ### Fixed

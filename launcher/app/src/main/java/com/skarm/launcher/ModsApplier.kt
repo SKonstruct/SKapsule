@@ -19,6 +19,14 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipInputStream
 
+/** Something only the user can put right (no game yet, no mods yet): shown to them, never reported. */
+open class UserActionException(message: String) : IOException(message)
+
+class GameNotInstalledException :
+    UserActionException("Game not installed. Please launch the game first to download its files.")
+
+class NoModsException : UserActionException("No mods found in the mods folder. Download mods first.")
+
 object ModsApplier {
     private const val TAG = "ModsApplier"
 
@@ -31,6 +39,7 @@ object ModsApplier {
         "config/area.dat", "config/area.xml",
         "config/attack.dat", "config/attack.xml",
         "config/battle_sprite.dat", "config/battle_sprite.xml",
+        "config/behavior.dat", "config/behavior.xml",
         "config/catalog.dat", "config/catalog.xml",
         "config/conversation.dat", "config/conversation.xml",
         "config/cursor.dat", "config/cursor.xml",
@@ -67,6 +76,7 @@ object ModsApplier {
         "config/scene_global.dat", "config/scene_global.xml",
         "config/shader.dat", "config/shader.xml",
         "config/sounder.dat", "config/sounder.xml",
+        "config/spawn_table.dat", "config/spawn_table.xml",
         "config/status_condition.dat", "config/status_condition.xml",
         "config/style.dat", "config/style.xml",
         "config/texture.dat", "config/texture.xml",
@@ -74,6 +84,7 @@ object ModsApplier {
         "config/tile_replacement.dat", "config/tile_replacement.xml",
         "config/uplink.dat", "config/uplink.xml",
         "config/variant.dat", "config/variant.xml",
+        "config/variant_table.dat", "config/variant_table.xml",
         "config/wall.dat", "config/wall.xml",
     )
 
@@ -106,7 +117,7 @@ object ModsApplier {
         val stats = ApplyStats()
         val rsrcDir = File(gameHome, "rsrc")
         if (!rsrcDir.exists()) {
-            throw IOException("Game not installed. Please launch the game first to download files.")
+            throw GameNotInstalledException()
         }
 
         val modsDir = File(gameHome, "mods")
@@ -119,7 +130,7 @@ object ModsApplier {
         }?.toList() ?: emptyList()
 
         if (modFiles.isEmpty()) {
-            throw IOException("No mods found in the mods folder. Download mods first.")
+            throw NoModsException()
         }
 
         val gameVersion = getGameVersion(gameHome)
@@ -347,7 +358,7 @@ object ModsApplier {
     ): Int = withContext(Dispatchers.IO) {
         val rsrcDir = File(gameHome, "rsrc")
         if (!rsrcDir.exists()) {
-            throw IOException("Game not installed. Please launch the game first.")
+            throw GameNotInstalledException()
         }
         // Class and locale mods live in the code jars, not rsrc/.
         onProgress("Restoring original code jars…", 0, 0)

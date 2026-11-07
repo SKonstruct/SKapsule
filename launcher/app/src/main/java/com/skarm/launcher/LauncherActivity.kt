@@ -409,8 +409,14 @@ class LauncherActivity : AppCompatActivity() {
                 // The screen going away is not a failed install; the work itself ran to the end.
                 if (t is kotlinx.coroutines.CancellationException) throw t
                 Log.e(TAG, "Runtime install failed", t)
-                CrashReporting.report("runtime_install_failed", t.toString())
-                binding.setupStatus.text = "Runtime setup failed: ${t.message}"
+                CrashReporting.report(
+                    "runtime_install_failed", t.toString(),
+                    mapOf("abis" to android.os.Build.SUPPORTED_ABIS.joinToString()),
+                )
+                // A bundled file that cannot be opened means the installed package is damaged
+                // or was replaced under a running app; installing again fixes it.
+                val hint = if (t is java.io.FileNotFoundException) "\nReinstall SKapsule to repair it." else ""
+                binding.setupStatus.text = "Runtime setup failed: ${t.message}$hint"
             } finally {
                 installingRuntime = false
             }
@@ -782,7 +788,7 @@ class LauncherActivity : AppCompatActivity() {
                 Toast.makeText(this@LauncherActivity, "Update failed: ${e.message}",
                     Toast.LENGTH_LONG).show()
             } finally {
-                progress.dialog.dismiss()
+                progress.dialog.dismissSafely()
             }
         }
     }
@@ -856,14 +862,14 @@ class LauncherActivity : AppCompatActivity() {
             try {
                 val modsDir = File(SkInstaller.homeDir(this@LauncherActivity), "mods")
                 val stats = ModsDownloader.sync(modsDir, progressInfo.updateProgress)
-                progressInfo.dialog.dismiss()
+                progressInfo.dialog.dismissSafely()
                 Toast.makeText(
                     this@LauncherActivity,
                     "Download complete: ${stats.downloaded} downloaded, ${stats.skipped} skipped, ${stats.deleted} deleted",
                     Toast.LENGTH_LONG,
                 ).show()
             } catch (e: Exception) {
-                progressInfo.dialog.dismiss()
+                progressInfo.dialog.dismissSafely()
                 CrashReporting.report("mods_download_failed", e.toString())
                 AlertDialog.Builder(this@LauncherActivity)
                     .setTitle("Download Failed")
@@ -889,7 +895,7 @@ class LauncherActivity : AppCompatActivity() {
             try {
                 val gameHome = SkInstaller.homeDir(this@LauncherActivity)
                 val stats = ModsApplier.apply(gameHome, progressInfo.updateProgress)
-                progressInfo.dialog.dismiss()
+                progressInfo.dialog.dismissSafely()
                 val message = buildString {
                     append("Applied: ${stats.getTotalModsApplied()} mods (${stats.resourceModsApplied} resource, ${stats.classModsApplied} class, ${stats.modpacksApplied} modpacks).\n")
                     append("Unpacked ${stats.jarsUnpacked} resources.")
@@ -904,8 +910,8 @@ class LauncherActivity : AppCompatActivity() {
                     .setPositiveButton(android.R.string.ok, null)
                     .show()
             } catch (e: Exception) {
-                progressInfo.dialog.dismiss()
-                CrashReporting.report("mods_apply_failed", e.toString())
+                progressInfo.dialog.dismissSafely()
+                if (e !is UserActionException) CrashReporting.report("mods_apply_failed", e.toString())
                 AlertDialog.Builder(this@LauncherActivity)
                     .setTitle("Apply Failed")
                     .setMessage(e.message ?: "Unknown error")
@@ -923,15 +929,15 @@ class LauncherActivity : AppCompatActivity() {
             try {
                 val gameHome = SkInstaller.homeDir(this@LauncherActivity)
                 val jarsUnpacked = ModsApplier.remove(gameHome, progressInfo.updateProgress)
-                progressInfo.dialog.dismiss()
+                progressInfo.dialog.dismissSafely()
                 AlertDialog.Builder(this@LauncherActivity)
                     .setTitle(R.string.mod_completed)
                     .setMessage(getString(R.string.mod_removed, jarsUnpacked))
                     .setPositiveButton(android.R.string.ok, null)
                     .show()
             } catch (e: Exception) {
-                progressInfo.dialog.dismiss()
-                CrashReporting.report("mods_remove_failed", e.toString())
+                progressInfo.dialog.dismissSafely()
+                if (e !is UserActionException) CrashReporting.report("mods_remove_failed", e.toString())
                 AlertDialog.Builder(this@LauncherActivity)
                     .setTitle("Remove Failed")
                     .setMessage(e.message ?: "Unknown error")
@@ -979,5 +985,13 @@ class LauncherActivity : AppCompatActivity() {
         binding.btnRamPlus.isEnabled = current < max
         binding.textRamFree.text =
             getString(R.string.ram_free, RamSettings.availableMb(this), RamSettings.totalMb(this))
+    }
+}
+
+/** Dismissing throws once the window is gone (the screen was recreated while the work ran). */
+private fun android.app.Dialog.dismissSafely() {
+    try {
+        if (isShowing) dismiss()
+    } catch (_: IllegalArgumentException) {
     }
 }

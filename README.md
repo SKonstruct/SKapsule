@@ -72,7 +72,7 @@ for the canonical, reproducible recipe.
 
 | Tool            | Version                 | Used for                                                                    |
 | --------------- | ----------------------- | --------------------------------------------------------------------------- |
-| Android SDK     | compileSdk/targetSdk 35 | building the app                                                            |
+| Android SDK     | compileSdk 37, targetSdk 37 | building the app                                                            |
 | Android NDK     | `30.0.14904198`         | native libs (Clang 20; NDK 27's Clang 18 miscompiles OpenAL's C++20 ranges) |
 | CMake           | `3.22.1`                | native build                                                                |
 | JDK 8           |                         | LWJGL's Java-8 multi-release layer                                          |

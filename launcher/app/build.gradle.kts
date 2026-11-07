@@ -55,7 +55,7 @@ val skVersionCode: Int = System.getenv("SK_VERSION_CODE")?.toIntOrNull()
 
 android {
     namespace = "com.skarm.launcher"
-    compileSdk = 35
+    compileSdk = 37
     // Unified toolchain for app cmake + the submodule build scripts (gl4es/openal/
     // lwjgl). openal-soft's C++20 ranges need Clang 19+; NDK 27's Clang 18 miscompiles
     // them. Also gives 16 KB-aligned .so by default (forward-compat with 16 KB-page
@@ -65,7 +65,7 @@ android {
     defaultConfig {
         applicationId = "com.skarm.launcher"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 37
         versionCode = skVersionCode
         versionName = skVersionName
 
