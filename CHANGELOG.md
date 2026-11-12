@@ -3,6 +3,23 @@
 Notable changes per release. Versions are the git tags the APKs are built from
 (`vX.Y.Z` → `skapsule-vX.Y.Z.apk`).
 
+## 2.4.5
+
+### Added
+
+- **Connect to custom servers.** A **Server** picker above Web / Steam lists Official and the servers you
+  add: tap it to choose one, and use the **+** beside it to add a server (name, address, port, and
+  optionally the server's public key, client and content URLs and a username and password for quick
+  login) or the pencil to edit or delete the selected one. The login is encrypted with the Android
+  Keystore and only handed to the game if the game is set up for that server. The chosen server is
+  written into the game's `config.jar` at every launch, so switching back to Official undoes it. A
+  private server uses the game's own logon window unless you saved a login for it, so the Web / Steam
+  switch is hidden while one is selected: Steam sign-in and the saved web account stay with Official. If
+  the game has an update pending, the launcher asks you to update on Official first, because the updater
+  would otherwise replace the edit and quietly connect you to Official. On Android 17, a server on your
+  own network (a PC at home, for instance) needs **Local network** access, which SKapsule asks for the
+  first time you play on one.
+
 ## 2.4.4
 
 ### Changed

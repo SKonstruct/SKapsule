@@ -81,14 +81,14 @@ object WebAccountStore {
     }
 
     /** IV (12 bytes) followed by the ciphertext, Base64. */
-    private fun encrypt(plain: String): String {
+    internal fun encrypt(plain: String): String {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key())
         val sealed = cipher.doFinal(plain.toByteArray(Charsets.UTF_8))
         return Base64.encodeToString(cipher.iv + sealed, Base64.NO_WRAP)
     }
 
-    private fun decrypt(blob: String): String {
+    internal fun decrypt(blob: String): String {
         val bytes = Base64.decode(blob, Base64.NO_WRAP)
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, bytes, 0, 12))

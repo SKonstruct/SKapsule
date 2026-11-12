@@ -8,15 +8,12 @@ on-device — the game code and assets are downloaded and patched from the offic
 servers at runtime (via getdown), exactly like the desktop client. Nothing about the
 game itself is bundled in this repository.
 
-> **Status: experimental / alpha.** The game boots, logs in, and is playable, but
-> there are known rough edges (see [Known issues](#known-issues)). Expect bugs.
-
 ---
 
 ## Disclaimer
 
-Spiral Knights is © SEGA / Grey Havens, LLC. **This is an unofficial, fan-made port
-and is not affiliated with, endorsed by, or supported by SEGA or Grey Havens.**
+Spiral Knights is © Grey Havens, LLC. **This is an unofficial, fan-made port
+and is not affiliated with, endorsed by, or supported by Grey Havens.**
 
 - No Spiral Knights game code or art assets are included in this repository or in the
   APK. They are downloaded from the official servers at first launch, the same way the
@@ -50,7 +47,7 @@ stick made every button unpressable).
 3. Launch **SKapsule**. On first run it unpacks the bundled JRE and runtime, then
    downloads/patches the game from the official servers — this first launch takes a
    while and needs a network connection.
-4. Choose **Play (Web)** or **Play (Steam)** and sign in with your own account.
+4. Pick **Web** or **Steam**, tap **Launch** and sign in with your own account.
 
 Later releases install themselves: when a newer version is published the launcher shows an
 **Update available** banner, and tapping it downloads the APK and hands it to the system
@@ -58,6 +55,18 @@ installer (grant "install unknown apps" once when prompted). The dialog also off
 notes and a **Skip this version** option.
 
 Only `arm64-v8a` devices are supported (no 32-bit builds).
+
+**Custom servers.** The **Server** picker above Web / Steam chooses Official or a saved server; the **+**
+beside it adds one (address, port, and optionally its public key and client/content URLs) and the pencil
+edits the selected one. The Web / Steam switch is Official's, so it is hidden for a private server. At launch the launcher writes the
+connection settings into the game's `code/config.jar` (`deployment.properties`: `server_host`,
+`server_ports`, `datagram_ports`, `key.public`, `client_root_url`, `content_url`), as [KnightLauncher](https://github.com/lucasluqui/KnightLauncher) does.
+Official's values are written back when you switch, so nothing lingers. A private server gets the game's
+own logon window, or your saved login for it if you gave one (encrypted with the Keystore; the game's bootstrap
+drops it unless the game's `server_host` is that server). Steam sign-in and the saved web account are never sent to it. With a game update
+pending the launch is refused until you update on Official, since the updater would replace the edit.
+On Android 17 a server on your own network (private or `.local` addresses) needs the **Local network**
+permission, which SKapsule requests when you launch against one; internet servers don't.
 
 ---
 
@@ -72,7 +81,7 @@ for the canonical, reproducible recipe.
 
 | Tool            | Version                 | Used for                                                                    |
 | --------------- | ----------------------- | --------------------------------------------------------------------------- |
-| Android SDK     | compileSdk 37, targetSdk 37 | building the app                                                            |
+| Android SDK     | compileSdk 37, targetSdk 37 | building the app                                                        |
 | Android NDK     | `30.0.14904198`         | native libs (Clang 20; NDK 27's Clang 18 miscompiles OpenAL's C++20 ranges) |
 | CMake           | `3.22.1`                | native build                                                                |
 | JDK 8           |                         | LWJGL's Java-8 multi-release layer                                          |
@@ -134,7 +143,7 @@ GitHub Release with the APK attached.
 ## How it works
 
 ```
-LauncherActivity ─ unpacks JRE + runtime, picks Web/Steam, launches GameActivity
+LauncherActivity ─ unpacks JRE + runtime, picks server and Web/Steam, launches GameActivity
         │
 GameActivity (:game process) ─ starts the FCL JVM, sets up EGL/GLES + input
         │
@@ -165,7 +174,7 @@ Kotlin installers wire these together.
 ```
 launcher/          Android app (Kotlin) — the buildable project
   app/             the Android application module
-scripts/           build-*-android.sh per native component + stage-launcher-assets.sh
+scripts/           build.sh (everything), build-*-android.sh per native component, stage-launcher-assets.sh
 external/bootstrap/       submodule — SkBootstrap / HeadlessGetdown / GLFW shim, staged into the APK
 external/gl4es/             submodule — GL → GLES translation
 external/openal-soft/       submodule — audio
@@ -219,7 +228,8 @@ Most default events carry no expiry; those show no countdown, which is normal.
 ## Crash reporting
 
 Uncaught exceptions and a few detected failures (runtime unpack, mod download/apply/remove,
-a failed self-update) are reported to Sentry, with the device model, Android version, app
+a failed self-update) are reported to Sentry, except a dropped or unreachable connection (that is your
+network, and the app tells you instead), with the device model, Android version, app
 build, which process it came from, and the same logcat dump that **Share Logs** exports.
 Credentials, tokens and account emails are stripped. Native crashes are not captured: the
 SDK's NDK component installs signal handlers, and the bundled JVM in this process needs
@@ -233,8 +243,6 @@ takes effect immediately.
 - **Character-shadow shader artifact.** Character shadows can render as a filled
   quad. The shader _link_ bug is fixed, but a visual artifact persists from another
   cause. Workaround: set graphics quality to **Low**.
-- **Experimental maturity.** Lifecycle/resume, input, and login paths work but
-  haven't been hardened across the full range of devices and Android versions.
 - **APK size.** The bundled runtime makes for a large (~90 MB) APK; it is untuned.
 
 ---

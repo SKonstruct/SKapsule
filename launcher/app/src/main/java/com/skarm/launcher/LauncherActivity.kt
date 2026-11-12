@@ -5,6 +5,7 @@ import android.content.res.ColorStateList
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
+import android.os.Build
 import android.text.InputType
 import android.util.Log
 import android.view.View
@@ -143,7 +144,7 @@ class LauncherActivity : AppCompatActivity() {
         binding.btnLaunch.setOnClickListener {
             val checkedId = binding.modeToggleGroup.checkedButtonId
             val mode = if (checkedId == R.id.btn_mode_steam) LoginMode.Steam else LoginMode.Web
-            if (mode == LoginMode.Steam) {
+            if (mode == LoginMode.Steam && ServerStore.selected(this) == null) {
                 onPlaySteam()
             } else {
                 launchGame(LoginMode.Web)
@@ -162,6 +163,9 @@ class LauncherActivity : AppCompatActivity() {
         binding.sidebarBtnDiscord.setOnClickListener { openUrl("https://dankware.alwaysdata.net/discord") }
         binding.sidebarBtnLogout.setOnClickListener { onLogout() }
         binding.sidebarBtnWebAccount.setOnClickListener { editWebAccount() }
+        binding.serverPick.setOnClickListener { showServers() }
+        binding.serverAction.setOnClickListener { editServer(ServerStore.selected(this)) }
+        showSelectedServer()
 
         // Avoid screen edges switch
         val avoidEdgesSwitch = binding.switchAvoidEdges
@@ -192,7 +196,9 @@ class LauncherActivity : AppCompatActivity() {
                 .show()
         }
 
-        binding.subtitle.setOnClickListener { showPlayerCountBreakdown() }
+        binding.subtitle.setOnClickListener {
+            if (ServerStore.selected(this) == null) showPlayerCountBreakdown()
+        }
         fetchPlayerCount()
         fetchNews()
         checkForUpdate()
@@ -351,6 +357,128 @@ class LauncherActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Shows which server Play connects to. Steam sign-in belongs to Official, so the Web/Steam
+     * switch is hidden for a private server and Play uses Web; the saved choice is left alone.
+     */
+    private fun showSelectedServer() {
+        val server = ServerStore.selected(this)
+        val name = server?.name ?: getString(R.string.servers_official)
+        binding.serverName.text = name
+        binding.serverPick.contentDescription = getString(R.string.servers_pick_description, name)
+        binding.serverAction.setImageResource(if (server == null) R.drawable.ic_add else R.drawable.ic_edit)
+        binding.serverAction.contentDescription = getString(if (server == null) R.string.servers_add else R.string.servers_edit)
+        binding.modeToggleGroup.visibility = if (server == null) View.VISIBLE else View.GONE
+        // The player count is Official's.
+        binding.subtitle.text = if (server == null && playerTotal > 0) {
+            getString(R.string.subtitle_player_count, playerTotal)
+        } else {
+            getString(R.string.subtitle_android)
+        }
+    }
+
+    /** Pick Official or a saved server; Add server is in the dialog, editing is the pencil beside the picker. */
+    private fun showServers() {
+        val servers = ServerStore.list(this)
+        val names = (listOf(getString(R.string.servers_official)) + servers.map { it.name }).toTypedArray()
+        val selectedId = ServerStore.selected(this)?.id
+        AlertDialog.Builder(this)
+            .setTitle(R.string.servers_title)
+            .setSingleChoiceItems(names, servers.indexOfFirst { it.id == selectedId } + 1) { dialog, which ->
+                ServerStore.select(this, servers.getOrNull(which - 1)?.id)
+                showSelectedServer()
+                dialog.dismiss()
+            }
+            .setNeutralButton(R.string.servers_add) { _, _ -> editServer(null) }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /** Add a server, or edit or delete [existing]. */
+    private fun editServer(existing: ServerStore.Server?) {
+        val pad = (resources.displayMetrics.density * 20).toInt()
+        fun field(hint: Int, value: String, type: Int = InputType.TYPE_CLASS_TEXT) = EditText(this).apply {
+            setHint(hint)
+            inputType = type or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            setText(value)
+        }
+        val name = field(R.string.servers_name, existing?.name.orEmpty())
+        val host = field(R.string.servers_host, existing?.host.orEmpty(), InputType.TYPE_TEXT_VARIATION_URI)
+        val port = field(R.string.servers_port, (existing?.port ?: ServerConnection.OFFICIAL_PORT).toString(), InputType.TYPE_CLASS_NUMBER)
+        val key = field(R.string.servers_key, existing?.publicKey.orEmpty())
+        val client = field(R.string.servers_client_url, existing?.clientUrl.orEmpty(), InputType.TYPE_TEXT_VARIATION_URI)
+        val content = field(R.string.servers_content_url, existing?.contentUrl.orEmpty(), InputType.TYPE_TEXT_VARIATION_URI)
+        val savedLogin = existing?.let { ServerStore.credentials(this, it.id) }
+        val limit = android.text.InputFilter.LengthFilter(WebAccountStore.MAX_LENGTH)
+        val user = field(R.string.servers_username, savedLogin?.username.orEmpty()).apply { filters = arrayOf(limit) }
+        val pass = field(
+            if (savedLogin != null) R.string.servers_password_saved else R.string.servers_password,
+            "",
+            InputType.TYPE_TEXT_VARIATION_PASSWORD,
+        ).apply { filters = arrayOf(limit) }
+        val form = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(pad, pad / 2, pad, 0)
+            listOf(name, host, port, key, client, content, user, pass).forEach { addView(it) }
+        }
+        val builder = AlertDialog.Builder(this)
+            .setTitle(if (existing == null) R.string.servers_add else R.string.servers_edit)
+            .setMessage(R.string.servers_form_message)
+            .setView(android.widget.ScrollView(this).apply { addView(form) })
+            .setPositiveButton(R.string.web_account_save, null)
+            .setNegativeButton(android.R.string.cancel, null)
+        if (existing != null) {
+            builder.setNeutralButton(R.string.servers_delete) { _, _ ->
+                ServerStore.delete(this, existing.id)
+                showSelectedServer()
+            }
+        }
+        val dialog = builder.show()
+        // Overridden after show() so a bad field keeps the dialog open.
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            val candidate = ServerStore.Server(
+                id = existing?.id ?: ServerStore.newId(),
+                name = name.text.toString().trim(),
+                host = host.text.toString().trim(),
+                port = port.text.toString().trim().toIntOrNull() ?: 0,
+                publicKey = key.text.toString().trim(),
+                clientUrl = client.text.toString().trim(),
+                contentUrl = content.text.toString().trim(),
+            )
+            val problem = ServerStore.validate(candidate, ServerStore.list(this))
+            if (problem != null) {
+                Toast.makeText(this, serverProblemText(problem), Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            val login = user.text.toString().trim()
+            val typed = pass.text.toString()
+            val password = typed.ifEmpty { savedLogin?.password.orEmpty() }
+            // A username needs a password and the other way round; both blank means no saved login.
+            if ((login.isEmpty() && typed.isNotEmpty()) || (login.isNotEmpty() && password.isEmpty()) || '\n' in login + typed) {
+                Toast.makeText(this, R.string.servers_err_login, Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            ServerStore.save(this, candidate)
+            val saved = ServerStore.saveCredentials(
+                this, candidate.id, if (login.isEmpty()) null else WebAccountStore.Account(login, password),
+            )
+            if (!saved) Toast.makeText(this, R.string.web_account_save_failed, Toast.LENGTH_SHORT).show()
+            // A server you just added or edited is the one you mean to play on.
+            ServerStore.select(this, candidate.id)
+            showSelectedServer()
+            dialog.dismiss()
+        }
+    }
+
+    private fun serverProblemText(problem: ServerStore.Problem): Int = when (problem) {
+        ServerStore.Problem.NAME -> R.string.servers_err_name
+        ServerStore.Problem.DUPLICATE -> R.string.servers_err_duplicate
+        ServerStore.Problem.HOST -> R.string.servers_err_host
+        ServerStore.Problem.PORT -> R.string.servers_err_port
+        ServerStore.Problem.KEY -> R.string.servers_err_key
+        ServerStore.Problem.URL -> R.string.servers_err_url
+    }
+
     private fun onLogout() {
         AlertDialog.Builder(this)
             .setMessage(R.string.logout_confirm_message)
@@ -495,8 +623,72 @@ class LauncherActivity : AppCompatActivity() {
         }
     }
 
-    private fun launchGame(mode: LoginMode, steamUser: String = "", steamPass: String = "") {
+    /** The launch to continue with once Local network access is answered (see [launchGame]). */
+    private var afterLocalNetworkPrompt: (() -> Unit)? = null
+    private val localNetworkPermission = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        val resume = afterLocalNetworkPrompt
+        afterLocalNetworkPrompt = null
+        if (granted) resume?.invoke() else showMessage(R.string.servers_title, getString(R.string.servers_local_network_denied))
+    }
+
+    private fun launchGame(requested: LoginMode, steamUser: String = "", steamPass: String = "") {
+        val chosen = ServerStore.selected(this)
+        // Android 17 stops an app that targets it from reaching the local network (a server on a PC
+        // at home, the emulator's host) until it is allowed; ask first, then carry on.
+        if (chosen != null && Build.VERSION.SDK_INT >= 37 && ServerStore.isLocalNetworkHost(chosen.host) &&
+            checkSelfPermission(LOCAL_NETWORK_PERMISSION) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            afterLocalNetworkPrompt = { launchGame(requested, steamUser, steamPass) }
+            localNetworkPermission.launch(LOCAL_NETWORK_PERMISSION)
+            return
+        }
         setLaunchButtonLoading(true)
+        val server = chosen
+        // Steam tickets and the saved Spiral Knights account belong to Official; a private
+        // server gets the stock logon window instead.
+        val mode = if (server != null) LoginMode.Web else requested
+        lifecycleScope.launch {
+            try {
+                val pointed = withContext(Dispatchers.IO) {
+                    ServerConnection.apply(SkInstaller.homeDir(this@LauncherActivity), server)
+                }
+                if (!pointed && server != null) {
+                    setLaunchButtonLoading(false)
+                    showMessage(R.string.servers_title, getString(R.string.servers_need_install))
+                    return@launch
+                }
+                // Checked after the edit so a stale Official-bound jar is never left behind either way.
+                if (server != null && withContext(Dispatchers.IO) {
+                        ServerConnection.updatePending(SkInstaller.homeDir(this@LauncherActivity))
+                    }
+                ) {
+                    setLaunchButtonLoading(false)
+                    showMessage(R.string.servers_title, getString(R.string.servers_update_pending))
+                    return@launch
+                }
+            } catch (e: Exception) {
+                Log.w("LauncherActivity", "Could not point the game at the server", e)
+                setLaunchButtonLoading(false)
+                showMessage(R.string.servers_title, getString(R.string.servers_apply_failed, e.message.orEmpty()))
+                return@launch
+            }
+            val login = withContext(Dispatchers.IO) {
+                if (mode != LoginMode.Web) null
+                else if (server != null) ServerStore.credentials(this@LauncherActivity, server.id)
+                else WebAccountStore.load(this@LauncherActivity)
+            }
+            startGame(mode, login, ServerConnection.desired(server).getValue("server_host"), steamUser, steamPass)
+        }
+    }
+
+    private fun showMessage(title: Int, message: String) {
+        AlertDialog.Builder(this).setTitle(title).setMessage(message)
+            .setPositiveButton(android.R.string.ok, null).show()
+    }
+
+    private fun startGame(mode: LoginMode, login: WebAccountStore.Account?, host: String, steamUser: String, steamPass: String) {
         startActivity(
             Intent(this, GameActivity::class.java).apply {
                 putExtra(EXTRA_LOGIN_MODE, mode.name)
@@ -507,11 +699,11 @@ class LauncherActivity : AppCompatActivity() {
                     putExtra(EXTRA_STEAM_USER, steamUser)
                     putExtra(EXTRA_STEAM_PASS, steamPass)
                 }
-                if (mode == LoginMode.Web) {
-                    WebAccountStore.load(this@LauncherActivity)?.let {
-                        putExtra(EXTRA_WEB_USER, it.username)
-                        putExtra(EXTRA_WEB_PASS, it.password)
-                    }
+                if (login != null) {
+                    putExtra(EXTRA_WEB_USER, login.username)
+                    putExtra(EXTRA_WEB_PASS, login.password)
+                    // The game withholds the login unless it is really set up for this server.
+                    putExtra(EXTRA_LOGIN_HOST, host)
                 }
             },
         )
@@ -532,7 +724,9 @@ class LauncherActivity : AppCompatActivity() {
 
             playerCounts = Pair(maxOf(live, 0), maxOf(preview, 0))
             val total = estimate(maxOf(live, 0)) + estimate(maxOf(preview, 0))
-            if (total > 0) {
+            playerTotal = total
+            // The count is Official's.
+            if (total > 0 && ServerStore.selected(this@LauncherActivity) == null) {
                 binding.subtitle.text = getString(R.string.subtitle_player_count, total)
             }
         }
@@ -562,6 +756,7 @@ class LauncherActivity : AppCompatActivity() {
 
     /** Live and preview Steam counts from the last successful fetch, or null. */
     private var playerCounts: Pair<Int, Int>? = null
+    private var playerTotal = 0
 
     /** Explains where the number in the subtitle comes from. */
     private fun showPlayerCountBreakdown() {
@@ -783,10 +978,13 @@ class LauncherActivity : AppCompatActivity() {
                 }
             } catch (e: Exception) {
                 Log.e("LauncherActivity", "Update install failed", e)
-                CrashReporting.report("update_install_failed", e.toString(),
-                    mapOf("version" to release.version))
-                Toast.makeText(this@LauncherActivity, "Update failed: ${e.message}",
-                    Toast.LENGTH_LONG).show()
+                val offline = CrashReporting.isConnectionProblem(e)
+                if (!offline) CrashReporting.report("update_install_failed", e.toString(), mapOf("version" to release.version))
+                Toast.makeText(
+                    this@LauncherActivity,
+                    if (offline) getString(R.string.update_download_failed) else "Update failed: ${e.message}",
+                    Toast.LENGTH_LONG,
+                ).show()
             } finally {
                 progress.dialog.dismissSafely()
             }
@@ -870,10 +1068,11 @@ class LauncherActivity : AppCompatActivity() {
                 ).show()
             } catch (e: Exception) {
                 progressInfo.dialog.dismissSafely()
-                CrashReporting.report("mods_download_failed", e.toString())
+                val offline = CrashReporting.isConnectionProblem(e)
+                if (!offline) CrashReporting.report("mods_download_failed", e.toString())
                 AlertDialog.Builder(this@LauncherActivity)
                     .setTitle("Download Failed")
-                    .setMessage(e.message ?: "Unknown error")
+                    .setMessage(if (offline) getString(R.string.mods_download_offline) else e.message ?: "Unknown error")
                     .setPositiveButton(android.R.string.ok, null)
                     .show()
             }
@@ -950,6 +1149,7 @@ class LauncherActivity : AppCompatActivity() {
     enum class LoginMode { Web, Steam }
 
     companion object {
+        private const val LOCAL_NETWORK_PERMISSION = "android.permission.ACCESS_LOCAL_NETWORK"
         /** Process-wide: a recreated screen must not start a second install over the first. */
         @Volatile private var installingRuntime = false
 
@@ -970,6 +1170,7 @@ class LauncherActivity : AppCompatActivity() {
         const val EXTRA_STEAM_PASS = "com.skarm.launcher.STEAM_PASS"
         const val EXTRA_WEB_USER = "com.skarm.launcher.WEB_USER"
         const val EXTRA_WEB_PASS = "com.skarm.launcher.WEB_PASS"
+        const val EXTRA_LOGIN_HOST = "com.skarm.launcher.LOGIN_HOST"
     }
 
     private fun stepRam(deltaMb: Int) {

@@ -52,6 +52,15 @@ object CrashReporting {
         }
     }
 
+    /**
+     * A dropped, timed-out or unreachable connection (anywhere in [error]'s causes): the user's network,
+     * not a defect, so it is told to the user and never reported.
+     */
+    fun isConnectionProblem(error: Throwable): Boolean = generateSequence(error) { it.cause }.take(8).any {
+        it is java.net.SocketException || it is java.io.InterruptedIOException || it is java.net.UnknownHostException ||
+            it is javax.net.ssl.SSLException || it is java.io.EOFException
+    }
+
     /** A failure the launcher detected itself. [type] is the grouping key. */
     fun report(type: String, message: String, extra: Map<String, String> = emptyMap()) {
         if (!Sentry.isEnabled()) return

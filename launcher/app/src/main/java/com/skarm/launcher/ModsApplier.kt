@@ -417,6 +417,18 @@ object ModsApplier {
         }
     }
 
+    /**
+     * Keeps a verified copy of a code jar before something other than the game edits it, so
+     * a later restore needs no network. Does nothing if the jar isn't the game's own.
+     */
+    internal fun preservePristine(gameHome: File, name: String) {
+        val expected = readGetdown(File(gameHome, "digest2.txt"))["code/$name"] ?: return
+        val jar = File(gameHome, "code/$name")
+        val pristine = File(jar.parentFile, "$name.pristine")
+        fun matches(f: File) = f.exists() && runCatching { getdownDigest(f) }.getOrNull() == expected
+        if (matches(jar) && !matches(pristine)) jar.copyTo(pristine, overwrite = true)
+    }
+
     /** `key = value` lines, as getdown writes getdown.txt and digest2.txt. */
     private fun readGetdown(file: File): Map<String, String> =
         if (!file.exists()) emptyMap() else file.readLines().mapNotNull { line ->

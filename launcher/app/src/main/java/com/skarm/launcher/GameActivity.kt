@@ -60,6 +60,7 @@ class GameActivity :
     private var steamPass: String = ""
     private var webUser: String = ""
     private var webPass: String = ""
+    private var loginHost: String = ""
     private var dismissing = false
     private var guardDialog: AlertDialog? = null
 
@@ -302,6 +303,7 @@ class GameActivity :
         steamPass = intent.getStringExtra(LauncherActivity.EXTRA_STEAM_PASS).orEmpty()
         webUser = intent.getStringExtra(LauncherActivity.EXTRA_WEB_USER).orEmpty()
         webPass = intent.getStringExtra(LauncherActivity.EXTRA_WEB_PASS).orEmpty()
+        loginHost = intent.getStringExtra(LauncherActivity.EXTRA_LOGIN_HOST).orEmpty()
     }
 
     /**
@@ -813,6 +815,9 @@ class GameActivity :
             val sw = metrics.widthPixels
             val sh = metrics.heightPixels
             if (webUser.isNotEmpty() && webPass.isNotEmpty()) NativeBridge.setWebLogin(webUser, webPass)
+            // Which server the login is for; SkBootstrap withholds it if the game is set up for another.
+            // Set every launch: this process can outlive one.
+            if (loginHost.isNotEmpty()) Os.setenv("SK_LOGIN_HOST", loginHost, true) else Os.unsetenv("SK_LOGIN_HOST")
             NativeBridge.startJvm(
                 jreHome = JreInstaller.homeDir(this).absolutePath,
                 classpath = classpath,
