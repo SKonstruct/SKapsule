@@ -20,6 +20,11 @@ Notable changes per release. Versions are the git tags the APKs are built from
   own network (a PC at home, for instance) needs **Local network** access, which SKapsule asks for the
   first time you play on one.
 
+### Fixed
+
+- **A dropped connection while downloading an update or the mods** now says to check your connection,
+  instead of showing the raw network error, and is no longer sent as an error report.
+
 ## 2.4.4
 
 ### Changed
