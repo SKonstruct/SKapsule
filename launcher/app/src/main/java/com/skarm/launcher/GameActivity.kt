@@ -899,21 +899,40 @@ class GameActivity :
      * Says why the game will not start, instead of leaving the overlay on its last status.
      * [stalled] marks the watchdog case, where the boot may only be slow, so it can keep waiting.
      */
-    private fun failBoot(message: String, stalled: Boolean = false) {
+    private fun failBoot(raw: String, stalled: Boolean = false) {
+        // The bootstrap sends the user-facing line first and, when it has one, the error behind it
+        // on the next line. Only the first line is shown; both go to the log and the report.
+        val message = raw.substringBefore('\n')
+        val cause = raw.substringAfter('\n', "")
+        val reported = if (cause.isEmpty()) message else "$message ($cause)"
         runOnUiThread {
             if (bootFailed || isFinishing || isDestroyed) return@runOnUiThread
             if (dismissing) {
-                // The game was already up, so this is not a boot failure.
-                Log.e(TAG, "Game stopped after starting: $message")
-                CrashReporting.report("game_stopped", message)
+                // The game was already up, so this is not a boot failure. Its render loop is gone
+                // though, so the frame on screen is frozen for good: say so rather than leave it.
+                Log.e(TAG, "Game stopped after starting: $reported")
+                CrashReporting.report("game_stopped", reported)
+                bootFailed = true
+                bootDialog = AlertDialog.Builder(this)
+                    .setTitle(R.string.game_stopped_title)
+                    .setMessage(R.string.game_stopped_message)
+                    .setCancelable(false)
+                    .setPositiveButton(R.string.share_logs, null)
+                    .setNegativeButton(R.string.exit_confirm_yes) { _, _ -> shutdownGame() }
+                    .create().also { dialog ->
+                        dialog.show()
+                        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                            LogExporter.captureAndShare(this)
+                        }
+                    }
                 return@runOnUiThread
             }
             bootFailed = true
             bootHandler.removeCallbacks(bootWatchdog)
-            Log.e(TAG, "Boot failed: $message")
+            Log.e(TAG, "Boot failed: $reported")
             binding.bootStatus.text = message
             // A stall with no connection is the user's network, not a fault in the game's updater.
-            if (!stalled || isOnline()) CrashReporting.report(if (stalled) "boot_timeout" else "boot_failed", message)
+            if (!stalled || isOnline()) CrashReporting.report(if (stalled) "boot_timeout" else "boot_failed", reported)
             val builder = AlertDialog.Builder(this)
                 .setTitle(R.string.boot_failed_title)
                 .setMessage(message)

@@ -3,6 +3,20 @@
 Notable changes per release. Versions are the git tags the APKs are built from
 (`vX.Y.Z` → `skapsule-vX.Y.Z.apk`).
 
+## 2.4.6
+
+### Changed
+
+- A report that the game stopped now says which error stopped it, so the next one can be diagnosed
+  without asking for a log. The dialog you see is unchanged.
+
+### Fixed
+
+- **Game froze when opening the friends list with Steam sign-in.** The game's 10 November update added a
+  Steam call the Steam stand-in did not have, which stopped the game's render loop. The friends list now
+  opens. If the game does stop after it has started, SKapsule now says so and offers to share the log or
+  exit, instead of leaving a frozen screen.
+
 ## 2.4.5
 
 ### Added

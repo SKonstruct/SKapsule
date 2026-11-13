@@ -13,6 +13,8 @@
     <string name="steam_login_ok">Sign in</string>
     <string name="boot_starting">Starting Java runtime…</string>
     <string name="boot_failed_title">Couldn\'t start the game</string>
+    <string name="game_stopped_title">The game stopped</string>
+    <string name="game_stopped_message">It hit an error and can\'t continue. Share the log so it can be fixed, then exit and start it again.</string>
     <string name="boot_keep_waiting">Keep waiting</string>
     <string name="boot_timeout">The game has shown no progress for three minutes. It may just be slow; otherwise share the log so it can be diagnosed.</string>
     <string name="boot_error_files">The game\'s files are damaged. Go back to the launcher to repair them, and share the log if it happens again.</string>

@@ -47,28 +47,6 @@ body:
     validations:
       required: true
 
-  - type: input
-    id: gpu
-    attributes:
-      label: GPU and graphics settings
-      description: >
-        Optional, but needed for visual bugs (corrupted models, wrong textures, black screens).
-        The GPU is on the `gl4es GL_RENDERER` line of the shared log. Also say what the game's
-        graphics quality is set to, and whether you changed it.
-      placeholder: "Adreno 740, quality Low (default)"
-
-  - type: dropdown
-    id: install
-    attributes:
-      label: How did you install it?
-      options:
-        - APK from GitHub Releases
-        - The in-app updater
-        - Built from source
-        - Other (explain below)
-    validations:
-      required: true
-
   - type: dropdown
     id: area
     attributes:
@@ -119,12 +97,6 @@ body:
       render: text
     validations:
       required: true
-
-  - type: input
-    id: sentry
-    attributes:
-      label: Sentry event ID
-      description: Optional. If the app reported the crash, paste the ID it showed.
 
   - type: textarea
     id: mods
