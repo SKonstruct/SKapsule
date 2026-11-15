@@ -166,7 +166,7 @@ dependencies {
     // sentry-android-core, NOT sentry-android: the umbrella artifact pulls
     // sentry-android-ndk, whose signal handlers would fight the bundled HotSpot
     // running in this same process.
-    implementation("io.sentry:sentry-android-core:8.62.0")
+    implementation("io.sentry:sentry-android-core:8.64.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20260814")
 }
