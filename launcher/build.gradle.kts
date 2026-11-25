@@ -1,7 +1,7 @@
 plugins {
     // Kotlin is provided by AGP 9's built-in Kotlin support (KGP pinned by AGP),
     // so we no longer apply org.jetbrains.kotlin.android ourselves.
-    id("com.android.application") version "9.5.1" apply false
+    id("com.android.application") version "9.5.2" apply false
     id("com.diffplug.spotless") version "8.11.0"
 }
 
