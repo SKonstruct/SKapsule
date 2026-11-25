@@ -2,11 +2,27 @@
 
 An unofficial Android (arm64) port of **Spiral Knights**.
 
+[![Tests](https://github.com/SKonstruct/SKapsule/actions/workflows/test.yml/badge.svg)](https://github.com/SKonstruct/SKapsule/actions/workflows/test.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
+![Android 8.0+ · arm64](https://img.shields.io/badge/Android-8.0%2B%20%C2%B7%20arm64-lightgrey.svg)
+
 SKapsule runs the _real_ Spiral Knights desktop client on your phone or tablet. It
 ships a custom JRE and a set of native libraries, then boots the game's own Java VM
 on-device — the game code and assets are downloaded and patched from the official
 servers at runtime (via getdown), exactly like the desktop client. Nothing about the
 game itself is bundled in this repository.
+
+## Highlights
+
+| | |
+| --- | --- |
+| **Play** | The real desktop client on your device. Gamepad-first, with on-screen touch controls, and a keyboard and mouse when you have them. Sign in with **Web**, or with **Steam** by QR code: there is no Steam password to type. |
+| **Controls** | **Edit Controls** in the launcher moves, resizes and hides every control, with opacity and resolution. Keep named presets, or export and import a layout as a file that also works on [SKapsule for iOS](https://github.com/SKonstruct/SKapsule-iOS). |
+| **Servers** | Official or your own private servers, saved in one picker. |
+| **Mods** | Download the maintained modpack, apply it, or remove it, from the options sidebar. Mods apply in an automatic order, the broadest first, so a small mod wins over a big one. There is nothing to sort by hand. |
+| **Graphics** | A resolution slider, **Sharpening**, **Sharp HUD** (experimental) and an FPS counter. |
+| **Languages** | English, Arabic, German, Spanish, Estonian, French, Italian, Japanese, Polish, Brazilian Portuguese, Russian and Simplified and Traditional Chinese. See [Translating](#translating). |
+| **Updates and logs** | A banner offers new versions and installs them. **Share Logs** bundles a log with credentials and emails removed, including a memory breakdown for long-session crashes. |
 
 ---
 
@@ -47,7 +63,9 @@ stick made every button unpressable).
 3. Launch **SKapsule**. On first run it unpacks the bundled JRE and runtime, then
    downloads/patches the game from the official servers — this first launch takes a
    while and needs a network connection.
-4. Pick **Web** or **Steam**, tap **Launch** and sign in with your own account.
+4. Pick **Web** or **Steam**, tap **Launch** and sign in with your own account. Steam shows a QR code on the
+   first launch, in portrait before the game turns landscape: scan it with the Steam app, or tap **Open Steam app** if Steam is on this device, and
+   approve. There is no Steam password to type.
 
 Later releases install themselves: when a newer version is published the launcher shows an
 **Update available** banner, and tapping it downloads the APK and hands it to the system
@@ -163,7 +181,8 @@ client expects on a platform Android lacks:
 | **openal-soft**  | audio                                                     | [`openal-soft`](https://github.com/SKonstruct/openal-soft) submodule       |
 | **LWJGL 3.4.1**  | windowing / GL / input bindings (Android-native build)    | [`lwjgl3`](https://github.com/SKonstruct/lwjgl3) submodule                 |
 | **caciocavallo** | headless AWT bridge (the game uses AWT/Swing for some UI) | [`caciocavallo17`](https://github.com/SKonstruct/caciocavallo17) submodule |
-| **frenchpress**  | Steam login (SteamKit-style auth)                         | [`frenchpress`](https://github.com/SKonstruct/frenchpress) submodule       |
+| **frenchpress**  | Steam sign-in (QR code / Steam app)                       | [`frenchpress`](https://github.com/SKonstruct/frenchpress) submodule       |
+| **skgfx**        | FPS counter, sharpening, Sharp HUD (shared with iOS)      | [`skgfx`](https://github.com/SKonstruct/skgfx) submodule (MIT)             |
 | **getdown**      | downloads, verifies, and patches the game                 | bundled `getdown-pro.jar`                                                  |
 
 A small `bootstrap` Java module (`SkBootstrap`, `HeadlessGetdown`) and the launcher's
@@ -181,6 +200,7 @@ external/openal-soft/       submodule — audio
 external/lwjgl3/            submodule — LWJGL Android build
 external/caciocavallo17/    submodule — headless AWT
 external/frenchpress/       submodule — Steam login
+external/skgfx/             submodule — graphics pass (mobile/skgfx.c, skgfx.h), shared with SKapsule-iOS
 out/               native build outputs (generated, gitignored)
 .github/workflows/ from-source CI + release automation
 ```
@@ -198,12 +218,24 @@ own UI out in raw framebuffer pixels: below roughly 578 px of surface height the
 UI stops laying out and character select never appears. The resolution slider already
 offers that trade-off, with a floor we know is safe. FPS override stays enabled.
 
+## Graphics
+
+The in-game settings panel (the ⚙ button) has, below **Resolution**: **Show FPS counter** (on by
+default), **Sharpening** (0 to 100%, off by default) and **Sharp HUD** (experimental, off by default).
+Sharpening and Sharp HUD draw the game off-screen first; Sharp HUD needs Resolution below 100%, and
+draws the HUD at the screen's full resolution, so the HUD comes out smaller.
+
 ## Editing the touch controls
 
 **Edit Controls** in the options sidebar opens the same editor the ⚙ button opens in game —
 drag to reposition, per-control visibility and scale, opacity, resolution, and Reset — without
 booting the game first. It opens landscape because the layout is stored relative to the
 landscape play area, so what you arrange is what you get.
+
+**Layouts…** in the editor panel keeps named presets, and exports or imports a layout as a `.json` file
+(also usable on SKapsule for iOS). Only the arrangement is shared: position, size and visibility of each control,
+plus opacity and **Show Buttons**; **Resolution** and **Show Controls** stay yours. Importing never overwrites a
+preset: it is saved under a new name, and applying it asks first.
 
 If the game is still running in the background it keeps its own copy of the layout and will
 overwrite whatever you change here when it closes, so exit the game first.
@@ -247,6 +279,15 @@ takes effect immediately.
 
 ---
 
+## Support
+
+Something wrong? [Open an issue](../../issues/new/choose) and attach the log: **Share Logs** in the options
+sidebar bundles the game's output, crash reports and a once-a-minute memory line (Java heap, native heap and
+graphics), with credentials and emails removed. For a crash that comes after a long session, share the log
+right afterwards, since that is when the memory line shows what grew.
+
+---
+
 ## References
 
 These projects were consulted during development. They are not part of the build (the
@@ -272,7 +313,7 @@ The original code in this repository (the launcher, bootstrap, and build scripts
 licensed under the **MIT License**.
 
 Bundled and submoduled third-party components retain their own licenses, including
-MIT (gl4es), BSD (LWJGL, getdown, clyde), LGPL-2.x (OpenAL Soft, dynamically linked as
+MIT (gl4es, skgfx), BSD (LWJGL, getdown, clyde), LGPL-2.x (OpenAL Soft, dynamically linked as
 a separate `.so`), and GPL-2.0 with the Classpath Exception (caciocavallo). The LGPL's
 dynamic-linking allowance and caciocavallo's Classpath Exception are what permit the
 launcher's own code to be MIT-licensed while distributing those components alongside
@@ -280,3 +321,13 @@ it; each component's own `LICENSE`/`COPYING` file holds the authoritative terms.
 
 Spiral Knights and all related game assets are the property of their respective
 owners and are **not** covered by this license.
+
+## Translating
+
+The text is in `launcher/app/src/main/res/values/strings.xml` (English). Every language has the same file in
+`values-<language>` (`ar`, `de`, `es`, `et`, `fr`, `it`, `ja`, `pl`, `pt-rBR`, `ru`, `zh-rCN`, `zh-rTW`), a copy of the
+English text until it is translated. Translate the text between the tags, keep the `name`, the `%1$s`/`%d` placeholders and
+apostrophe escaping (`\'`), and leave `translatable="false"` entries alone. `StringsParityTest` (run by
+`./gradlew testDebugUnitTest`) fails when a language lacks a key, has an unknown one or loses a placeholder. A new language
+also needs a line in `res/xml/locales_config.xml` and one in `LauncherActivity.languages`. The workflow, a prompt for a
+model and a review checklist are in the SKradle repository's `docs/translating.md`.

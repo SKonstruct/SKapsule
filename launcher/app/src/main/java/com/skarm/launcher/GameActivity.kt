@@ -4,6 +4,8 @@ import android.annotation.SuppressLint
 import android.app.AlertDialog
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.pm.ActivityInfo
+import android.graphics.Bitmap
 import android.hardware.input.InputManager
 import android.net.LocalServerSocket
 import android.net.Uri
@@ -13,8 +15,8 @@ import android.os.Looper
 import android.os.Process
 import android.os.SystemClock
 import android.system.Os
-import android.text.InputType
 import android.util.Log
+import android.view.Gravity
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -24,7 +26,10 @@ import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.View
 import android.view.WindowManager
-import android.widget.EditText
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
@@ -46,23 +51,30 @@ import kotlin.math.roundToInt
  * created on. Hosts SK via the embedded JRE 25; rendering is routed through
  * libgl4es.so. Single visible UI element is a small "Exit" button.
  */
-class GameActivity :
+open class GameActivity :
     AppCompatActivity(),
     SurfaceHolder.Callback,
     NativeBridge.BootListener,
-    NativeBridge.CredentialListener {
+    NativeBridge.SignInListener {
 
     private lateinit var binding: ActivityGameBinding
     private lateinit var surface: SurfaceView
     private var jvmKicked = false
     private lateinit var loginMode: LauncherActivity.LoginMode
-    private var steamUser: String = ""
-    private var steamPass: String = ""
     private var webUser: String = ""
     private var webPass: String = ""
     private var loginHost: String = ""
     private var dismissing = false
-    private var guardDialog: AlertDialog? = null
+
+    /**
+     * True for the first Steam sign-in (GameSignInActivity): the QR is shown in portrait, and the
+     * screen turns landscape once the sign-in is over and the game is about to start.
+     */
+    protected open fun startsInPortrait() = false
+    private var portraitPhase = false
+    private var signInDialog: AlertDialog? = null
+    private var signInImage: ImageView? = null
+    private var signInUrl: String = ""
 
     // Boot failure handling. The overlay is dismissed only by SK's first frame, so a game that
     // never starts used to leave it on the last status forever ("Starting Java runtime",
@@ -73,8 +85,8 @@ class GameActivity :
     private val bootHandler = Handler(Looper.getMainLooper())
     private val bootWatchdog = Runnable {
         if (binding.bootOverlay.visibility != View.VISIBLE || dismissing || bootFailed) return@Runnable
-        // A Steam Guard prompt can legitimately sit unanswered.
-        if (guardDialog != null) kickBootWatchdog() else failBoot(getString(R.string.boot_timeout), stalled = true)
+        // The Steam sign-in QR can legitimately sit unanswered.
+        if (signInDialog != null) kickBootWatchdog() else failBoot(getString(R.string.boot_timeout), stalled = true)
     }
     private val memoryLogger = object : Runnable {
         override fun run() {
@@ -106,6 +118,29 @@ class GameActivity :
     private var currentBufferWidth = 0
     private var currentBufferHeight = 0
     private var fixedSizeApplied = false
+
+    // Graphics settings (GfxSettings), kept in step with the native pass (cpp/skgfx.c). When the
+    // offscreen path is on the surface stays native-sized and the pass does the scaling.
+    private var sharpenPercent = 0
+    private var sharpHud = false
+    private var offscreenPath = false
+
+    // FPS counter: the swap hook counts frames, this reads the count twice a second.
+    private var fpsLastCount = 0L
+    private var fpsLastMs = 0L
+    private val fpsTicker = object : Runnable {
+        override fun run() {
+            val now = SystemClock.elapsedRealtime()
+            val frames = NativeBridge.frameCount()
+            if (fpsLastMs != 0L && now > fpsLastMs) {
+                val fps = ((frames - fpsLastCount) * 1000.0 / (now - fpsLastMs)).roundToInt()
+                binding.fpsCounter.text = getString(R.string.gfx_fps, fps)
+            }
+            fpsLastCount = frames
+            fpsLastMs = now
+            bootHandler.postDelayed(this, FPS_WINDOW_MS)
+        }
+    }
 
     // Drag-to-reposition for the chrome buttons (gear/keyboard), active only while
     // the touch overlay is in Edit Layout mode. A press that stays put is treated as
@@ -228,9 +263,8 @@ class GameActivity :
         // JVM via native. The overlay is visible by default (covers the black gap)
         // and shows "Starting Java runtime…" until the first status arrives.
         NativeBridge.setBootListener(this)
-        // Steam Guard (2FA) prompts route here too; the dialog blocks frenchpress's
-        // login thread until a code is submitted (or "" on cancel).
-        NativeBridge.setCredentialListener(this)
+        // The Steam sign-in QR routes here too; frenchpress polls for Cancel while it shows.
+        NativeBridge.setSignInListener(this)
 
         inputManager = getSystemService(INPUT_SERVICE) as InputManager
         inputManager.registerInputDeviceListener(deviceListener, null)
@@ -239,12 +273,29 @@ class GameActivity :
         binding.btnKeyboard.setOnClickListener { toggleSoftKeyboard() }
         binding.btnEditLayout.setOnClickListener { binding.touchOverlay.toggleEditMode() }
 
+        // Layout presets and export/import, from the in-game editor too. Created here, not
+        // lazily: the file pickers register with this Activity's result registry, which only
+        // accepts registrations before STARTED. Presets live in a file both processes read fresh.
+        val layoutLibrary = LayoutLibraryController(this, binding.touchOverlay)
+        binding.touchOverlay.layoutLibraryRequestListener = { layoutLibrary.show() }
+
         // Resolution slider: apply the persisted scale on launch, and re-apply live.
         renderScale = binding.touchOverlay.currentRenderScale()
         binding.touchOverlay.renderScaleChangeListener = { scale ->
             renderScale = scale
             applyRenderScale()
         }
+        sharpenPercent = GfxSettings.sharpenPercent(this)
+        sharpHud = GfxSettings.sharpHud(this)
+        binding.touchOverlay.gfxChangeListener = {
+            sharpenPercent = GfxSettings.sharpenPercent(this)
+            sharpHud = GfxSettings.sharpHud(this)
+            applyRenderScale()
+        }
+        binding.touchOverlay.fpsChangeListener = { show -> setFpsVisible(show) }
+        setFpsVisible(GfxSettings.showFps(this))
+        binding.root.doOnLayout { positionFpsCounter() }
+        surface.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> positionFpsCounter() }
 
         // Let the gear/keyboard buttons be dragged while Edit Layout mode is active.
         migrateChromeLayoutOnce()
@@ -290,17 +341,12 @@ class GameActivity :
             },
         )
 
+        portraitPhase = startsInPortrait()
         loginMode = runCatching {
             LauncherActivity.LoginMode.valueOf(
                 intent.getStringExtra(LauncherActivity.EXTRA_LOGIN_MODE).orEmpty(),
             )
         }.getOrDefault(LauncherActivity.LoginMode.Web)
-        // Steam credentials, present only on a first Steam login (subsequent launches
-        // resume from frenchpress's stored refresh token). Empty in Web mode — which
-        // frenchpress reads as "web account" and falls through to normal web login.
-        // Threaded into the JVM as FRENCHPRESS_STEAM_USER/PASS env vars (sklauncher.c).
-        steamUser = intent.getStringExtra(LauncherActivity.EXTRA_STEAM_USER).orEmpty()
-        steamPass = intent.getStringExtra(LauncherActivity.EXTRA_STEAM_PASS).orEmpty()
         webUser = intent.getStringExtra(LauncherActivity.EXTRA_WEB_USER).orEmpty()
         webPass = intent.getStringExtra(LauncherActivity.EXTRA_WEB_PASS).orEmpty()
         loginHost = intent.getStringExtra(LauncherActivity.EXTRA_LOGIN_HOST).orEmpty()
@@ -350,16 +396,9 @@ class GameActivity :
     private fun pushCursorTouch(action: Int, overlayX: Float, overlayY: Float, button: Int) {
         val viewX = overlayX - surface.left
         val viewY = overlayY - surface.top
-        val sx = if (surface.width > 0 && currentBufferWidth > 0) {
-            currentBufferWidth.toFloat() / surface.width
-        } else {
-            1f
-        }
-        val sy = if (surface.height > 0 && currentBufferHeight > 0) {
-            currentBufferHeight.toFloat() / surface.height
-        } else {
-            1f
-        }
+        val (gameWidth, gameHeight) = gameSize()
+        val sx = if (surface.width > 0 && gameWidth > 0) gameWidth.toFloat() / surface.width else 1f
+        val sy = if (surface.height > 0 && gameHeight > 0) gameHeight.toFloat() / surface.height else 1f
         val x = (viewX * sx).toInt()
         val y = (viewY * sy).toInt()
         when (action) {
@@ -747,11 +786,15 @@ class GameActivity :
         }
         currentBufferWidth = width
         currentBufferHeight = height
+        // Not while the screen is portrait: that size is not the game's, and a render scale applied
+        // to it would freeze the wrong baseline. The landscape surface that follows sets it.
+        if (!portraitPhase) applyGfxConfig()
         NativeBridge.onSurfaceChanged(width, height)
         if (!jvmKicked && NativeBridge.jvmStarted) {
             // The JVM outlived the previous Activity; starting it again is a no-op and re-staging
-            // the jars under it is not.
+            // the jars under it is not. Its sign-in is long over, so nothing would end the portrait phase.
             jvmKicked = true
+            endPortraitPhase()
         }
         if (!jvmKicked) {
             jvmKicked = true
@@ -812,8 +855,9 @@ class GameActivity :
             // sklauncher.c) + the JDK's appended .java/.userPrefs.
             PrefsInstaller.seedDefaults(File(home, ".userPrefs/.java/.userPrefs"))
             val metrics = resources.displayMetrics
-            val sw = metrics.widthPixels
-            val sh = metrics.heightPixels
+            // The game is landscape whatever the screen is while the sign-in is showing.
+            val sw = maxOf(metrics.widthPixels, metrics.heightPixels)
+            val sh = minOf(metrics.widthPixels, metrics.heightPixels)
             if (webUser.isNotEmpty() && webPass.isNotEmpty()) NativeBridge.setWebLogin(webUser, webPass)
             // Which server the login is for; SkBootstrap withholds it if the game is set up for another.
             // Set every launch: this process can outlive one.
@@ -826,8 +870,6 @@ class GameActivity :
                 cacioDir = cacioDir,
                 frenchpressJar = frenchpressJar,
                 credFile = credFile,
-                steamUser = steamUser,
-                steamPass = steamPass,
                 binDir = binDir,
                 screenWidth = sw,
                 screenHeight = sh,
@@ -838,7 +880,46 @@ class GameActivity :
         // Apply the persisted (or last-set) render scale now that the baseline size
         // is known. No-ops when already at the target size, so it won't loop on the
         // surfaceChanged that setFixedSize itself triggers.
-        applyRenderScale()
+        if (!portraitPhase) applyRenderScale()
+    }
+
+    /** Tells the native pass what the settings are; it tells the game its size if that changed. */
+    private fun applyGfxConfig() {
+        if (fullSurfaceWidth == 0 || fullSurfaceHeight == 0) return
+        offscreenPath = GfxSettings.usesOffscreen(renderScale, sharpenPercent, sharpHud)
+        NativeBridge.setGfxConfig(
+            offscreenPath, renderScale, sharpenPercent / 100f, sharpHud, fullSurfaceWidth, fullSurfaceHeight,
+        )
+    }
+
+    /** What the game believes its window size is: the buffer itself, or what the offscreen pass reports. */
+    private fun gameSize(): Pair<Int, Int> =
+        if (offscreenPath && fullSurfaceWidth > 0) {
+            GfxSettings.gameSize(fullSurfaceWidth, fullSurfaceHeight, renderScale, sharpHud)
+        } else {
+            Pair(currentBufferWidth, currentBufferHeight)
+        }
+
+    private fun setFpsVisible(show: Boolean) {
+        bootHandler.removeCallbacks(fpsTicker)
+        binding.fpsCounter.visibility = if (show) View.VISIBLE else View.GONE
+        if (show) {
+            fpsLastMs = 0L
+            bootHandler.post(fpsTicker)
+        }
+    }
+
+    /** Top-left corner of what the game fills, clear of the camera cutout and any avoid-edges margin. */
+    private fun positionFpsCounter() {
+        val cutout = ViewCompat.getRootWindowInsets(binding.root)?.getInsets(WindowInsetsCompat.Type.displayCutout())
+        val gap = (3 * resources.displayMetrics.density).toInt()
+        val lp = binding.fpsCounter.layoutParams as android.widget.FrameLayout.LayoutParams
+        val left = max(surface.left, cutout?.left ?: 0) + gap
+        val top = (cutout?.top ?: 0) + gap
+        if (lp.leftMargin != left || lp.topMargin != top) {
+            lp.setMargins(left, top, 0, 0)
+            binding.fpsCounter.layoutParams = lp
+        }
     }
 
     /**
@@ -848,8 +929,13 @@ class GameActivity :
      */
     private fun applyRenderScale() {
         if (fullSurfaceWidth == 0 || fullSurfaceHeight == 0) return
-        val targetW = max(1, (fullSurfaceWidth * renderScale).roundToInt())
-        val targetH = max(1, (fullSurfaceHeight * renderScale).roundToInt())
+        // The native pass first, so the game hears about its new size once, not once per half of the change.
+        applyGfxConfig()
+        // With the offscreen path the surface stays native-sized: the pass does the scaling (and the
+        // sharpening) on its way to the window, instead of the compositor.
+        val factor = if (offscreenPath) 1f else renderScale
+        val targetW = max(1, (fullSurfaceWidth * factor).roundToInt())
+        val targetH = max(1, (fullSurfaceHeight * factor).roundToInt())
         if (targetW == currentBufferWidth && targetH == currentBufferHeight) return
         fixedSizeApplied = true
         surface.holder.setFixedSize(targetW, targetH)
@@ -972,11 +1058,12 @@ class GameActivity :
         urlServer = null
         bootHandler.removeCallbacksAndMessages(null)
         NativeBridge.setBootListener(null)
-        NativeBridge.setCredentialListener(null)
-        // Unblock any login thread parked on a dialog we're about to drop.
-        NativeBridge.submitCode("")
-        guardDialog?.dismiss()
-        guardDialog = null
+        NativeBridge.setSignInListener(null)
+        // A recreated activity gets the QR replayed; one that is going away takes the sign-in with it.
+        if (isFinishing) NativeBridge.cancelSignIn()
+        signInDialog?.dismiss()
+        signInDialog = null
+        signInImage = null
         super.onDestroy()
     }
 
@@ -1020,84 +1107,110 @@ class GameActivity :
         }
     }
 
-    // --- NativeBridge.CredentialListener (called from the JVM login thread) ---
+    // --- NativeBridge.SignInListener (called from the JVM login thread) ---
 
-    /**
-     * Steam needs a typed authenticator (TOTP) code — reached only when no Steam
-     * Mobile App push approval is available, so a code is mandatory here. The
-     * login thread is parked in NativeBridge.promptForDeviceCode; we collect the
-     * code and hand it back via submitCode(). Marshalled onto the UI thread.
-     */
-    override fun onPromptDeviceCode(prevWrong: Boolean) {
+    override fun onShowSignIn(url: String, modules: String) {
+        runOnUiThread { showSignInDialog(url, modules) }
+    }
+
+    override fun onHideSignIn() {
         runOnUiThread {
-            showGuardDialog(
-                title = getString(R.string.steam_guard_title),
-                message = getString(
-                    if (prevWrong) {
-                        R.string.steam_guard_device_retry
-                    } else {
-                        R.string.steam_guard_device_message
-                    },
-                ),
-                numeric = true,
-            )
+            signInDialog?.dismiss()
+            signInDialog = null
+            signInImage = null
+            endPortraitPhase()
         }
     }
 
-    /** Steam needs an email Steam Guard code sent to [email]. See {@link #onPromptDeviceCode}. */
-    override fun onPromptEmailCode(email: String, prevWrong: Boolean) {
-        runOnUiThread {
-            showGuardDialog(
-                title = getString(R.string.steam_guard_title),
-                message = getString(
-                    if (prevWrong) {
-                        R.string.steam_guard_email_retry
-                    } else {
-                        R.string.steam_guard_email_message
-                    },
-                    email,
-                ),
-                // email codes are alphanumeric
-                numeric = false,
-            )
-        }
-    }
-
-    /**
-     * Builds the single-field Steam Guard dialog. Both OK and cancel/back MUST
-     * reach submitCode() exactly once so the parked login thread never hangs:
-     * OK submits the trimmed code, cancel submits "" (login then fails fast
-     * rather than waiting out the 120s timeout). Replaces any prior dialog so a
-     * retry prompt doesn't stack.
-     */
-    private fun showGuardDialog(title: String, message: String, numeric: Boolean) {
-        guardDialog?.dismiss()
-        val input = EditText(this).apply {
-            inputType = if (numeric) {
-                InputType.TYPE_CLASS_NUMBER
-            } else {
-                InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
+    /** The sign-in is over: lock to landscape for the game and put the chrome back where it belongs. */
+    private fun endPortraitPhase() {
+        if (!portraitPhase) return
+        portraitPhase = false
+        // The chrome buttons were placed while the screen was portrait; do it again once the
+        // rotation has laid the views out.
+        binding.root.addOnLayoutChangeListener(object : View.OnLayoutChangeListener {
+            override fun onLayoutChange(
+                v: View, left: Int, top: Int, right: Int, bottom: Int,
+                oldLeft: Int, oldTop: Int, oldRight: Int, oldBottom: Int,
+            ) {
+                if (right - left > bottom - top) {
+                    v.removeOnLayoutChangeListener(this)
+                    applyChromePositions()
+                }
             }
-            hint = getString(R.string.steam_guard_hint)
+        })
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+    }
+
+    /**
+     * The Steam sign-in QR. Steam rotates the challenge while it waits, so a dialog that is
+     * already up only swaps its image and link. Cancel, back and tap-outside all end in
+     * cancelSignIn(): frenchpress notices on its next poll and continues without Steam.
+     */
+    private fun showSignInDialog(url: String, modules: String) {
+        val grid = QrModules.parse(modules) ?: run {
+            Log.w(TAG, "ignoring malformed sign-in QR")
+            return
         }
-        guardDialog = AlertDialog.Builder(this)
-            .setTitle(title)
-            .setMessage(message)
-            .setView(input)
+        signInUrl = url
+        val metrics = resources.displayMetrics
+        // Landscape leaves little height once the title, message and buttons are counted.
+        val qrDp = minOf(SIGN_IN_QR_DP, (metrics.heightPixels / metrics.density - SIGN_IN_CHROME_DP).toInt())
+        val scale = QrModules.scaleFor(grid, (qrDp.coerceAtLeast(SIGN_IN_QR_MIN_DP) * metrics.density).toInt())
+        val side = QrModules.sidePx(grid, scale)
+        val bitmap = Bitmap.createBitmap(QrModules.toPixels(grid, scale), side, side, Bitmap.Config.ARGB_8888)
+
+        signInImage?.let {
+            it.setImageBitmap(bitmap)
+            return
+        }
+
+        val pad = (SIGN_IN_PADDING_DP * resources.displayMetrics.density).toInt()
+        val image = ImageView(this).apply {
+            setImageBitmap(bitmap)
+            layoutParams = LinearLayout.LayoutParams(side, side)
+        }
+        val message = TextView(this).apply {
+            setText(R.string.steam_signin_message)
+            gravity = Gravity.CENTER
+            setPadding(0, pad / 2, 0, 0)
+        }
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(pad, pad, pad, 0)
+            addView(image)
+            addView(message)
+        }
+        signInImage = image
+        signInDialog = AlertDialog.Builder(this)
+            .setTitle(R.string.steam_signin_title)
+            .setView(ScrollView(this).apply { addView(content) })
             .setCancelable(true)
-            .setPositiveButton(android.R.string.ok) { _, _ ->
-                NativeBridge.submitCode(input.text.toString().trim())
-                guardDialog = null
+            .setPositiveButton(R.string.steam_signin_open_app, null)
+            .setNegativeButton(android.R.string.cancel) { _, _ -> endSignIn() }
+            .setOnCancelListener { endSignIn() }
+            .create()
+            .also { dialog ->
+                dialog.setCanceledOnTouchOutside(false)
+                dialog.show()
+                // Set after show() so the button does not dismiss the QR the user still has to scan.
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { openSteamApp() }
             }
-            .setNegativeButton(android.R.string.cancel) { _, _ ->
-                NativeBridge.submitCode("")
-                guardDialog = null
-            }
-            .setOnCancelListener { // back button / tap-outside
-                NativeBridge.submitCode("")
-                guardDialog = null
-            }
-            .show()
+    }
+
+    private fun endSignIn() {
+        NativeBridge.cancelSignIn()
+        signInDialog = null
+        signInImage = null
+    }
+
+    private fun openSteamApp() {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(signInUrl)))
+        } catch (e: ActivityNotFoundException) {
+            Toast.makeText(this, R.string.steam_signin_no_app, Toast.LENGTH_LONG).show()
+        }
     }
 
     companion object {
@@ -1105,6 +1218,12 @@ class GameActivity :
 
         private const val URL_RELAY_TIMEOUT_MS = 2_000
         private const val URL_RELAY_MAX_CHARS = 2_048
+
+        // The QR is drawn at a whole number of pixels per module, so this is a ceiling, not the size.
+        private const val SIGN_IN_QR_DP = 260
+        private const val SIGN_IN_QR_MIN_DP = 160
+        private const val SIGN_IN_CHROME_DP = 250
+        private const val SIGN_IN_PADDING_DP = 20
 
         /** One line of at most [max] chars, or null if it is longer or the stream ends first. */
         internal fun readBoundedLine(reader: java.io.Reader, max: Int): String? {
@@ -1294,3 +1413,5 @@ class GameActivity :
         }
     }
 }
+
+private const val FPS_WINDOW_MS = 500L

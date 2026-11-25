@@ -22,6 +22,8 @@
 #include <EGL/egl.h>
 #include <GLES2/gl2.h>
 
+#include "skgfx.h"
+
 // Avoid pulling in jni.h for one define
 #ifndef JNI_VERSION_1_8
 #define JNI_VERSION_1_8 0x00010008
@@ -77,9 +79,7 @@ static struct {
     char cacio_dir[1024];
     char frenchpress_jar[1024];  // prepended to SK classpath (-Dfrenchpress.jar); empty = off
     char cred_file[1024];        // FRENCHPRESS_CRED_FILE (Steam refresh-token store)
-    char steam_user[256];        // FRENCHPRESS_STEAM_USER (first login only); empty = web
-    char steam_pass[256];        // FRENCHPRESS_STEAM_PASS
-    char web_user[256];          // SK_WEB_USER: saved web account, passed to the game as its login
+    char web_user[256];         // SK_WEB_USER: saved web account, passed to the game as its login
     char web_pass[256];          // SK_WEB_PASS
     char bin_dir[1024];          // prepended to PATH so SK's Runtime.exec finds our xdg-open shim
     int initial_screen_width;
@@ -96,6 +96,7 @@ static struct {
 #define EV_SCROLL       3
 #define EV_KEY          4
 #define EV_CHAR         5
+#define EV_FRAMEBUFFER_SIZE 6   // a=width, b=height: what the game should believe its window is
 
 #define INPUT_Q_CAP 2048   // power-of-two-ish; must exceed a frame's worth of events
 static struct {
@@ -322,6 +323,61 @@ static void render_thread_rebind_if_dirty(void) {
     pthread_mutex_unlock(&egl_lock);
 }
 
+// --- graphics pass (skgfx.c) ----------------------------------------------------
+
+static void *g_gl4es_handle;
+
+// The size of the surface the game really draws on (the window, not the game's idea of it).
+static bool egl_surface_size(int *w, int *h) {
+    EGLint sw = 0, sh = 0;
+    if (gfx.display == EGL_NO_DISPLAY || gfx.surface == EGL_NO_SURFACE) return false;
+    eglQuerySurface(gfx.display, gfx.surface, EGL_WIDTH, &sw);
+    eglQuerySurface(gfx.display, gfx.surface, EGL_HEIGHT, &sh);
+    *w = sw;
+    *h = sh;
+    return sw > 0 && sh > 0;
+}
+
+// What the game was last told its window size is, packed w<<32|h; 0 until it first asks.
+static _Atomic uint64_t told_size;
+
+// The native window's size as the launcher last said it. Used while the offscreen path is wanted,
+// because the surface itself changes size a moment after the settings do.
+static _Atomic int native_w, native_h;
+
+static void believed_size(int *w, int *h) {
+    int nw = gfx.width > 0 ? gfx.width : jvm.initial_screen_width;
+    int nh = gfx.height > 0 ? gfx.height : jvm.initial_screen_height;
+    if (skgfx_wanted() && atomic_load(&native_w) > 0 && atomic_load(&native_h) > 0) {
+        nw = atomic_load(&native_w);
+        nh = atomic_load(&native_h);
+    }
+    skgfx_believed_size(nw, nh, w, h);
+}
+
+// The game only learns its size when it asks (glfwCreateWindow) or is told. A later change, from the
+// resolution slider, the graphics settings or a resized window, is told as a framebuffer-size event.
+static void push_size_if_changed(void) {
+    uint64_t old = atomic_load(&told_size);
+    if (old == 0) return;  // not asked yet: its first question gets the current answer
+    int w, h;
+    believed_size(&w, &h);
+    uint64_t now = ((uint64_t)(uint32_t)w << 32) | (uint32_t)h;
+    if (now != old && atomic_compare_exchange_strong(&told_size, &old, now)) {
+        input_push(EV_FRAMEBUFFER_SIZE, w, h, 0);
+    }
+}
+
+// Once gl4es is up (render thread, egl_lock held, context current): set the pass up and, if the
+// settings ask for it, start drawing the game offscreen before its first frame.
+static void skgfx_start_once(void) {
+    static bool done;
+    int w, h;
+    if (done || !g_gl4es_handle) return;
+    done = true;
+    if (skgfx_init(g_gl4es_handle) && egl_surface_size(&w, &h)) skgfx_after_swap(0, w, h);
+}
+
 // --- gl4es activation ---------------------------------------------------------
 
 static void gl4es_bring_up_once(void) {
@@ -332,6 +388,7 @@ static void gl4es_bring_up_once(void) {
 
     void *gl4es = dlopen("libgl4es.so", RTLD_NOW | RTLD_GLOBAL);
     if (!gl4es) { LOGW("dlopen libgl4es.so failed: %s", dlerror()); return; }
+    g_gl4es_handle = gl4es;
 
     void (*initialize_gl4es)(void) = dlsym(gl4es, "initialize_gl4es");
     const GLubyte *(*gl4es_glGetString)(GLenum) = dlsym(gl4es, "glGetString");
@@ -661,8 +718,9 @@ static jmethodID g_nb_launch_status;  // onLaunchStatus(Ljava/lang/String;)V
 static jmethodID g_nb_render_ready;   // onRenderReady()V
 static jmethodID g_nb_boot_failed;    // onBootFailed(Ljava/lang/String;)V
 static jmethodID g_nb_keep_alive;     // steamKeepAlive(Z)V
-static jmethodID g_nb_prompt_device;  // promptForDeviceCode(Z)Ljava/lang/String;
-static jmethodID g_nb_prompt_email;   // promptForEmailCode(Ljava/lang/String;Z)Ljava/lang/String;
+static jmethodID g_nb_show_sign_in;   // showSignIn(Ljava/lang/String;Ljava/lang/String;)V
+static jmethodID g_nb_hide_sign_in;   // hideSignIn()V
+static jmethodID g_nb_sign_in_cancelled; // signInCancelled()Z
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
     g_art_vm = vm;
@@ -679,12 +737,12 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
         g_nb_boot_failed   = (*env)->GetStaticMethodID(env, cls, "onBootFailed",
                                                        "(Ljava/lang/String;)V");
         g_nb_keep_alive    = (*env)->GetStaticMethodID(env, cls, "steamKeepAlive", "(Z)V");
-        g_nb_prompt_device = (*env)->GetStaticMethodID(env, cls, "promptForDeviceCode",
-                                                       "(Z)Ljava/lang/String;");
-        g_nb_prompt_email  = (*env)->GetStaticMethodID(env, cls, "promptForEmailCode",
-                                                       "(Ljava/lang/String;Z)Ljava/lang/String;");
+        g_nb_show_sign_in  = (*env)->GetStaticMethodID(env, cls, "showSignIn",
+                                                       "(Ljava/lang/String;Ljava/lang/String;)V");
+        g_nb_hide_sign_in  = (*env)->GetStaticMethodID(env, cls, "hideSignIn", "()V");
+        g_nb_sign_in_cancelled = (*env)->GetStaticMethodID(env, cls, "signInCancelled", "()Z");
         (*env)->DeleteLocalRef(env, cls);
-        LOGI("JNI_OnLoad: cached NativeBridge boot-overlay + Steam Guard callbacks");
+        LOGI("JNI_OnLoad: cached NativeBridge boot-overlay + Steam sign-in callbacks");
     } else {
         (*env)->ExceptionClear(env);
         LOGW("JNI_OnLoad: NativeBridge not found; boot-overlay callbacks disabled");
@@ -695,7 +753,7 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 // ART aborts the process ("Native thread exited without calling DetachCurrentThread") when a
 // thread it knows about exits, so every thread art_env() attaches is detached again by this
 // thread-exit destructor. Short-lived HotSpot threads reach here too (the Steam callback pump
-// shows the Guard prompt and is shut down afterwards).
+// shows the sign-in QR and is shut down afterwards).
 static pthread_key_t g_art_detach_key;
 static pthread_once_t g_art_detach_once = PTHREAD_ONCE_INIT;
 
@@ -783,44 +841,45 @@ static void JNICALL sk_native_boot_failed(JNIEnv *env, jclass thiz, jstring msg)
     if (c) (*env)->ReleaseStringUTFChars(env, msg, c);
 }
 
-// Marshals an ART String result back into a HotSpot String. `art_result` is a
-// local ref in the ART VM; `hs_env` is the HotSpot env of the calling thread.
-// Returns a fresh HotSpot jstring (never NULL: "" on any failure, since callers
-// — JavaSteam's handleCodeAuth — throw on a null/empty code anyway).
-static jstring hs_string_from_art(JNIEnv *hs_env, JNIEnv *art, jstring art_result) {
-    if (!art_result) return (*hs_env)->NewStringUTF(hs_env, "");
-    const char *c = (*art)->GetStringUTFChars(art, art_result, NULL);
-    jstring out = (*hs_env)->NewStringUTF(hs_env, c ? c : "");
-    if (c) (*art)->ReleaseStringUTFChars(art, art_result, c);
-    (*art)->DeleteLocalRef(art, art_result);
+// Re-marshals a HotSpot String into an ART String (the two VMs cannot share jobjects).
+static jstring art_string_from_hs(JNIEnv *hs_env, JNIEnv *art, jstring hs_str) {
+    const char *c = hs_str ? (*hs_env)->GetStringUTFChars(hs_env, hs_str, NULL) : NULL;
+    jstring out = (*art)->NewStringUTF(art, c ? c : "");
+    if (c) (*hs_env)->ReleaseStringUTFChars(hs_env, hs_str, c);
     return out;
 }
 
-// HotSpot-registered natives: SkBootstrap.nativePrompt{Device,Email}Code BLOCK
-// on the ART side (NativeBridge parks the login thread until the user submits a
-// code), then return it to frenchpress. The calling HotSpot thread is attached
-// to ART for the duration via art_env().
-static jstring JNICALL sk_native_prompt_device_code(JNIEnv *env, jclass thiz, jboolean prevWrong) {
+// HotSpot-registered natives behind SkBootstrap.nativeShowSignIn / nativeHideSignIn /
+// nativeSignInCancelled. frenchpress's login thread shows the Steam sign-in QR on the ART UI,
+// then polls for the user's Cancel; none of them block. The calling HotSpot thread is attached
+// to ART via art_env().
+static void JNICALL sk_native_show_sign_in(JNIEnv *env, jclass thiz, jstring url, jstring modules) {
+    (void)thiz;
     JNIEnv *art = art_env();
-    if (!art || !g_nb_cls || !g_nb_prompt_device) return (*env)->NewStringUTF(env, "");
-    jstring r = (jstring)(*art)->CallStaticObjectMethod(art, g_nb_cls, g_nb_prompt_device, prevWrong);
-    if ((*art)->ExceptionCheck(art)) { (*art)->ExceptionClear(art); r = NULL; }
-    return hs_string_from_art(env, art, r);
+    if (!art || !g_nb_cls || !g_nb_show_sign_in) return;
+    jstring art_url = art_string_from_hs(env, art, url);
+    jstring art_modules = art_string_from_hs(env, art, modules);
+    (*art)->CallStaticVoidMethod(art, g_nb_cls, g_nb_show_sign_in, art_url, art_modules);
+    if ((*art)->ExceptionCheck(art)) (*art)->ExceptionClear(art);
+    (*art)->DeleteLocalRef(art, art_url);
+    (*art)->DeleteLocalRef(art, art_modules);
 }
 
-static jstring JNICALL sk_native_prompt_email_code(JNIEnv *env, jclass thiz, jstring email,
-                                                   jboolean prevWrong) {
+static void JNICALL sk_native_hide_sign_in(JNIEnv *env, jclass thiz) {
+    (void)env; (void)thiz;
     JNIEnv *art = art_env();
-    if (!art || !g_nb_cls || !g_nb_prompt_email) return (*env)->NewStringUTF(env, "");
-    // Re-marshal the HotSpot `email` arg into an ART String for the ART call.
-    const char *ec = email ? (*env)->GetStringUTFChars(env, email, NULL) : NULL;
-    jstring art_email = (*art)->NewStringUTF(art, ec ? ec : "");
-    if (ec) (*env)->ReleaseStringUTFChars(env, email, ec);
-    jstring r = (jstring)(*art)->CallStaticObjectMethod(art, g_nb_cls, g_nb_prompt_email,
-                                                        art_email, prevWrong);
-    if ((*art)->ExceptionCheck(art)) { (*art)->ExceptionClear(art); r = NULL; }
-    (*art)->DeleteLocalRef(art, art_email);
-    return hs_string_from_art(env, art, r);
+    if (!art || !g_nb_cls || !g_nb_hide_sign_in) return;
+    (*art)->CallStaticVoidMethod(art, g_nb_cls, g_nb_hide_sign_in);
+    if ((*art)->ExceptionCheck(art)) (*art)->ExceptionClear(art);
+}
+
+static jboolean JNICALL sk_native_sign_in_cancelled(JNIEnv *env, jclass thiz) {
+    (void)env; (void)thiz;
+    JNIEnv *art = art_env();
+    if (!art || !g_nb_cls || !g_nb_sign_in_cancelled) return JNI_FALSE;
+    jboolean r = (*art)->CallStaticBooleanMethod(art, g_nb_cls, g_nb_sign_in_cancelled);
+    if ((*art)->ExceptionCheck(art)) { (*art)->ExceptionClear(art); return JNI_FALSE; }
+    return r;
 }
 
 static void *jvm_thread_main(void *arg) {
@@ -839,12 +898,8 @@ static void *jvm_thread_main(void *arg) {
     setenv("LD_LIBRARY_PATH", jvm.lib_path, 1);
 
     // frenchpress (Steam-login shim) env. Must be set before JNI_CreateJavaVM so
-    // System.getenv sees them. CRED_FILE points the FileCredentialStore at our
-    // user.home; STEAM_USER/PASS are present only on a first Steam login — absent
-    // for web login, which frenchpress reads as an empty-username web account.
+    // System.getenv sees it. CRED_FILE points the FileCredentialStore at our user.home.
     if (jvm.cred_file[0])  setenv("FRENCHPRESS_CRED_FILE",  jvm.cred_file,  1);
-    if (jvm.steam_user[0]) setenv("FRENCHPRESS_STEAM_USER", jvm.steam_user, 1);
-    if (jvm.steam_pass[0]) setenv("FRENCHPRESS_STEAM_PASS", jvm.steam_pass, 1);
     // A saved web account: SkBootstrap hands these to SK's main() as its username/password.
     if (jvm.web_user[0] && jvm.web_pass[0]) {
         setenv("SK_WEB_USER", jvm.web_user, 1);
@@ -981,6 +1036,13 @@ static void *jvm_thread_main(void *arg) {
         ADD_OPT("-Xms128M");
         ADD_OPT(opt_xmx);
     }
+    // KnightLauncher's recommended game settings (its "Load recommended settings"). The collector
+    // is left to the JVM, which picks G1 here: the same one KnightLauncher recommends.
+    // DisableExplicitGC: SK's own System.gc() calls would each be a stop-the-world pause.
+    ADD_OPT("-XX:+DisableExplicitGC");
+    // SK holds textures and models behind soft references, and the default (1000 ms per MB of
+    // free heap) retains them far too long for a phone. KnightLauncher passes this always.
+    ADD_OPT("-XX:SoftRefLRUPolicyMSPerMB=10");
 
     ADD_OPT(opt_home);
     ADD_OPT(opt_libpath);
@@ -996,16 +1058,14 @@ static void *jvm_thread_main(void *arg) {
     // disable_steam_api is misleadingly named: it only stops froth-foamy from loading
     // the native libsteam_api.so (which we never ship on Android) — froth still issues
     // its Steam calls and falls back gracefully. Kept ALWAYS; frenchpress's shimmed
-    // SteamAPI.init() runs regardless and drives login via JavaSteam when creds are set.
+    // SteamAPI.init() runs regardless and drives login via JavaSteam.
     ADD_OPT("-Dcom.threerings.froth.disable_steam_api=true");
     if (frenchpress) {
         ADD_OPT(opt_fp_jar);
-        // Force our native bridge prompt: username/password still come from the
-        // FRENCHPRESS_STEAM_USER/PASS env (set from the Android login screen), but
-        // Steam Guard codes are collected via an Android dialog (NativeBridge ->
-        // GameActivity). This shadows SwingCredentialPrompt, which would otherwise
-        // be chosen on the non-headless cacio AWT and render into an invisible
-        // buffer. With no FRENCHPRESS_STEAM_USER it still yields a web account.
+        // Force our native bridge prompt: the Steam sign-in QR is shown by an Android
+        // dialog (NativeBridge -> GameActivity). This shadows SwingCredentialPrompt,
+        // which would otherwise be chosen on the non-headless cacio AWT and render
+        // into an invisible buffer.
         ADD_OPT("-Dfrenchpress.credentialPrompt=com.skarm.launcher.bootstrap.NativeBridgePrompt");
     }
     ADD_OPT("-Dno_log_redir=true");
@@ -1096,15 +1156,11 @@ static void *jvm_thread_main(void *arg) {
 
         // Securely unset env vars
         unsetenv("FRENCHPRESS_CRED_FILE");
-        unsetenv("FRENCHPRESS_STEAM_USER");
-        unsetenv("FRENCHPRESS_STEAM_PASS");
         unsetenv("SK_WEB_USER");
         unsetenv("SK_WEB_PASS");
 
         // Scrub the global struct buffers to prevent memory snooping
         memset(jvm.cred_file, 0, sizeof(jvm.cred_file));
-        memset(jvm.steam_user, 0, sizeof(jvm.steam_user));
-        memset(jvm.steam_pass, 0, sizeof(jvm.steam_pass));
         memset(jvm.web_user, 0, sizeof(jvm.web_user));
         memset(jvm.web_pass, 0, sizeof(jvm.web_pass));
     }
@@ -1123,10 +1179,12 @@ static void *jvm_thread_main(void *arg) {
                   (void *)sk_native_boot_failed },
                 { "nativeSteamKeepAlive", "(Z)V",
                   (void *)sk_native_steam_keep_alive },
-                { "nativePromptDeviceCode", "(Z)Ljava/lang/String;",
-                  (void *)sk_native_prompt_device_code },
-                { "nativePromptEmailCode", "(Ljava/lang/String;Z)Ljava/lang/String;",
-                  (void *)sk_native_prompt_email_code },
+                { "nativeShowSignIn", "(Ljava/lang/String;Ljava/lang/String;)V",
+                  (void *)sk_native_show_sign_in },
+                { "nativeHideSignIn", "()V",
+                  (void *)sk_native_hide_sign_in },
+                { "nativeSignInCancelled", "()Z",
+                  (void *)sk_native_sign_in_cancelled },
             };
             jint rrc = (*env)->RegisterNatives(env, skBoot, m,
                                                sizeof(m) / sizeof(m[0]));
@@ -1226,8 +1284,7 @@ static void copy_arg(char *dst, size_t dst_sz, const char *src) {
 static void start_jvm_thread_once(const char *jre_home, const char *classpath,
                                   const char *lib_path, const char *app_files,
                                   const char *cacio_dir, const char *frenchpress_jar,
-                                  const char *cred_file, const char *steam_user,
-                                  const char *steam_pass, const char *bin_dir,
+                                  const char *cred_file, const char *bin_dir,
                                   int screen_width, int screen_height, int max_heap_mb) {
     bool expected = false;
     if (!atomic_compare_exchange_strong(&jvm.started, &expected, true)) {
@@ -1241,8 +1298,6 @@ static void start_jvm_thread_once(const char *jre_home, const char *classpath,
     copy_arg(jvm.cacio_dir, sizeof(jvm.cacio_dir), cacio_dir);
     copy_arg(jvm.frenchpress_jar, sizeof(jvm.frenchpress_jar), frenchpress_jar);
     copy_arg(jvm.cred_file,  sizeof(jvm.cred_file),  cred_file);
-    copy_arg(jvm.steam_user, sizeof(jvm.steam_user), steam_user);
-    copy_arg(jvm.steam_pass, sizeof(jvm.steam_pass), steam_pass);
     copy_arg(jvm.bin_dir,    sizeof(jvm.bin_dir),    bin_dir);
     jvm.initial_screen_width = screen_width;
     jvm.initial_screen_height = screen_height;
@@ -1277,6 +1332,7 @@ static void JNICALL glfw_make_current_impl(JNIEnv *env, jclass thiz, jlong windo
         // make sure we actually still have an EGL context to prevent render errors.
         egl_make_current_on_caller_thread();
         atomic_store(&gfx.surface_dirty, 0); // we just bound the current surface
+        skgfx_start_once();
     }
     pthread_mutex_unlock(&egl_lock);
 }
@@ -1284,8 +1340,9 @@ static void JNICALL glfw_make_current_impl(JNIEnv *env, jclass thiz, jlong windo
 static jintArray JNICALL glfw_get_surface_size_impl(JNIEnv *env, jclass thiz) {
     jintArray arr = (*env)->NewIntArray(env, 2);
     if (!arr) return NULL;
-    int w = gfx.width > 0 ? gfx.width : jvm.initial_screen_width;
-    int h = gfx.height > 0 ? gfx.height : jvm.initial_screen_height;
+    int w, h;
+    believed_size(&w, &h);
+    atomic_store(&told_size, ((uint64_t)(uint32_t)w << 32) | (uint32_t)h);
     jint dims[2] = { w, h };
     (*env)->SetIntArrayRegion(env, arr, 0, 2, dims);
     return arr;
@@ -1303,6 +1360,9 @@ static void JNICALL glfw_swap_buffers_impl(JNIEnv *env, jclass thiz, jlong windo
         pthread_mutex_lock(&egl_lock);
     }
     if (gfx.display != EGL_NO_DISPLAY && gfx.surface != EGL_NO_SURFACE) {
+        int sw = 0, sh = 0;
+        bool sized = egl_surface_size(&sw, &sh);
+        if (sized) skgfx_present(0, sw, sh);
         if (!eglSwapBuffers(gfx.display, gfx.surface)) {
             EGLint err = eglGetError();
             if (err != EGL_BAD_SURFACE) {
@@ -1311,8 +1371,10 @@ static void JNICALL glfw_swap_buffers_impl(JNIEnv *env, jclass thiz, jlong windo
         } else {
             swapped = true;
         }
+        if (sized) skgfx_after_swap(0, sw, sh);
     }
     pthread_mutex_unlock(&egl_lock);
+    push_size_if_changed();
 
     // First successful frame: tell the ART boot overlay to dismiss. One-shot; the
     // overlay's own idempotency guard tolerates a stray repeat, but we gate here
@@ -1410,6 +1472,7 @@ Java_com_skarm_launcher_NativeBridge_onSurfaceChanged(JNIEnv *env, jobject thiz,
     bool size_changed = (width != gfx.width || height != gfx.height);
     gfx.width = width;
     gfx.height = height;
+    push_size_if_changed();
 
     // A live buffer-size change (resolution slider -> setFixedSize) must rebuild the
     // EGL surface so it matches the new geometry; otherwise SK renders its resized
@@ -1419,6 +1482,24 @@ Java_com_skarm_launcher_NativeBridge_onSurfaceChanged(JNIEnv *env, jobject thiz,
     }
 
     if (!egl_bring_up()) return;
+}
+
+// The graphics settings (render scale, sharpening, Sharp HUD). Takes effect at the next frame; the
+// game is told its new size if that changes.
+JNIEXPORT void JNICALL
+Java_com_skarm_launcher_NativeBridge_setGfxConfig(JNIEnv *env, jobject thiz, jboolean enabled,
+                                                  jfloat scale, jfloat sharpen, jboolean hud,
+                                                  jint native_width, jint native_height) {
+    atomic_store(&native_w, native_width);
+    atomic_store(&native_h, native_height);
+    skgfx_set_config(enabled, scale, sharpen, hud);
+    push_size_if_changed();
+}
+
+// Frames the game has presented, for the FPS counter.
+JNIEXPORT jlong JNICALL
+Java_com_skarm_launcher_NativeBridge_frameCount(JNIEnv *env, jobject thiz) {
+    return (jlong)skgfx_frames();
 }
 
 JNIEXPORT void JNICALL
@@ -1450,8 +1531,7 @@ Java_com_skarm_launcher_NativeBridge_startJvm(JNIEnv *env, jobject thiz,
                                               jstring jreHome, jstring classpath,
                                               jstring libPath, jstring appFiles,
                                               jstring cacioDir, jstring frenchpressJar,
-                                              jstring credFile, jstring steamUser,
-                                              jstring steamPass, jstring binDir,
+                                              jstring credFile, jstring binDir,
                                               jint screenWidth, jint screenHeight,
                                               jint maxHeapMb) {
     const char *home = (*env)->GetStringUTFChars(env, jreHome,   NULL);
@@ -1461,8 +1541,6 @@ Java_com_skarm_launcher_NativeBridge_startJvm(JNIEnv *env, jobject thiz,
     const char *cd   = (*env)->GetStringUTFChars(env, cacioDir,  NULL);
     const char *fj   = (*env)->GetStringUTFChars(env, frenchpressJar, NULL);
     const char *cf   = (*env)->GetStringUTFChars(env, credFile,  NULL);
-    const char *su   = (*env)->GetStringUTFChars(env, steamUser, NULL);
-    const char *sp   = (*env)->GetStringUTFChars(env, steamPass, NULL);
     const char *bd   = (*env)->GetStringUTFChars(env, binDir,    NULL);
     LOGI("startJvm requested");
     LOGI("  jreHome     = %s", home);
@@ -1472,11 +1550,9 @@ Java_com_skarm_launcher_NativeBridge_startJvm(JNIEnv *env, jobject thiz,
     LOGI("  cacioDir    = %s", cd);
     LOGI("  frenchpress = %s", fj);
     LOGI("  credFile    = %s", cf);
-    LOGI("  steamUser   = %s", su[0] ? "(set)" : "(none)");  // never log pass
     LOGI("  binDir      = %s", bd);
     LOGI("  maxHeapMb   = %d", maxHeapMb);
-    start_jvm_thread_once(home, cp, lp, af, cd, fj, cf, su, sp, bd, screenWidth, screenHeight,
-                          maxHeapMb);
+    start_jvm_thread_once(home, cp, lp, af, cd, fj, cf, bd, screenWidth, screenHeight, maxHeapMb);
     (*env)->ReleaseStringUTFChars(env, jreHome,   home);
     (*env)->ReleaseStringUTFChars(env, classpath, cp);
     (*env)->ReleaseStringUTFChars(env, libPath,   lp);
@@ -1484,8 +1560,6 @@ Java_com_skarm_launcher_NativeBridge_startJvm(JNIEnv *env, jobject thiz,
     (*env)->ReleaseStringUTFChars(env, cacioDir,  cd);
     (*env)->ReleaseStringUTFChars(env, frenchpressJar, fj);
     (*env)->ReleaseStringUTFChars(env, credFile,  cf);
-    (*env)->ReleaseStringUTFChars(env, steamUser, su);
-    (*env)->ReleaseStringUTFChars(env, steamPass, sp);
     (*env)->ReleaseStringUTFChars(env, binDir,    bd);
 }
 

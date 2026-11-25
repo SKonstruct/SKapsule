@@ -16,3 +16,6 @@
 [submodule "bootstrap"]
 	path = external/bootstrap
 	url = https://github.com/SKonstruct/bootstrap.git
+[submodule "skgfx"]
+	path = external/skgfx
+	url = https://github.com/SKonstruct/skgfx.git

@@ -90,6 +90,10 @@ object TouchControlManager {
     const val MIN_RENDER_SCALE = 0.6f
     const val MAX_RENDER_SCALE = 1.0f
 
+    /** Per-control size multiplier bounds; the editor's slider and imported layouts share them. */
+    const val MIN_NODE_SCALE = 0.5f
+    const val MAX_NODE_SCALE = 2.5f
+
     // Button codes from GameActivity
     const val GP_BTN_A = 0
     const val GP_BTN_B = 1
@@ -124,6 +128,9 @@ object TouchControlManager {
 
         return try {
             val data = gson.fromJson(jsonStr, TouchLayoutData::class.java) ?: createDefaultLayout()
+            // A save with no controls leaves the editor and the game with nothing to show or
+            // drag. Same guard as the iOS port.
+            if (data.nodes.isNullOrEmpty()) return createDefaultLayout()
             // Gson zero-fills fields missing from layouts saved before renderScale
             // existed, which would give a 0 scale (a 1x1 framebuffer). Clamp to the
             // valid range so old saves stay renderable.
@@ -135,7 +142,7 @@ object TouchControlManager {
                 // Gson zero-fills a `scale` missing from layouts saved before it existed,
                 // which lays the control out at zero size. Same guard as renderScale.
                 if (node.scale <= 0f) node.scale = 1.0f
-                node.scale = node.scale.coerceIn(0.5f, 2.5f)
+                node.scale = node.scale.coerceIn(MIN_NODE_SCALE, MAX_NODE_SCALE)
                 ACTION_BAR_LABELS[node.id]?.let { node.copy(label = it) } ?: node
             }
             data

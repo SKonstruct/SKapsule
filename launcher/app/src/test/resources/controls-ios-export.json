@@ -1,0 +1,121 @@
+{
+  "version" : 1,
+  "actionBarVisible" : true,
+  "nodes" : [
+    {
+      "scale" : 1,
+      "id" : "joy_move",
+      "yPercent" : 0.69999998807907104,
+      "visible" : true,
+      "xPercent" : 0.15000000596046448
+    },
+    {
+      "scale" : 1,
+      "id" : "joy_face",
+      "yPercent" : 0.69999998807907104,
+      "visible" : true,
+      "xPercent" : 0.85000002384185791
+    },
+    {
+      "scale" : 1.5,
+      "id" : "btn_esc",
+      "yPercent" : 0.10000000149011612,
+      "visible" : true,
+      "xPercent" : 0.11999999731779099
+    },
+    {
+      "scale" : 1,
+      "id" : "btn_strafe",
+      "yPercent" : 0.72000002861022949,
+      "visible" : false,
+      "xPercent" : 0.2800000011920929
+    },
+    {
+      "scale" : 1,
+      "id" : "btn_defend",
+      "yPercent" : 0.72000002861022949,
+      "visible" : true,
+      "xPercent" : 0.72000002861022949
+    },
+    {
+      "scale" : 1,
+      "id" : "btn_dodge",
+      "yPercent" : 0.44999998807907104,
+      "visible" : true,
+      "xPercent" : 0.77999997138977051
+    },
+    {
+      "scale" : 1,
+      "id" : "btn_shieldbash",
+      "yPercent" : 0.44999998807907104,
+      "visible" : true,
+      "xPercent" : 0.87999999523162842
+    },
+    {
+      "scale" : 1,
+      "id" : "btn_prevweap",
+      "yPercent" : 0.55000001192092896,
+      "visible" : true,
+      "xPercent" : 0.94999998807907104
+    },
+    {
+      "scale" : 1,
+      "id" : "btn_nextweap",
+      "yPercent" : 0.85000002384185791,
+      "visible" : true,
+      "xPercent" : 0.94999998807907104
+    },
+    {
+      "scale" : 1,
+      "id" : "btn_ab1",
+      "yPercent" : 0.89999997615814209,
+      "visible" : true,
+      "xPercent" : 0.27500000596046448
+    },
+    {
+      "scale" : 1,
+      "id" : "btn_ab2",
+      "yPercent" : 0.89999997615814209,
+      "visible" : true,
+      "xPercent" : 0.3449999988079071
+    },
+    {
+      "scale" : 1,
+      "id" : "btn_ab3",
+      "yPercent" : 0.89999997615814209,
+      "visible" : true,
+      "xPercent" : 0.41499999165534973
+    },
+    {
+      "scale" : 1,
+      "id" : "btn_item1",
+      "yPercent" : 0.89999997615814209,
+      "visible" : true,
+      "xPercent" : 0.51499998569488525
+    },
+    {
+      "scale" : 1,
+      "id" : "btn_item2",
+      "yPercent" : 0.89999997615814209,
+      "visible" : true,
+      "xPercent" : 0.58499997854232788
+    },
+    {
+      "scale" : 1,
+      "id" : "btn_item3",
+      "yPercent" : 0.89999997615814209,
+      "visible" : true,
+      "xPercent" : 0.65499997138977051
+    },
+    {
+      "scale" : 1,
+      "id" : "btn_item4",
+      "yPercent" : 0.89999997615814209,
+      "visible" : true,
+      "xPercent" : 0.72500002384185791
+    }
+  ],
+  "name" : "From iOS",
+  "globalOpacity" : 0.55000001192092896,
+  "format" : "skapsule-controls"
+}

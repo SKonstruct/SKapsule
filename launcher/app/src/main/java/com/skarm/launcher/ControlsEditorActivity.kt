@@ -39,6 +39,11 @@ class ControlsEditorActivity : AppCompatActivity() {
         val overlay = binding.touchOverlay
         overlay.doOnLayout { if (!overlay.isEditing) overlay.toggleEditMode() }
 
+        // Presets and export/import. Created here, not lazily: the file pickers register with
+        // this Activity's result registry, which only accepts registrations before STARTED.
+        val layoutLibrary = LayoutLibraryController(this, overlay)
+        overlay.layoutLibraryRequestListener = { layoutLibrary.show() }
+
         binding.btnDone.setOnClickListener { finishEditing() }
         onBackPressedDispatcher.addCallback(
             this,

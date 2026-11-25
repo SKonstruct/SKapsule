@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.Debug
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -93,9 +94,16 @@ object LogExporter {
                 ?.substringAfter(':')?.trim() ?: "?"
             val mi = ActivityManager.MemoryInfo()
             context.getSystemService(ActivityManager::class.java)?.getMemoryInfo(mi)
+            // PSS split by owner (KB): tells a Java-heap problem from a native one, and a native
+            // heap (malloc) leak from a graphics (GL driver / textures) one. smaps is read once.
+            val stats = Debug.MemoryInfo().also { Debug.getMemoryInfo(it) }.memoryStats
+            fun pss(key: String) = stats[key] ?: "?"
+            val split = "java=${pss("summary.java-heap")} native=${pss("summary.native-heap")} " +
+                "gfx=${pss("summary.graphics")} code=${pss("summary.code")} " +
+                "other=${pss("summary.private-other")}"
             val line = "${timestamp()} rss=${field("VmRSS")} swap=${field("VmSwap")} " +
                 "threads=${field("Threads")} avail=${mi.availMem shr 20}MB " +
-                "lowMemory=${mi.lowMemory} $event".trimEnd()
+                "lowMemory=${mi.lowMemory} pss[$split] $event".trimEnd()
             Log.i(TAG, "mem $line")
             val file = File(diagDir(context), "mem.log")
             if (file.length() > 256 * 1024) file.delete()

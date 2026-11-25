@@ -41,7 +41,7 @@ Don't blind-edit. Before claiming a change works, build the affected component:
   minimum bar; for behavior changes, also run the relevant unit tests
   (`./gradlew :app:testDebugUnitTest`).
 - **Native submodules (`external/gl4es/`, `external/openal-soft/`, `external/lwjgl3/`, `external/caciocavallo17/`,
-  `external/frenchpress/`):** rebuild via the matching script in `scripts/`. Each script
+  `external/frenchpress/`; `external/skgfx/` is C compiled by the launcher's CMake, no script):** rebuild via the matching script in `scripts/`. Each script
   expects specific JDKs in its environment — see
   [README §Building from source](README.md#building-from-source-developers) for the
   full matrix. In particular, `build-lwjgl3-android.sh` needs both `JAVA_HOME` →
@@ -163,6 +163,37 @@ list the user-visible effect, and call out anything reviewers should double-chec
 
 - Keep them readable and reproducible. CI must be able to run them unattended.
 - Don't add interactive prompts or assume a developer machine layout.
+
+---
+
+## Graphics pass (`external/skgfx/mobile/skgfx.c`)
+
+The FPS counter, sharpening and Sharp HUD. Ported from KnightLauncherPlus's `skgfx`; **`skgfx.c` and
+`skgfx.h` come from the `external/skgfx` submodule (`mobile/`, single source: SKonstruct/skgfx, MIT), shared
+with SKapsule-iOS.** Change them in that repo, then bump the submodule pointer here. CMake reads them from there.
+
+- **Redirect:** gl4es maps the game's framebuffer 0 to `glstate->fbo.mainfbo_fbo`. The gl4es fork
+  exports `gl4es_skgfx_set_main_framebuffer()` and a small hook table (`gl4es_skgfx_hooks`: ortho,
+  draw, viewport, scissor, blendfunc), all NULL unless the host sets them. The game then draws into
+  our scene target and `skgfx_present` puts it on the window (CAS when asked) before the swap. These
+  gl4es patches belong to our fork only; do not offer them upstream.
+- **Settings:** `GfxSettings` (FPS on, sharpening %, Sharp HUD) plus the resolution slider. The offscreen
+  path is on when sharpening > 0 or (Sharp HUD and scale < 1); otherwise the old `setFixedSize` path.
+- **What the game believes its size is** (`skgfx_believed_size`, mirrored by `GfxSettings.gameSize`, which
+  also drives touch mapping): the scene size, or the full window with Sharp HUD (the game lays out and
+  rasterises text at full size; its viewport and scissor are scaled down for the scene, as in KLP).
+  Changes are told to the game as a framebuffer-size event (`EV_FRAMEBUFFER_SIZE`): before this, a live
+  Resolution change never reached the game.
+- **GL discipline:** anything gl4es tracks (viewport, scissor, blend, framebuffer) changes through its own
+  entry points; everything else (our programs, bindings, vertex attribute 0, texture unit 0) is saved
+  and restored exactly. No GL text: the FPS counter is a `TextView` fed by `skgfx_frames()`. Fails open:
+  a shader, framebuffer or hook problem leaves the game drawing straight into the window.
+- **Sharp HUD start** is the first full-window `glOrtho` after 20 depth-tested draws (as KLP). Not
+  supported: MSAA on the layer, a game screenshot taken while the HUD is being drawn.
+- **Measured** (emulator, software GPU, login screen): 16 fps at either resolution (CPU/JVM-bound), the
+  present pass ~45-50 ms per frame there (SwiftShader: says nothing about a phone). Not measured: real
+  device fps and GPU time (`adb shell setprop debug.skgfx.time 1` before the game starts logs the pass's
+  GPU ms every 120 frames), in-world Sharp HUD (needs a login), thermals over 10 minutes.
 
 ---
 

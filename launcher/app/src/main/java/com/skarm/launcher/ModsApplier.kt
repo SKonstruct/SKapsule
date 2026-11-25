@@ -125,13 +125,20 @@ object ModsApplier {
         val classChangesDir = File(codeDir, "class-changes")
         val localeChangesDir = File(codeDir, "locale-changes")
 
-        val modFiles = modsDir.listFiles { _, name ->
+        val found = modsDir.listFiles { _, name ->
             name.endsWith(".zip") || name.endsWith(".modpack")
         }?.toList() ?: emptyList()
 
-        if (modFiles.isEmpty()) {
+        if (found.isEmpty()) {
             throw NoModsException()
         }
+
+        // A later mod wins where two change the same file, so the order matters. It is worked
+        // out here, never chosen: the mods that change the most files go first and a small,
+        // targeted one beats a broad one (see ModsOrder). File.listFiles has no defined order.
+        onProgress("Working out the mod order…", 0, 0)
+        val modFiles = ModsOrder.optimal(found, { it.name }, ::filesChanged)
+        Log.i(TAG, "Mod order: " + modFiles.joinToString { it.name })
 
         val gameVersion = getGameVersion(gameHome)
         Log.i(TAG, "Current game version: $gameVersion")
@@ -247,6 +254,39 @@ object ModsApplier {
         File(rsrcDir, "mod.png").delete()
 
         stats
+    }
+
+    /**
+     * How many files a mod would write, which is what [ModsOrder] ranks by. A modpack is the sum
+     * of its inner mods (the top-level `.zip` entries, which is what [apply] unpacks from it). A
+     * mod that cannot be read counts 0, so it sorts last and fails on its own when applied.
+     */
+    internal fun filesChanged(modFile: File): Int = try {
+        ZipFile(modFile).use { zip ->
+            if (modFile.name.endsWith(".modpack")) {
+                zip.entries().asSequence()
+                    .filter { !it.isDirectory && '/' !in it.name && it.name.endsWith(".zip") }
+                    .sumOf { inner -> zip.getInputStream(inner).use { countZipStream(it) } }
+            } else {
+                ModsOrder.filesWritten(zip.entries().asSequence().map { it.name }, PROTECTED_FILES)
+            }
+        }
+    } catch (e: Exception) {
+        Log.w(TAG, "Could not read ${modFile.name} to order it", e)
+        0
+    }
+
+    /** The entry names of a zip read as a stream (an inner mod), without keeping their contents. */
+    private fun countZipStream(input: java.io.InputStream): Int {
+        val names = ArrayList<String>()
+        ZipInputStream(input).use { zis ->
+            while (true) {
+                val entry = zis.nextEntry ?: break
+                names += entry.name
+                zis.closeEntry()
+            }
+        }
+        return ModsOrder.filesWritten(names.asSequence(), PROTECTED_FILES)
     }
 
     private fun getGameVersion(gameHome: File): String? {

@@ -7,6 +7,14 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Build
 import android.text.InputType
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
+import android.text.SpannableString
+import android.text.Spanned
+import android.text.TextPaint
+import android.text.method.LinkMovementMethod
+import android.text.style.ClickableSpan
+import android.text.style.ForegroundColorSpan
 import android.util.Log
 import android.view.View
 import android.widget.EditText
@@ -62,6 +70,7 @@ class LauncherActivity : AppCompatActivity() {
         binding.title.text = "SKapsule v$ver"
 
         binding.btnDonate.setOnClickListener { openUrl(DONATE_URL) }
+        setupCredit()
 
         // Open options sidebar
         binding.btnOptions.setOnClickListener {
@@ -160,6 +169,7 @@ class LauncherActivity : AppCompatActivity() {
         binding.sidebarBtnEditControls.setOnClickListener { openControlsEditor() }
         binding.sidebarBtnCheckUpdates.setOnClickListener { checkForUpdateNow() }
         binding.sidebarBtnGithub.setOnClickListener { openUrl("https://github.com/SKonstruct/SKapsule") }
+        binding.sidebarBtnLanguage.setOnClickListener { showLanguageDialog() }
         binding.sidebarBtnDiscord.setOnClickListener { openUrl("https://dankware.alwaysdata.net/discord") }
         binding.sidebarBtnLogout.setOnClickListener { onLogout() }
         binding.sidebarBtnWebAccount.setOnClickListener { editWebAccount() }
@@ -252,7 +262,7 @@ class LauncherActivity : AppCompatActivity() {
                 }
                 startActivity(fallbackIntent)
             } catch (ex: Exception) {
-                Toast.makeText(this, "Could not open folder", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, R.string.toast_folder_failed, Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -293,11 +303,69 @@ class LauncherActivity : AppCompatActivity() {
         }
     }
 
+    /** The languages SKapsule has, as BCP 47 tags with the name each one has in itself. Keep in step with `res/values-*`. */
+    private val languages by lazy {
+        listOf(
+            "en" to R.string.language_name_en, "ar" to R.string.language_name_ar, "de" to R.string.language_name_de,
+            "es" to R.string.language_name_es, "et" to R.string.language_name_et, "fr" to R.string.language_name_fr,
+            "it" to R.string.language_name_it, "ja" to R.string.language_name_ja, "pl" to R.string.language_name_pl,
+            "pt-BR" to R.string.language_name_pt_br, "ru" to R.string.language_name_ru,
+            "zh-CN" to R.string.language_name_zh_cn, "zh-TW" to R.string.language_name_zh_tw,
+        )
+    }
+
+    /** Picks the app's language (the system's by default); the screen is recreated in it. */
+    private fun showLanguageDialog() {
+        val names = listOf(getString(R.string.language_follow_system)) + languages.map { getString(it.second) }
+        val current = AppCompatDelegate.getApplicationLocales().toLanguageTags()
+        val checked = languages.indexOfFirst { it.first.equals(current, ignoreCase = true) }.let { if (it < 0) 0 else it + 1 }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.sidebar_language)
+            .setSingleChoiceItems(names.toTypedArray(), checked) { dialog, which ->
+                val tags = if (which == 0) "" else languages[which - 1].first
+                AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(tags))
+                dialog.dismiss()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /**
+     * "Built with ♥ by SirDank": the heart in the brand pink, and the name a link to the author's site. Quiet on
+     * purpose (12sp, grey), but on the screen every player sees.
+     */
+    private fun setupCredit() {
+        val text = getString(R.string.credit_built_with)
+        val styled = SpannableString(text)
+        val heart = text.indexOf('\u2665')
+        if (heart >= 0) {
+            // The string follows the heart with U+FE0E (text style), so it takes the colour instead of the red emoji.
+            styled.setSpan(
+                ForegroundColorSpan(getColor(R.color.sk_pink)), heart, minOf(heart + 2, text.length),
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE,
+            )
+        }
+        val name = "SirDank"
+        val start = text.indexOf(name)
+        if (start >= 0) {
+            styled.setSpan(object : ClickableSpan() {
+                override fun onClick(widget: View) = openUrl(CREDIT_URL)
+                override fun updateDrawState(ds: TextPaint) {
+                    ds.color = Color.WHITE
+                    ds.isUnderlineText = true
+                }
+            }, start, start + name.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+        binding.credit.text = styled
+        binding.credit.movementMethod = LinkMovementMethod.getInstance()
+        binding.credit.highlightColor = Color.TRANSPARENT
+    }
+
     private fun openUrl(url: String) {
         try {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
         } catch (e: Exception) {
-            Toast.makeText(this, "No browser found to open link", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.toast_no_browser, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -489,7 +557,7 @@ class LauncherActivity : AppCompatActivity() {
                 }
                 binding.sidebarBtnLogout.visibility = View.GONE
                 binding.sidebarDividerLogout.visibility = View.GONE
-                Toast.makeText(this, "Logged out successfully", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, R.string.toast_logged_out, Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
@@ -543,8 +611,8 @@ class LauncherActivity : AppCompatActivity() {
                 )
                 // A bundled file that cannot be opened means the installed package is damaged
                 // or was replaced under a running app; installing again fixes it.
-                val hint = if (t is java.io.FileNotFoundException) "\nReinstall SKapsule to repair it." else ""
-                binding.setupStatus.text = "Runtime setup failed: ${t.message}$hint"
+                val hint = if (t is java.io.FileNotFoundException) "\n" + getString(R.string.runtime_reinstall_hint) else ""
+                binding.setupStatus.text = getString(R.string.runtime_setup_failed, t.message ?: "", hint)
             } finally {
                 installingRuntime = false
             }
@@ -557,50 +625,14 @@ class LauncherActivity : AppCompatActivity() {
     }
 
     /**
-     * Steam path. frenchpress persists a Steam refresh token after the first
-     * successful login, so we only prompt for username/password when no creds file
-     * exists yet; subsequent launches resume silently from the token. The collected
-     * credentials are passed straight through to the game JVM (env vars set in
-     * sklauncher.c) and never stored in plaintext by the launcher.
+     * Steam path. The launcher never sees Steam credentials: frenchpress signs in inside the game
+     * with its stored refresh token, or shows a QR code on the first launch (see GameActivity).
      */
     private fun onPlaySteam() {
-        if (FrenchpressInstaller.credFile(this).exists()) {
-            launchGame(LoginMode.Steam)
-        } else {
-            promptSteamLogin()
+        if (!FrenchpressInstaller.credFile(this).exists()) {
+            Toast.makeText(this, R.string.steam_first_launch_hint, Toast.LENGTH_LONG).show()
         }
-    }
-
-    private fun promptSteamLogin() {
-        val pad = (resources.displayMetrics.density * 20).toInt()
-        val userField = EditText(this).apply {
-            hint = getString(R.string.steam_username)
-            inputType = InputType.TYPE_CLASS_TEXT
-        }
-        val passField = EditText(this).apply {
-            hint = getString(R.string.steam_password)
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-        }
-        val layout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(pad, pad / 2, pad, 0)
-            addView(userField)
-            addView(passField)
-        }
-        AlertDialog.Builder(this)
-            .setTitle(R.string.steam_login_title)
-            .setMessage(R.string.steam_login_message)
-            .setView(layout)
-            .setPositiveButton(R.string.steam_login_ok) { _, _ ->
-                val user = userField.text.toString().trim()
-                val pass = passField.text.toString()
-                // Empty username => web account; frenchpress treats it as such.
-                launchGame(LoginMode.Steam, user, pass)
-            }
-            .setNegativeButton(android.R.string.cancel) { _, _ ->
-                setLaunchButtonLoading(false)
-            }
-            .show()
+        launchGame(LoginMode.Steam)
     }
 
     private fun setLaunchButtonLoading(loading: Boolean) {
@@ -613,7 +645,7 @@ class LauncherActivity : AppCompatActivity() {
             val progressDrawable = IndeterminateDrawable.createCircularDrawable(this, spec)
             binding.btnLaunch.icon = progressDrawable
             binding.btnLaunch.iconTint = ColorStateList.valueOf(Color.WHITE)
-            binding.btnLaunch.text = "Launching..."
+            binding.btnLaunch.text = getString(R.string.launching)
             binding.btnLaunch.setTextColor(Color.WHITE)
         } else {
             binding.btnLaunch.icon = androidx.core.content.ContextCompat.getDrawable(this, android.R.drawable.ic_media_play)
@@ -633,14 +665,14 @@ class LauncherActivity : AppCompatActivity() {
         if (granted) resume?.invoke() else showMessage(R.string.servers_title, getString(R.string.servers_local_network_denied))
     }
 
-    private fun launchGame(requested: LoginMode, steamUser: String = "", steamPass: String = "") {
+    private fun launchGame(requested: LoginMode) {
         val chosen = ServerStore.selected(this)
         // Android 17 stops an app that targets it from reaching the local network (a server on a PC
         // at home, the emulator's host) until it is allowed; ask first, then carry on.
         if (chosen != null && Build.VERSION.SDK_INT >= 37 && ServerStore.isLocalNetworkHost(chosen.host) &&
             checkSelfPermission(LOCAL_NETWORK_PERMISSION) != android.content.pm.PackageManager.PERMISSION_GRANTED
         ) {
-            afterLocalNetworkPrompt = { launchGame(requested, steamUser, steamPass) }
+            afterLocalNetworkPrompt = { launchGame(requested) }
             localNetworkPermission.launch(LOCAL_NETWORK_PERMISSION)
             return
         }
@@ -679,7 +711,7 @@ class LauncherActivity : AppCompatActivity() {
                 else if (server != null) ServerStore.credentials(this@LauncherActivity, server.id)
                 else WebAccountStore.load(this@LauncherActivity)
             }
-            startGame(mode, login, ServerConnection.desired(server).getValue("server_host"), steamUser, steamPass)
+            startGame(mode, login, ServerConnection.desired(server).getValue("server_host"))
         }
     }
 
@@ -688,17 +720,15 @@ class LauncherActivity : AppCompatActivity() {
             .setPositiveButton(android.R.string.ok, null).show()
     }
 
-    private fun startGame(mode: LoginMode, login: WebAccountStore.Account?, host: String, steamUser: String, steamPass: String) {
+    private fun startGame(mode: LoginMode, login: WebAccountStore.Account?, host: String) {
+        // A first Steam sign-in shows its QR in portrait, like this screen, before the game goes landscape.
+        val signInFirst = mode == LoginMode.Steam && !FrenchpressInstaller.credFile(this).exists()
         startActivity(
-            Intent(this, GameActivity::class.java).apply {
+            Intent(this, if (signInFirst) GameSignInActivity::class.java else GameActivity::class.java).apply {
                 putExtra(EXTRA_LOGIN_MODE, mode.name)
                 // Passed explicitly: GameActivity runs in :game, and that process can
                 // outlive a launch with a stale SharedPreferences cache of this value.
                 putExtra(EXTRA_MAX_HEAP_MB, RamSettings.get(this@LauncherActivity))
-                if (steamUser.isNotEmpty()) {
-                    putExtra(EXTRA_STEAM_USER, steamUser)
-                    putExtra(EXTRA_STEAM_PASS, steamPass)
-                }
                 if (login != null) {
                     putExtra(EXTRA_WEB_USER, login.username)
                     putExtra(EXTRA_WEB_PASS, login.password)
@@ -928,7 +958,7 @@ class LauncherActivity : AppCompatActivity() {
     }
 
     private fun showUpdateBanner(release: AppUpdater.Release) {
-        binding.updateTitle.text = "Update available — v${release.version}"
+        binding.updateTitle.text = getString(R.string.update_available_title, release.version)
         binding.updateBanner.setOnClickListener { showUpdateDialog(release) }
         binding.updateBanner.visibility = View.VISIBLE
         binding.updateBanner.alpha = 0f
@@ -942,23 +972,23 @@ class LauncherActivity : AppCompatActivity() {
 
     private fun showUpdateDialog(release: AppUpdater.Release) {
         val builder = AlertDialog.Builder(this)
-            .setTitle("Update to v${release.version}?")
-            .setNegativeButton("Skip this version") { _, _ ->
+            .setTitle(getString(R.string.update_title, release.version))
+            .setNegativeButton(R.string.update_skip) { _, _ ->
                 AppUpdater.skipVersion(this, release.version)
                 binding.updateBanner.visibility = View.GONE
             }
-            .setNeutralButton("Release notes") { _, _ -> openUrl(release.htmlUrl) }
+            .setNeutralButton(R.string.update_release_notes) { _, _ -> openUrl(release.htmlUrl) }
         if (release.apkUrl != null) {
-            builder.setMessage("Download and install the new version?")
-                .setPositiveButton("Install") { _, _ -> installUpdate(release) }
+            builder.setMessage(R.string.update_message)
+                .setPositiveButton(R.string.update_install) { _, _ -> installUpdate(release) }
         } else {
-            builder.setMessage("This release has no APK attached — open it on GitHub instead.")
+            builder.setMessage(R.string.update_no_apk)
         }
         builder.show()
     }
 
     private fun installUpdate(release: AppUpdater.Release) {
-        val progress = showProgressDialog(R.string.update_downloading, "Starting download…")
+        val progress = showProgressDialog(R.string.update_downloading, getString(R.string.progress_starting_download))
         // The receiver has to outlive this call: PackageInstaller.commit() broadcasts
         // asynchronously, so STATUS_PENDING_USER_ACTION -- the intent that actually opens
         // the system installer -- arrives well after downloadAndInstall() returns. It is
@@ -1054,7 +1084,7 @@ class LauncherActivity : AppCompatActivity() {
     }
 
     private fun downloadMods() {
-        val progressInfo = showProgressDialog(R.string.mod_sync_title, "Starting download…")
+        val progressInfo = showProgressDialog(R.string.mod_sync_title, getString(R.string.progress_starting_download))
 
         lifecycleScope.launch {
             try {
@@ -1071,8 +1101,8 @@ class LauncherActivity : AppCompatActivity() {
                 val offline = CrashReporting.isConnectionProblem(e)
                 if (!offline) CrashReporting.report("mods_download_failed", e.toString())
                 AlertDialog.Builder(this@LauncherActivity)
-                    .setTitle("Download Failed")
-                    .setMessage(if (offline) getString(R.string.mods_download_offline) else e.message ?: "Unknown error")
+                    .setTitle(R.string.download_failed)
+                    .setMessage(if (offline) getString(R.string.mods_download_offline) else e.message ?: getString(R.string.unknown_error))
                     .setPositiveButton(android.R.string.ok, null)
                     .show()
             }
@@ -1088,7 +1118,7 @@ class LauncherActivity : AppCompatActivity() {
 
     private fun applyMods() {
         if (refuseWhileGameRuns()) return
-        val progressInfo = showProgressDialog(R.string.mod_apply_title, "Starting apply…")
+        val progressInfo = showProgressDialog(R.string.mod_apply_title, getString(R.string.progress_starting_apply))
 
         lifecycleScope.launch {
             try {
@@ -1112,8 +1142,8 @@ class LauncherActivity : AppCompatActivity() {
                 progressInfo.dialog.dismissSafely()
                 if (e !is UserActionException) CrashReporting.report("mods_apply_failed", e.toString())
                 AlertDialog.Builder(this@LauncherActivity)
-                    .setTitle("Apply Failed")
-                    .setMessage(e.message ?: "Unknown error")
+                    .setTitle(R.string.apply_failed)
+                    .setMessage(e.message ?: getString(R.string.unknown_error))
                     .setPositiveButton(android.R.string.ok, null)
                     .show()
             }
@@ -1122,7 +1152,7 @@ class LauncherActivity : AppCompatActivity() {
 
     private fun removeMods() {
         if (refuseWhileGameRuns()) return
-        val progressInfo = showProgressDialog(R.string.mod_remove_title, "Starting remove…")
+        val progressInfo = showProgressDialog(R.string.mod_remove_title, getString(R.string.progress_starting_remove))
 
         lifecycleScope.launch {
             try {
@@ -1138,8 +1168,8 @@ class LauncherActivity : AppCompatActivity() {
                 progressInfo.dialog.dismissSafely()
                 if (e !is UserActionException) CrashReporting.report("mods_remove_failed", e.toString())
                 AlertDialog.Builder(this@LauncherActivity)
-                    .setTitle("Remove Failed")
-                    .setMessage(e.message ?: "Unknown error")
+                    .setTitle(R.string.remove_failed)
+                    .setMessage(e.message ?: getString(R.string.unknown_error))
                     .setPositiveButton(android.R.string.ok, null)
                     .show()
             }
@@ -1154,6 +1184,7 @@ class LauncherActivity : AppCompatActivity() {
         @Volatile private var installingRuntime = false
 
         private const val DONATE_URL = "https://buymeacoffee.com/sirdankk"
+        private const val CREDIT_URL = "https://dankware.alwaysdata.net/"
         private const val NEWS_FADE_MS = 180L
         // KnightLauncher's CustomColors.WARNING, with dark text as on its badge.
         private const val NEWS_ENDING_SOON_COLOR = 0xFFFBC65B.toInt()
@@ -1166,8 +1197,6 @@ class LauncherActivity : AppCompatActivity() {
         private const val APPID_PREVIEW = 99920
 
         const val EXTRA_MAX_HEAP_MB = "com.skarm.launcher.MAX_HEAP_MB"
-        const val EXTRA_STEAM_USER = "com.skarm.launcher.STEAM_USER"
-        const val EXTRA_STEAM_PASS = "com.skarm.launcher.STEAM_PASS"
         const val EXTRA_WEB_USER = "com.skarm.launcher.WEB_USER"
         const val EXTRA_WEB_PASS = "com.skarm.launcher.WEB_PASS"
         const val EXTRA_LOGIN_HOST = "com.skarm.launcher.LOGIN_HOST"

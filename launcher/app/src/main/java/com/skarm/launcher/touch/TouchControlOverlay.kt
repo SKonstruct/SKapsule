@@ -14,6 +14,7 @@ import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.Switch
 import android.widget.TextView
+import com.skarm.launcher.GfxSettings
 import com.skarm.launcher.NativeBridge
 import com.skarm.launcher.R
 
@@ -57,6 +58,9 @@ class TouchControlOverlay @JvmOverloads constructor(
     // Editor UI Panel
     private val editorPanel: LinearLayout
 
+    // The panel scrolls: the graphics rows make it taller than a landscape phone screen.
+    private val editorScroll: android.widget.ScrollView
+
     // Cached node settings views for fast updates
     private var cachedNodeTitle: TextView? = null
     private var cachedVisibleSwitch: Switch? = null
@@ -76,12 +80,13 @@ class TouchControlOverlay @JvmOverloads constructor(
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(HudPalette.SURFACE)
             setPadding(32, 32, 32, 32)
-            visibility = View.GONE
             // Bound the panel width so it doesn't stretch across the whole
             // screen (a MATCH_PARENT separator otherwise forces a WRAP_CONTENT
             // vertical LinearLayout to fill the full width).
             val panelWidth = (320 * resources.displayMetrics.density).toInt()
             layoutParams = LayoutParams(panelWidth, LayoutParams.WRAP_CONTENT, Gravity.CENTER)
+
+            val panel = this
 
             // Global Settings
             val globalTitle = TextView(context).apply {
@@ -152,6 +157,7 @@ class TouchControlOverlay @JvmOverloads constructor(
                         // Track the value live, but defer the (surface-rebuilding)
                         // apply to release so a drag doesn't thrash the EGL surface.
                         layoutData.renderScale = progressToRenderScale(progress)
+                        updateGfxEnabled(panel)
                     }
                     override fun onStartTrackingTouch(seekBar: SeekBar?) {}
                     override fun onStopTrackingTouch(seekBar: SeekBar?) {
@@ -160,6 +166,89 @@ class TouchControlOverlay @JvmOverloads constructor(
                 })
             }
             addView(resolutionSlider)
+
+            // Graphics (cpp/skgfx.c). Stored apart from the touch layout, so Reset Layout leaves them alone.
+            val fpsSwitch = Switch(context).apply {
+                text = context.getString(R.string.gfx_show_fps)
+                setTextColor(Color.WHITE)
+                tag = "fpsSwitch"
+                isChecked = GfxSettings.showFps(context)
+                setOnCheckedChangeListener { _, isChecked ->
+                    GfxSettings.setShowFps(context, isChecked)
+                    fpsChangeListener?.invoke(isChecked)
+                }
+            }
+            addView(fpsSwitch)
+
+            val sharpenLabel = TextView(context).apply {
+                setTextColor(Color.WHITE)
+                tag = "sharpenLabel"
+                text = sharpenText(GfxSettings.sharpenPercent(context))
+            }
+            addView(sharpenLabel)
+            val sharpenRow = LinearLayout(context).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            val sharpenSlider = SeekBar(context).apply {
+                max = GfxSettings.MAX_SHARPEN
+                tag = "sharpenSlider"
+                progress = GfxSettings.sharpenPercent(context)
+                layoutParams = LinearLayout.LayoutParams(0, android.view.ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
+                setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                        sharpenLabel.text = sharpenText(progress)
+                    }
+                    override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+                    override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                        // Applied on release, like the resolution: the surface may be rebuilt.
+                        GfxSettings.setSharpenPercent(context, progress)
+                        gfxChangeListener?.invoke()
+                    }
+                })
+            }
+            sharpenRow.addView(sharpenSlider)
+            sharpenRow.addView(
+                Button(context).apply {
+                    text = context.getString(R.string.gfx_sharpen_reset)
+                    setOnClickListener {
+                        sharpenSlider.progress = 0
+                        GfxSettings.setSharpenPercent(context, 0)
+                        gfxChangeListener?.invoke()
+                    }
+                },
+            )
+            addView(sharpenRow)
+
+            val sharpHudSwitch = Switch(context).apply {
+                text = context.getString(R.string.gfx_sharp_hud)
+                setTextColor(Color.WHITE)
+                tag = "sharpHudSwitch"
+                isChecked = GfxSettings.sharpHud(context)
+                setOnCheckedChangeListener { _, isChecked ->
+                    GfxSettings.setSharpHud(context, isChecked)
+                    gfxChangeListener?.invoke()
+                }
+            }
+            addView(sharpHudSwitch)
+            addView(
+                TextView(context).apply {
+                    setTextColor(0xFFB0B0B0.toInt())
+                    textSize = 12f
+                    tag = "gfxHint"
+                },
+            )
+            updateGfxEnabled(panel)
+
+            // Layout library: presets, export, import. The host Activity provides it (it needs
+            // the file pickers of an Activity), so the button stays hidden until a host sets one.
+            val layoutsButton = Button(context).apply {
+                text = context.getString(R.string.layouts_button)
+                tag = "layoutsButton"
+                visibility = View.GONE
+                setOnClickListener { layoutLibraryRequestListener?.invoke() }
+            }
+            addView(layoutsButton)
 
             // Reset Layout (double-tap gated so a stray tap doesn't wipe work)
             val resetButton = Button(context).apply {
@@ -233,8 +322,32 @@ class TouchControlOverlay @JvmOverloads constructor(
             cachedScaleSlider = scaleSlider
         }
 
+        editorScroll = android.widget.ScrollView(context).apply {
+            visibility = View.GONE
+            layoutParams = LayoutParams(
+                (320 * resources.displayMetrics.density).toInt(), LayoutParams.WRAP_CONTENT, Gravity.CENTER,
+            )
+            addView(editorPanel)
+        }
         buildControls()
-        addView(editorPanel)
+        addView(editorScroll)
+    }
+
+    private fun sharpenText(percent: Int): String =
+        if (percent <= 0) context.getString(R.string.gfx_sharpen_off) else context.getString(R.string.gfx_sharpen_value, percent)
+
+    /**
+     * Sharp HUD needs a scene smaller than the window, so it is greyed out at 100% resolution, with
+     * the hint saying what to change. The hint also says what the offscreen features have in common.
+     */
+    private fun updateGfxEnabled(panel: LinearLayout) {
+        val applies = GfxSettings.sharpHudApplies(layoutData.renderScale)
+        panel.findViewWithTag<Switch>("sharpHudSwitch")?.apply {
+            isEnabled = applies
+            alpha = if (applies) 1f else 0.4f
+        }
+        panel.findViewWithTag<TextView>("gfxHint")?.text = context.getString(R.string.gfx_hint_offscreen) + "\n" +
+            context.getString(if (applies) R.string.gfx_hint_sharp_hud else R.string.gfx_hint_sharp_hud_needs_scale)
     }
 
     private fun buildControls() {
@@ -344,6 +457,22 @@ class TouchControlOverlay @JvmOverloads constructor(
     // moves; the host Activity applies it to the game surface.
     var renderScaleChangeListener: ((Float) -> Unit)? = null
 
+    /**
+     * Set by the host Activity (the launcher's editor and the game) to open the layout library
+     * (presets, export, import). Setting it is what reveals the panel's "Layouts" button.
+     */
+    var layoutLibraryRequestListener: (() -> Unit)? = null
+        set(value) {
+            field = value
+            editorPanel.findViewWithTag<Button>("layoutsButton")?.visibility =
+                if (value != null) View.VISIBLE else View.GONE
+        }
+
+    // Notified when sharpening or Sharp HUD changes (read back from GfxSettings), and with the FPS
+    // counter's new state.
+    var gfxChangeListener: (() -> Unit)? = null
+    var fpsChangeListener: ((Boolean) -> Unit)? = null
+
     // Notified whenever edit mode is entered/exited so the host can toggle
     // drag-to-reposition on the static chrome buttons (gear/keyboard).
     var editModeChangeListener: ((Boolean) -> Unit)? = null
@@ -380,7 +509,7 @@ class TouchControlOverlay @JvmOverloads constructor(
         }
 
         // Ensure editor panel is brought to front and centered
-        editorPanel.bringToFront()
+        editorScroll.bringToFront()
     }
 
     fun toggleEditMode() {
@@ -388,7 +517,7 @@ class TouchControlOverlay @JvmOverloads constructor(
         // of this switch, so release it first.
         cancelActivePointers()
         inEditMode = !inEditMode
-        editorPanel.visibility = if (inEditMode) View.VISIBLE else View.GONE
+        editorScroll.visibility = if (inEditMode) View.VISIBLE else View.GONE
 
         if (!inEditMode) {
             // Save layout when exiting edit mode
@@ -422,8 +551,16 @@ class TouchControlOverlay @JvmOverloads constructor(
         }
     }
 
-    private fun resetLayout() {
-        layoutData = TouchControlManager.createDefaultLayout()
+    private fun resetLayout() = applyLayout(TouchControlManager.createDefaultLayout())
+
+    /** A copy of the live layout, safe to keep or edit without touching the controls on screen. */
+    fun currentLayoutSnapshot(): TouchLayoutData =
+        layoutData.copy(nodes = layoutData.nodes.map { it.copy() }.toMutableList())
+
+    /** Replaces the layout wholesale (Reset, or a preset/import from the layout library). */
+    fun applyLayout(data: TouchLayoutData) {
+        val previousRenderScale = layoutData.renderScale
+        layoutData = data
         selectView(null)
         buildControls()
         TouchControlManager.saveLayout(context, layoutData)
@@ -431,13 +568,21 @@ class TouchControlOverlay @JvmOverloads constructor(
         // Refresh the global controls to reflect the restored defaults.
         editorPanel.findViewWithTag<Switch>("enableSwitch")?.isChecked = layoutData.controlsEnabled
         editorPanel.findViewWithTag<Switch>("actionBarSwitch")?.isChecked = layoutData.actionBarVisible
-        editorPanel.findViewWithTag<SeekBar>("opacitySlider")?.progress =
-            (layoutData.globalOpacity * 100).toInt()
+        // Moving the slider fires its listener, which rounds the opacity to a whole slider step;
+        // put the exact value back so a preset or import keeps what it said.
+        val exactOpacity = layoutData.globalOpacity
+        editorPanel.findViewWithTag<SeekBar>("opacitySlider")?.progress = opacityToProgress(exactOpacity)
+        layoutData.globalOpacity = exactOpacity
         editorPanel.findViewWithTag<SeekBar>("resolutionSlider")?.progress =
             renderScaleToProgress(layoutData.renderScale)
-        renderScaleChangeListener?.invoke(layoutData.renderScale)
+        updateGfxEnabled(editorPanel)
+        // In game this resizes the surface, so only when the scale actually changed: a preset
+        // keeps the current one, Reset may not.
+        if (layoutData.renderScale != previousRenderScale) {
+            renderScaleChangeListener?.invoke(layoutData.renderScale)
+        }
 
-        editorPanel.bringToFront()
+        editorScroll.bringToFront()
     }
 
     /**

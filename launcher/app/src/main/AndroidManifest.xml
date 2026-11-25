@@ -30,6 +30,7 @@
         android:theme="@style/Theme.SKLauncher"
         android:allowBackup="false"
         android:supportsRtl="false"
+        android:localeConfig="@xml/locales_config"
         android:hardwareAccelerated="true"
         android:networkSecurityConfig="@xml/network_security_config"
         android:appCategory="game"
@@ -72,6 +73,19 @@
             android:resizeableActivity="false"
             android:hardwareAccelerated="true" />
 
+        <!-- GameActivity for a first Steam sign-in: starts portrait so the QR is shown in the
+             launcher's orientation, then GameActivity turns it landscape. Same process and
+             attributes otherwise. -->
+        <activity
+            android:name=".GameSignInActivity"
+            android:exported="false"
+            android:process=":game"
+            android:configChanges="orientation|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation|screenLayout|density|uiMode|fontScale|layoutDirection|locale"
+            android:screenOrientation="portrait"
+            android:launchMode="singleTask"
+            android:resizeableActivity="false"
+            android:hardwareAccelerated="true" />
+
         <!-- Holds the :game process at foreground priority during Steam sign-in
              so the auth poll survives the user tabbing out to approve. Same
              process as the JVM it protects; started/stopped only around the
@@ -110,6 +124,17 @@
             </intent-filter>
         </provider>
 
+    
+        <!-- Keeps the language chosen in the app (AppCompat) across restarts on Android 12 and older; Android 13+
+             stores it itself (and lists it in the system's per-app language setting, see locales_config). -->
+        <service
+            android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
+            android:enabled="false"
+            android:exported="false">
+            <meta-data
+                android:name="autoStoreLocales"
+                android:value="true" />
+        </service>
     </application>
 
 </manifest>

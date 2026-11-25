@@ -61,6 +61,25 @@
         android:focusable="false"
         android:contentDescription="@string/chrome_toggle_buttons" />
 
+    <!-- FPS counter: a native view above the game, so the game's own screenshots never contain it.
+         Positioned by GameActivity.positionFpsCounter; fed from the swap hook's frame count. -->
+    <TextView
+        android:id="@+id/fps_counter"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top|start"
+        android:background="@drawable/bg_fps_counter"
+        android:fontFamily="monospace"
+        android:paddingHorizontal="6dp"
+        android:paddingVertical="1dp"
+        android:text="@string/gfx_fps_idle"
+        android:textColor="@android:color/white"
+        android:textSize="11sp"
+        android:visibility="gone"
+        android:clickable="false"
+        android:focusable="false"
+        android:importantForAccessibility="no" />
+
     <!-- Invisible focusable view that hosts the soft-keyboard InputConnection and
          forwards typed input to SK (the SurfaceView can't host an IME). -->
     <com.skarm.launcher.ImeBridgeView

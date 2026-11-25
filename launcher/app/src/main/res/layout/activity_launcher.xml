@@ -21,7 +21,7 @@
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Options"
+            android:contentDescription="@string/cd_options"
             android:src="@drawable/ic_settings"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
@@ -42,6 +42,20 @@
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintEnd_toStartOf="@id/btn_options" />
 
+        <!-- Credit: quiet, top-start, level with the gear. "SirDank" is a link (LauncherActivity.setupCredit). -->
+        <TextView
+            android:id="@+id/credit"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:gravity="center_vertical"
+            android:text="@string/credit_built_with"
+            android:textColor="#808080"
+            android:textSize="12sp"
+            app:layout_constraintTop_toTopOf="@id/btn_options"
+            app:layout_constraintBottom_toBottomOf="@id/btn_options"
+            app:layout_constraintStart_toStartOf="parent" />
+
         <!-- Update notification banner -->
         <LinearLayout
             android:id="@+id/update_banner"
@@ -55,7 +69,7 @@
             android:visibility="gone"
             android:clickable="true"
             android:focusable="true"
-            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/credit"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toStartOf="@id/btn_donate">
 
@@ -85,7 +99,7 @@
                     android:id="@+id/update_subtitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Tap to view release"
+                    android:text="@string/news_tap_release"
                     android:textColor="#A6A6A6"
                     android:textSize="12sp" />
             </LinearLayout>
@@ -108,7 +122,7 @@
                 android:id="@+id/title"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="SKapsule"
+                android:text="@string/app_name"
                 android:textColor="#FFFFFF"
                 android:textSize="32sp"
                 android:textStyle="bold" />
@@ -395,7 +409,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Settings"
+                android:text="@string/sidebar_settings_title"
                 android:textColor="#FFFFFF"
                 android:textSize="20sp"
                 android:textStyle="bold"
@@ -541,6 +555,20 @@
                 app:iconSize="20dp"
                 app:iconPadding="12dp" />
 
+            <!-- Language Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/sidebar_btn_language"
+                style="@style/Widget.Material3.Button.TextButton.Icon"
+                android:layout_width="match_parent"
+                android:layout_height="50dp"
+                android:gravity="start|center_vertical"
+                android:text="@string/sidebar_language"
+                android:textColor="#FFFFFF"
+                app:icon="@drawable/ic_language"
+                app:iconTint="#FFFFFF"
+                app:iconSize="20dp"
+                app:iconPadding="12dp" />
+
             <View
                 android:id="@+id/sidebar_divider_logout"
                 android:layout_width="match_parent"
@@ -610,7 +638,7 @@
                     android:gravity="center"
                     android:textColor="#FFFFFF"
                     android:textSize="14sp"
-                    tools:text="768 MB" />
+                    tools:text="1024 MB" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_ram_plus"

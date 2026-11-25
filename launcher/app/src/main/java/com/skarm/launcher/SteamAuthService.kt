@@ -13,13 +13,13 @@ import android.os.IBinder
  * Short-lived foreground service that keeps the :game process alive while
  * frenchpress is mid Steam login.
  *
- * Steam Mobile App approval — and reading a Steam Guard code from an
- * authenticator — forces the user to tab away to another app. Without an
- * elevated process priority Android reaps the backgrounded JVM, the auth poll
- * (JavaSteam's pollingWaitForResult) dies with it, and the user lands back at
- * the menu; because the refresh token is only persisted after a *successful*
- * logon, the next launch re-runs the whole 2FA dance — which is exactly the
- * "why does it ask every time" the field report describes.
+ * Approving the QR sign-in in the Steam Mobile App forces the user to tab
+ * away to another app. Without an elevated process priority Android reaps the
+ * backgrounded JVM, the auth poll (JavaSteam's pollingWaitForResult) dies with
+ * it, and the user lands back at the menu; because the refresh token is only
+ * persisted after a *successful* logon, the next launch asks for the QR code
+ * again — which is exactly the "why does it ask every time" the field report
+ * describes.
  *
  * A foreground service is the lever that raises oom_adj enough to survive the
  * tab-out. It runs in :game (same process as the JVM it protects) and is

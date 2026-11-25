@@ -8,13 +8,14 @@ import android.content.Context
  *
  * SK's live set peaks around 300MB, so the JVM's own ergonomics (a fraction of total
  * device RAM) commit far more than it ever needs. KnightLauncher ships a fixed 512M for
- * this game; the default here leaves headroom above that without inflating the footprint.
+ * this game; the default here is 1024M, headroom above that. Only the cap: the heap starts
+ * at 128M and grows as the game needs it, so the footprint is not inflated.
  */
 object RamSettings {
     const val KEY = "max_ram_mb"
     const val MIN_MB = 512
     const val STEP_MB = 128
-    const val DEFAULT_MB = 768
+    const val DEFAULT_MB = 1024
 
     /** Upper bound: half of physical RAM, so the heap can't crowd out the JIT mapping,
      *  textures and the rest of the process into an OOM kill. */

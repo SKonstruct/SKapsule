@@ -6,25 +6,29 @@
     <string name="exit_confirm_yes">Exit</string>
     <string name="exit_confirm_no">Keep playing</string>
     <string name="setup_starting">Preparing runtime…</string>
-    <string name="steam_login_title">Steam Login</string>
-    <string name="steam_login_message">Sign in with your Steam account. Approve the sign-in from the Steam Mobile App if prompted. Leave blank to use a web account instead.</string>
-    <string name="steam_username">Steam username</string>
-    <string name="steam_password">Steam password</string>
-    <string name="steam_login_ok">Sign in</string>
+    <string name="steam_first_launch_hint">Steam sign-in: a QR code appears once the game starts. Approve it in the Steam app.</string>
     <string name="boot_starting">Starting Java runtime…</string>
     <string name="boot_failed_title">Couldn\'t start the game</string>
+    <string name="gfx_fps">FPS %1$d</string>
+    <string name="gfx_fps_idle">FPS --</string>
+    <string name="gfx_show_fps">Show FPS counter</string>
+    <string name="gfx_sharpen_off">Sharpening: off</string>
+    <string name="gfx_sharpen_value">Sharpening: %1$d%%</string>
+    <string name="gfx_sharpen_reset">Reset</string>
+    <string name="gfx_sharp_hud">Sharp HUD (experimental)</string>
+    <string name="gfx_hint_offscreen">Sharpening and Sharp HUD draw the game off-screen first.</string>
+    <string name="gfx_hint_sharp_hud">Sharp HUD draws the HUD at full resolution, so it gets smaller: raise the game\'s UI scale to compensate.</string>
+    <string name="gfx_hint_sharp_hud_needs_scale">Sharp HUD needs Resolution below 100%.</string>
     <string name="game_stopped_title">The game stopped</string>
     <string name="game_stopped_message">It hit an error and can\'t continue. Share the log so it can be fixed, then exit and start it again.</string>
     <string name="boot_keep_waiting">Keep waiting</string>
     <string name="boot_timeout">The game has shown no progress for three minutes. It may just be slow; otherwise share the log so it can be diagnosed.</string>
     <string name="boot_error_files">The game\'s files are damaged. Go back to the launcher to repair them, and share the log if it happens again.</string>
     <string name="boot_error_stage">The game\'s startup files could not be written. Check that the device has free storage.</string>
-    <string name="steam_guard_title">Steam Guard</string>
-    <string name="steam_guard_hint">Code</string>
-    <string name="steam_guard_device_message">Enter the Steam Guard code from your authenticator app.</string>
-    <string name="steam_guard_device_retry">That code was incorrect. Enter the current Steam Guard code from your authenticator app.</string>
-    <string name="steam_guard_email_message">Enter the Steam Guard code sent to %1$s.</string>
-    <string name="steam_guard_email_retry">That code was incorrect. Enter the new Steam Guard code sent to %1$s.</string>
+    <string name="steam_signin_title">Sign in to Steam</string>
+    <string name="steam_signin_message">Scan this code with the Steam app on your phone, or tap Open Steam app if Steam is installed on this device. Approve the sign-in there.</string>
+    <string name="steam_signin_open_app">Open Steam app</string>
+    <string name="steam_signin_no_app">Nothing on this device can open the Steam sign-in link.</string>
     <string name="url_confirm">Tap again to open %1$s</string>
     <string name="share_logs">Share logs</string>
     <string name="share_logs_chooser">Share diagnostic log</string>
@@ -40,6 +44,47 @@
     <string name="sidebar_share_logs">Share Logs</string>
     <string name="sidebar_open_folder">Open Folder</string>
     <string name="sidebar_github">GitHub</string>
+    <string name="sidebar_settings_title">Settings</string>
+    <string name="runtime_reinstall_hint">Reinstall SKapsule to repair it.</string>
+    <string name="launching">Launching...</string>
+    <string name="progress_starting_download">Starting download…</string>
+    <string name="progress_starting_apply">Starting apply…</string>
+    <string name="progress_starting_remove">Starting remove…</string>
+    <string name="runtime_setup_failed">Runtime setup failed: %1$s%2$s</string>
+    <string name="update_available_title">Update available — v%1$s</string>
+    <string name="sidebar_language">Language</string>
+    <!-- Each language is named in itself; these are not translated. -->
+    <string name="language_name_en" translatable="false">English</string>
+    <string name="language_name_ar" translatable="false">العربية</string>
+    <string name="language_name_de" translatable="false">Deutsch</string>
+    <string name="language_name_es" translatable="false">Español</string>
+    <string name="language_name_et" translatable="false">Eesti</string>
+    <string name="language_name_fr" translatable="false">Français</string>
+    <string name="language_name_it" translatable="false">Italiano</string>
+    <string name="language_name_ja" translatable="false">日本語</string>
+    <string name="language_name_pl" translatable="false">Polski</string>
+    <string name="language_name_pt_br" translatable="false">Português (Brasil)</string>
+    <string name="language_name_ru" translatable="false">Русский</string>
+    <string name="language_name_zh_cn" translatable="false">简体中文</string>
+    <string name="language_name_zh_tw" translatable="false">繁體中文</string>
+    <string name="language_follow_system">Follow the system</string>
+    <string name="cd_options">Options</string>
+    <string name="news_tap_release">Tap to view release</string>
+    <string name="toast_folder_failed">Could not open folder</string>
+    <string name="toast_no_browser">No browser found to open link</string>
+    <string name="toast_logged_out">Logged out successfully</string>
+    <string name="update_title">Update to v%1$s?</string>
+    <string name="update_skip">Skip this version</string>
+    <string name="update_release_notes">Release notes</string>
+    <string name="update_message">Download and install the new version?</string>
+    <string name="update_install">Install</string>
+    <string name="update_no_apk">This release has no APK attached — open it on GitHub instead.</string>
+    <string name="download_failed">Download Failed</string>
+    <string name="apply_failed">Apply Failed</string>
+    <string name="remove_failed">Remove Failed</string>
+    <string name="unknown_error">Unknown error</string>
+    <!-- The credit on the main screen: the heart is coloured and "SirDank" opens the author's site (see setupCredit). -->
+    <string name="credit_built_with">Built with \u2665\uFE0E by SirDank</string>
     <string name="sidebar_check_updates">Check for Updates</string>
     <string name="mods_game_running">Close the game first: mods change files it has open.</string>
     <string name="update_download_failed">Couldn\'t download the update. Check your connection and try again.</string>
@@ -128,4 +173,31 @@
     <string name="mod_completed">Operation completed successfully.</string>
     <string name="mod_removed">Mods removed successfully!\nUnpacked %1$d resources.</string>
     <string name="update_downloading">Updating SKapsule</string>
+    <string name="layouts_button">Layouts…</string>
+    <string name="layouts_title">Layouts</string>
+    <string name="layouts_default_row">Default (built-in)</string>
+    <string name="layouts_save_current">＋ Save current layout as preset…</string>
+    <string name="layouts_export">Export current layout to file…</string>
+    <string name="layouts_import">Import layout from file…</string>
+    <string name="layouts_apply_title">Apply \"%1$s\"?</string>
+    <string name="layouts_apply_message">This replaces your current arrangement. Save it as a preset first to keep it.</string>
+    <string name="layouts_apply">Apply</string>
+    <string name="layouts_delete">Delete</string>
+    <string name="layouts_applied">Applied \"%1$s\"</string>
+    <string name="layouts_delete_title">Delete \"%1$s\"?</string>
+    <string name="layouts_delete_message">The preset is removed. The layout on screen is not changed.</string>
+    <string name="layouts_deleted">Deleted \"%1$s\"</string>
+    <string name="layouts_save_title">Save current layout</string>
+    <string name="layouts_name_hint">Preset name</string>
+    <string name="layouts_save">Save</string>
+    <string name="layouts_full">Preset list is full (%1$d). Delete one first.</string>
+    <string name="layouts_saved">Saved as \"%1$s\"</string>
+    <string name="layouts_exported">Layout exported</string>
+    <string name="layouts_write_failed">Could not write the file</string>
+    <string name="layouts_err_newer">That layout was made by a newer version of SKapsule.</string>
+    <string name="layouts_err_large">That file is too large to be a layout.</string>
+    <string name="layouts_err_invalid">That file isn\'t a valid SKapsule controls layout.</string>
+    <string name="layouts_read_failed">Could not read the file</string>
+    <string name="layouts_imported_as">Imported as \"%1$s\".</string>
+    <string name="layouts_default_name">My layout</string>
 </resources>

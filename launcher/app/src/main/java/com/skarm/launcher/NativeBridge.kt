@@ -17,6 +17,12 @@ object NativeBridge {
 
     external fun onSurfaceCreated(surface: Surface)
     external fun onSurfaceChanged(width: Int, height: Int)
+
+    /** The graphics pass (cpp/skgfx.c): offscreen on/off, scene scale, sharpening 0..1, Sharp HUD, native window size. */
+    external fun setGfxConfig(enabled: Boolean, scale: Float, sharpen: Float, hud: Boolean, nativeWidth: Int, nativeHeight: Int)
+
+    /** Frames the game has presented so far, for the FPS counter. */
+    external fun frameCount(): Long
     external fun onSurfaceDestroyed()
 
     /**
@@ -25,8 +31,6 @@ object NativeBridge {
      * @param frenchpressJar path to frenchpress.jar; prepended to SK's classpath (Steam-login
      *   shim). Empty to disable.
      * @param credFile path to frenchpress's Steam refresh-token store (FRENCHPRESS_CRED_FILE).
-     * @param steamUser,steamPass Steam credentials for a first login (env vars). Empty = web
-     *   login (frenchpress treats an empty username as a web account).
      * @param binDir directory prepended to the JVM's PATH; holds the xdg-open shim symlink so
      *   SK's Runtime.exec("xdg-open <url>") resolves to it. Empty to leave PATH untouched.
      */
@@ -50,8 +54,6 @@ object NativeBridge {
         cacioDir: String,
         frenchpressJar: String,
         credFile: String,
-        steamUser: String,
-        steamPass: String,
         binDir: String,
         screenWidth: Int,
         screenHeight: Int,
@@ -163,70 +165,62 @@ object NativeBridge {
         }
     }
 
-    // --- JVM/native -> Android Steam Guard (2FA) prompt ------------------------
-    // Unlike the boot-overlay callbacks above (fire-and-forget), these are a
-    // BLOCKING request/response: frenchpress's login thread (a HotSpot thread
-    // attached to ART) calls promptForDeviceCode/promptForEmailCode and parks
-    // until the user submits a code, which is handed back across `codeExchange`.
-    //
-    // JavaSteam only ever reaches these when no Steam-Mobile-App push approval
-    // is available, so a code is mandatory and blocking here is correct — push
-    // accounts log in silently and never trigger a prompt. See the 120s login
-    // timeout in SteamSession.attempt() as the ultimate backstop.
+    // --- JVM/native -> Android Steam sign-in (QR) -------------------------------
+    // frenchpress's login thread (a HotSpot thread attached to ART) shows the Steam challenge
+    // through showSignIn, again whenever Steam rotates it, and polls signInCancelled until the
+    // user approves in the Steam app, cancels, or it times out. None of it blocks.
 
-    /** Implemented by GameActivity to surface the Steam Guard dialog on the UI thread. */
-    interface CredentialListener {
-        /** Ask for a Steam Guard authenticator (TOTP) code. */
-        fun onPromptDeviceCode(prevWrong: Boolean)
+    /** Implemented by GameActivity to surface the sign-in dialog on the UI thread. */
+    interface SignInListener {
+        /** Show the QR for [url] (rows of '1'/'0' in [modules]); update in place if already showing. */
+        fun onShowSignIn(url: String, modules: String)
 
-        /** Ask for a Steam Guard email code sent to [email]. */
-        fun onPromptEmailCode(email: String, prevWrong: Boolean)
+        fun onHideSignIn()
     }
+
+    private val signInLock = Any()
+    private var signInListener: SignInListener? = null
+    private var activeSignIn: Pair<String, String>? = null
 
     @Volatile
-    private var credentialListener: CredentialListener? = null
+    private var cancelRequested = false
 
-    fun setCredentialListener(listener: CredentialListener?) {
-        credentialListener = listener
+    /** A sign-in already showing is replayed to a newly attached listener (activity recreated). */
+    fun setSignInListener(listener: SignInListener?) {
+        val replay = synchronized(signInLock) {
+            signInListener = listener
+            activeSignIn
+        }
+        if (listener != null && replay != null) listener.onShowSignIn(replay.first, replay.second)
     }
 
-    // Single-slot rendezvous between the blocked login thread (taker) and the UI
-    // thread (offerer). SynchronousQueue means a late submission with no waiter
-    // simply no-ops rather than leaking a stale code into the next prompt.
-    private val codeExchange = java.util.concurrent.SynchronousQueue<String>()
-
-    /**
-     * Native (login thread) -> request a device code and BLOCK until the user
-     * submits one. Returns the code, or "" if no UI is registered (login then
-     * fails fast rather than hanging) or the wait is interrupted.
-     */
+    /** Native (login thread) -> show or refresh the sign-in QR. */
     @JvmStatic
-    fun promptForDeviceCode(prevWrong: Boolean): String {
-        val listener = credentialListener ?: return ""
-        listener.onPromptDeviceCode(prevWrong)
-        return awaitCode()
+    fun showSignIn(url: String, modules: String) {
+        val listener = synchronized(signInLock) {
+            if (activeSignIn == null) cancelRequested = false
+            activeSignIn = url to modules
+            signInListener
+        }
+        listener?.onShowSignIn(url, modules)
     }
 
-    /** Native (login thread) -> request an email code and BLOCK. See {@link #promptForDeviceCode}. */
+    /** Native (login thread) -> the sign-in ended (approved, cancelled, timed out or failed). */
     @JvmStatic
-    fun promptForEmailCode(email: String, prevWrong: Boolean): String {
-        val listener = credentialListener ?: return ""
-        listener.onPromptEmailCode(email, prevWrong)
-        return awaitCode()
+    fun hideSignIn() {
+        val listener = synchronized(signInLock) {
+            activeSignIn = null
+            signInListener
+        }
+        listener?.onHideSignIn()
     }
 
-    private fun awaitCode(): String = try {
-        codeExchange.take()
-    } catch (ie: InterruptedException) {
-        Thread.currentThread().interrupt()
-        ""
-    }
+    /** Native (login thread) -> has the user pressed Cancel? */
+    @JvmStatic
+    fun signInCancelled(): Boolean = cancelRequested
 
-    /**
-     * UI thread -> hand the user's entered code (or "" to fall through/cancel)
-     * to the parked login thread. No-ops if nothing is waiting.
-     */
-    fun submitCode(code: String) {
-        codeExchange.offer(code)
+    /** UI thread -> the user gave up on signing in; frenchpress carries on without Steam. */
+    fun cancelSignIn() {
+        cancelRequested = true
     }
 }
