@@ -80,6 +80,19 @@
         android:focusable="false"
         android:importantForAccessibility="no" />
 
+    <!-- The game's mouse cursor (a setting, off by default): an arrow whose tip sits where the game last saw the
+         pointer. Placed by GameActivity.pushCursorTouch; never takes touches. -->
+    <ImageView
+        android:id="@+id/mouse_cursor"
+        android:layout_width="22dp"
+        android:layout_height="28dp"
+        android:layout_gravity="top|start"
+        android:src="@drawable/ic_cursor"
+        android:visibility="gone"
+        android:clickable="false"
+        android:focusable="false"
+        android:importantForAccessibility="no" />
+
     <!-- Invisible focusable view that hosts the soft-keyboard InputConnection and
          forwards typed input to SK (the SurfaceView can't host an IME). -->
     <com.skarm.launcher.ImeBridgeView

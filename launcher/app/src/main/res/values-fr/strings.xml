@@ -16,9 +16,6 @@
     <string name="gfx_sharpen_value">Netteté : %1$d%%</string>
     <string name="gfx_sharpen_reset">Réinitialiser</string>
     <string name="gfx_sharp_hud">HUD net (expérimental)</string>
-    <string name="gfx_hint_offscreen">La netteté et le HUD net effectuent d\'abord le rendu hors écran.</string>
-    <string name="gfx_hint_sharp_hud">Le HUD net s\'affiche en pleine résolution (il devient plus petit) : augmentez l\'échelle de l\'interface dans le jeu pour compenser.</string>
-    <string name="gfx_hint_sharp_hud_needs_scale">Le HUD net nécessite une résolution inférieure à 100 %.</string>
     <string name="game_stopped_title">Le jeu s\'est arrêté</string>
     <string name="game_stopped_message">Une erreur est survenue et le jeu ne peut pas continuer. Partagez le journal pour corriger le problème, puis quittez et relancez.</string>
     <string name="boot_keep_waiting">Continuer d\'attendre</string>
@@ -49,7 +46,6 @@
     <string name="launching">Lancement...</string>
     <string name="progress_starting_download">Démarrage du téléchargement…</string>
     <string name="progress_starting_apply">Application en cours…</string>
-    <string name="progress_starting_remove">Suppression en cours…</string>
     <string name="runtime_setup_failed">Échec de configuration de l\'environnement : %1$s%2$s</string>
     <string name="update_available_title">Mise à jour disponible — v%1$s</string>
     <string name="sidebar_language">Langue</string>
@@ -67,7 +63,6 @@
     <string name="update_no_apk">Cette version n\'a pas d\'APK joint — ouvrez-la plutôt sur GitHub.</string>
     <string name="download_failed">Échec du téléchargement</string>
     <string name="apply_failed">Échec de l\'application</string>
-    <string name="remove_failed">Échec de la suppression</string>
     <string name="unknown_error">Erreur inconnue</string>
     <!-- The credit on the main screen: the heart is coloured and "SirDank" opens the author's site (see setupCredit). -->
     <string name="credit_built_with">Créé avec \u2665\uFE0E par SirDank</string>
@@ -143,7 +138,6 @@
     <string name="editor_game_running_message">Spiral Knights est toujours ouvert en arrière-plan et conserve sa propre copie de la disposition des commandes. Fermez d\'abord le jeu par précaution.</string>
     <string name="editor_edit_anyway">Modifier quand même</string>
     <string name="pref_crash_reporting">Envoyer les rapports de crash</string>
-    <string name="pref_crash_reporting_note">Modèle d\'appareil, version d\'Android, build et journal de crash sans identifiants ni e-mails.</string>
     <string name="pref_max_ram">RAM max</string>
     <string name="ram_decrease">\u2212</string>
     <string name="ram_increase">+</string>
@@ -151,13 +145,9 @@
     <string name="ram_free">%1$d Mo libres sur %2$d Mo</string>
     <string name="subtitle_android">Spiral Knights pour Android</string>
     <string name="sidebar_download_mods">Télécharger le modpack</string>
-    <string name="sidebar_apply_mods">Appliquer les mods</string>
-    <string name="sidebar_remove_mods">Supprimer les mods</string>
     <string name="mod_sync_title">Téléchargement des mods</string>
     <string name="mod_apply_title">Application des mods</string>
-    <string name="mod_remove_title">Suppression des mods</string>
     <string name="mod_completed">Opération terminée avec succès.</string>
-    <string name="mod_removed">Mods supprimés avec succès !\n%1$d ressources décompressées.</string>
     <string name="update_downloading">Mise à jour de SKapsule</string>
     <string name="layouts_button">Dispositions…</string>
     <string name="layouts_title">Dispositions</string>
@@ -190,8 +180,13 @@
     <string name="sidebar_mods_current">Modpack à jour</string>
     <string name="editor_tab_edit">Modifier</string>
     <string name="editor_tab_settings">Paramètres</string>
-    <string name="editor_tab_close">Fermer</string>
     <string name="touch_floating_left">Stick gauche flottant</string>
     <string name="touch_floating_right">Stick droit flottant</string>
-    <string name="touch_floating_hint">Un stick flottant apparaît là où votre pouce se pose et le suit.</string>
+    <string name="sidebar_reset_game">Reset Game Files</string>
+    <string name="mod_remove_title">Resetting Game Files</string>
+    <string name="remove_failed">Reset Failed</string>
+    <string name="progress_starting_remove">Starting reset…</string>
+    <string name="mod_removed">Game files reset.\nUnpacked %1$d resources.</string>
+    <string name="mod_applied_warnings">Mods applied with warnings</string>
+    <string name="gfx_show_cursor">Show mouse cursor</string>
 </resources>

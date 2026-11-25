@@ -26,10 +26,19 @@ Notable changes per release. Versions are the git tags the APKs are built from
   arrangement travels: where each control sits, its size and whether it shows, plus opacity and **Show Buttons**.
   Resolution and **Show Controls** stay yours, and a file can never change what a control does. Importing saves a
   new preset and asks before applying it.
+- **Mods apply by themselves.** There is no Apply Mods button: when the mods folder changes (a download, or a
+  mod you added) or the game updates, SKapsule applies the mods when you open the launcher, and restores the game
+  once if you remove every mod. **Remove Mods** is now **Reset Game Files**; the mods already in the folder stay
+  unapplied after it until the folder changes.
+- **Mouse cursor.** **Show mouse cursor** in the sidebar and in the in-game panel draws the game's cursor where it
+  last saw the pointer. Off by default.
 - **A calmer touch-controls editor.** A tab strip at the top switches between **Edit** and **Settings**. On Edit,
   the small dialog for the selected control only appears when something is selected, and it docks away from
   that control so it never covers what you are dragging. Settings shows the full panel with the controls
   visible but untouchable.
+  The tab strip is Edit | Settings: the settings button closes the editor.
+- **A tidier sidebar.** The descriptions under **Send crash reports**, **Sharp HUD** and **Floating right stick** are
+  gone, and the settings sidebar runs to the bottom edge of the screen.
 - **Floating thumb sticks.** Turn on **Floating left stick** and/or **Floating right stick** in Settings: the stick
   appears where your thumb lands on that half of the screen and follows it, leaving a faint ghost where it
   waits. Buttons still win a touch. The choice is saved in layouts, presets and exported files (older versions

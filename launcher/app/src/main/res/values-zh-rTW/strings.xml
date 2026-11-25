@@ -16,9 +16,6 @@
     <string name="gfx_sharpen_value">銳化：%1$d%%</string>
     <string name="gfx_sharpen_reset">重設</string>
     <string name="gfx_sharp_hud">清晰HUD（實驗性）</string>
-    <string name="gfx_hint_offscreen">銳化與清晰HUD會先在離屏緩衝區繪製遊戲畫面。</string>
-    <string name="gfx_hint_sharp_hud">清晰HUD以完整解析度繪製HUD（介面會變小）：請調大遊戲內UI縮放比例以補償。</string>
-    <string name="gfx_hint_sharp_hud_needs_scale">清晰HUD需要解析度低於100%。</string>
     <string name="game_stopped_title">遊戲已停止</string>
     <string name="game_stopped_message">發生錯誤導致遊戲無法繼續。請分享記錄以便排查修復，然後結束並重新啟動。</string>
     <string name="boot_keep_waiting">繼續等待</string>
@@ -49,7 +46,6 @@
     <string name="launching">啟動中...</string>
     <string name="progress_starting_download">正在開始下載…</string>
     <string name="progress_starting_apply">正在開始套用…</string>
-    <string name="progress_starting_remove">正在開始移除…</string>
     <string name="runtime_setup_failed">執行環境設定失敗：%1$s%2$s</string>
     <string name="update_available_title">有可用更新 — v%1$s</string>
     <string name="sidebar_language">語言</string>
@@ -67,7 +63,6 @@
     <string name="update_no_apk">此版本未附加APK檔案 — 請在GitHub上檢視。</string>
     <string name="download_failed">下載失敗</string>
     <string name="apply_failed">套用失敗</string>
-    <string name="remove_failed">移除失敗</string>
     <string name="unknown_error">未知錯誤</string>
     <!-- The credit on the main screen: the heart is coloured and "SirDank" opens the author's site (see setupCredit). -->
     <string name="credit_built_with">由 SirDank 用 \u2665\uFE0E 打造</string>
@@ -143,7 +138,6 @@
     <string name="editor_game_running_message">Spiral Knights仍在背景執行並持有自己的控制配置複本。為安全起見，請先關閉遊戲以免被覆寫。</string>
     <string name="editor_edit_anyway">仍然編輯</string>
     <string name="pref_crash_reporting">傳送當機回報</string>
-    <string name="pref_crash_reporting_note">裝置型號、Android版本、應用程式組建與當機記錄（已去除認證資訊與電子郵件）。</string>
     <string name="pref_max_ram">最大記憶體</string>
     <string name="ram_decrease">\u2212</string>
     <string name="ram_increase">+</string>
@@ -151,13 +145,9 @@
     <string name="ram_free">%1$d MB 可用 / %2$d MB</string>
     <string name="subtitle_android">Spiral Knights Android版</string>
     <string name="sidebar_download_mods">下載模組包</string>
-    <string name="sidebar_apply_mods">套用模組</string>
-    <string name="sidebar_remove_mods">移除模組</string>
     <string name="mod_sync_title">正在下載模組</string>
     <string name="mod_apply_title">正在套用模組</string>
-    <string name="mod_remove_title">正在移除模組</string>
     <string name="mod_completed">操作成功完成。</string>
-    <string name="mod_removed">模組已成功移除！\n解壓縮了 %1$d 個資源。</string>
     <string name="update_downloading">正在更新SKapsule</string>
     <string name="layouts_button">配置…</string>
     <string name="layouts_title">配置</string>
@@ -190,8 +180,13 @@
     <string name="sidebar_mods_current">模組包已是最新</string>
     <string name="editor_tab_edit">編輯</string>
     <string name="editor_tab_settings">設定</string>
-    <string name="editor_tab_close">關閉</string>
     <string name="touch_floating_left">浮動左搖桿</string>
     <string name="touch_floating_right">浮動右搖桿</string>
-    <string name="touch_floating_hint">浮動搖桿會出現在拇指按下的位置並跟隨移動。</string>
+    <string name="sidebar_reset_game">Reset Game Files</string>
+    <string name="mod_remove_title">Resetting Game Files</string>
+    <string name="remove_failed">Reset Failed</string>
+    <string name="progress_starting_remove">Starting reset…</string>
+    <string name="mod_removed">Game files reset.\nUnpacked %1$d resources.</string>
+    <string name="mod_applied_warnings">Mods applied with warnings</string>
+    <string name="gfx_show_cursor">Show mouse cursor</string>
 </resources>

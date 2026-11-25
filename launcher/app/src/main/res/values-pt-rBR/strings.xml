@@ -16,9 +16,6 @@
     <string name="gfx_sharpen_value">Nitidez: %1$d%%</string>
     <string name="gfx_sharpen_reset">Redefinir</string>
     <string name="gfx_sharp_hud">HUD nítido (experimental)</string>
-    <string name="gfx_hint_offscreen">Nitidez e HUD nítido renderizam o jogo fora da tela primeiro.</string>
-    <string name="gfx_hint_sharp_hud">O HUD nítido é desenhado na resolução máxima (fica menor): aumente a escala da interface no jogo para compensar.</string>
-    <string name="gfx_hint_sharp_hud_needs_scale">O HUD nítido requer resolução abaixo de 100%.</string>
     <string name="game_stopped_title">O jogo parou</string>
     <string name="game_stopped_message">Ocorreu um erro e não é possível continuar. Compartilhe o log para correção, depois saia e abra novamente.</string>
     <string name="boot_keep_waiting">Continuar aguardando</string>
@@ -49,7 +46,6 @@
     <string name="launching">Iniciando...</string>
     <string name="progress_starting_download">Iniciando download…</string>
     <string name="progress_starting_apply">Iniciando aplicação…</string>
-    <string name="progress_starting_remove">Iniciando remoção…</string>
     <string name="runtime_setup_failed">Falha na configuração do ambiente: %1$s%2$s</string>
     <string name="update_available_title">Atualização disponível — v%1$s</string>
     <string name="sidebar_language">Idioma</string>
@@ -67,7 +63,6 @@
     <string name="update_no_apk">Este lançamento não possui APK anexado — abra no GitHub.</string>
     <string name="download_failed">Falha no download</string>
     <string name="apply_failed">Falha ao aplicar</string>
-    <string name="remove_failed">Falha ao remover</string>
     <string name="unknown_error">Erro desconhecido</string>
     <!-- The credit on the main screen: the heart is coloured and "SirDank" opens the author's site (see setupCredit). -->
     <string name="credit_built_with">Feito com \u2665\uFE0E por SirDank</string>
@@ -143,7 +138,6 @@
     <string name="editor_game_running_message">Spiral Knights ainda está aberto em segundo plano e mantém sua própria cópia do layout dos controles. Feche o jogo primeiro para evitar sobrescrever.</string>
     <string name="editor_edit_anyway">Editar mesmo assim</string>
     <string name="pref_crash_reporting">Enviar relatórios de falha</string>
-    <string name="pref_crash_reporting_note">Modelo do dispositivo, versão do Android, build e log de erros sem credenciais nem e-mails.</string>
     <string name="pref_max_ram">RAM máx.</string>
     <string name="ram_decrease">\u2212</string>
     <string name="ram_increase">+</string>
@@ -151,13 +145,9 @@
     <string name="ram_free">%1$d MB livres de %2$d MB</string>
     <string name="subtitle_android">Spiral Knights para Android</string>
     <string name="sidebar_download_mods">Baixar modpack</string>
-    <string name="sidebar_apply_mods">Aplicar mods</string>
-    <string name="sidebar_remove_mods">Remover mods</string>
     <string name="mod_sync_title">Baixando mods</string>
     <string name="mod_apply_title">Aplicando mods</string>
-    <string name="mod_remove_title">Removendo mods</string>
     <string name="mod_completed">Operação concluída com sucesso.</string>
-    <string name="mod_removed">Mods removidos com sucesso!\nRecursos descompactados: %1$d.</string>
     <string name="update_downloading">Atualizando o SKapsule</string>
     <string name="layouts_button">Layouts…</string>
     <string name="layouts_title">Layouts</string>
@@ -190,8 +180,13 @@
     <string name="sidebar_mods_current">Modpack atualizado</string>
     <string name="editor_tab_edit">Editar</string>
     <string name="editor_tab_settings">Configurações</string>
-    <string name="editor_tab_close">Fechar</string>
     <string name="touch_floating_left">Analógico esquerdo flutuante</string>
     <string name="touch_floating_right">Analógico direito flutuante</string>
-    <string name="touch_floating_hint">Um analógico flutuante aparece onde seu polegar toca e o acompanha.</string>
+    <string name="sidebar_reset_game">Reset Game Files</string>
+    <string name="mod_remove_title">Resetting Game Files</string>
+    <string name="remove_failed">Reset Failed</string>
+    <string name="progress_starting_remove">Starting reset…</string>
+    <string name="mod_removed">Game files reset.\nUnpacked %1$d resources.</string>
+    <string name="mod_applied_warnings">Mods applied with warnings</string>
+    <string name="gfx_show_cursor">Show mouse cursor</string>
 </resources>

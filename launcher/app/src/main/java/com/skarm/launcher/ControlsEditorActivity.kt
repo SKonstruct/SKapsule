@@ -43,7 +43,6 @@ class ControlsEditorActivity : AppCompatActivity() {
         // this Activity's result registry, which only accepts registrations before STARTED.
         val layoutLibrary = LayoutLibraryController(this, overlay)
         overlay.layoutLibraryRequestListener = { layoutLibrary.show() }
-        overlay.closeTabVisible = false // Done is already here
 
         binding.btnDone.setOnClickListener { finishEditing() }
         onBackPressedDispatcher.addCallback(

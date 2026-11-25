@@ -16,6 +16,7 @@ import java.util.Properties
 object GfxSettings {
     private const val FILE_NAME = "gfx_settings.properties"
     private const val KEY_FPS = "fps"
+    private const val KEY_CURSOR = "cursor"
     private const val KEY_SHARPEN = "sharpen"
     private const val KEY_SHARP_HUD = "hud"
 
@@ -27,6 +28,11 @@ object GfxSettings {
     fun showFps(context: Context): Boolean = read(context).getProperty(KEY_FPS)?.toBooleanStrictOrNull() ?: true
 
     fun setShowFps(context: Context, show: Boolean) = write(context, KEY_FPS, show.toString())
+
+    /** The game's mouse cursor drawn on screen (off by default): a touch screen has no pointer to see. */
+    fun showCursor(context: Context): Boolean = read(context).getProperty(KEY_CURSOR)?.toBooleanStrictOrNull() ?: false
+
+    fun setShowCursor(context: Context, show: Boolean) = write(context, KEY_CURSOR, show.toString())
 
     fun sharpenPercent(context: Context): Int =
         (read(context).getProperty(KEY_SHARPEN)?.toIntOrNull() ?: 0).coerceIn(0, MAX_SHARPEN)

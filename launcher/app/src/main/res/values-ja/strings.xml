@@ -16,9 +16,6 @@
     <string name="gfx_sharpen_value">シャープ化: %1$d%%</string>
     <string name="gfx_sharpen_reset">リセット</string>
     <string name="gfx_sharp_hud">シャープHUD (実験的機能)</string>
-    <string name="gfx_hint_offscreen">シャープ化とシャープHUDは、ゲームをまず画面外にレンダリングします。</string>
-    <string name="gfx_hint_sharp_hud">シャープHUDはHUDを最大解像度で描画します (縮小されます)。ゲーム内のUIスケールを上げて調整してください。</string>
-    <string name="gfx_hint_sharp_hud_needs_scale">シャープHUDを使用するには解像度を100%未満にする必要があります。</string>
     <string name="game_stopped_title">ゲームが停止しました</string>
     <string name="game_stopped_message">エラーが発生したため続行できません。修正のためにログを共有し、ゲームを終了して再起動してください。</string>
     <string name="boot_keep_waiting">待機を続ける</string>
@@ -49,7 +46,6 @@
     <string name="launching">起動中...</string>
     <string name="progress_starting_download">ダウンロードを開始中…</string>
     <string name="progress_starting_apply">適用を開始中…</string>
-    <string name="progress_starting_remove">削除を開始中…</string>
     <string name="runtime_setup_failed">ランタイムのセットアップに失敗しました: %1$s%2$s</string>
     <string name="update_available_title">アップデート利用可能 — v%1$s</string>
     <string name="sidebar_language">言語</string>
@@ -67,7 +63,6 @@
     <string name="update_no_apk">このリリースにはAPKが添付されていません。GitHubで直接開いてください。</string>
     <string name="download_failed">ダウンロード失敗</string>
     <string name="apply_failed">適用失敗</string>
-    <string name="remove_failed">削除失敗</string>
     <string name="unknown_error">不明なエラー</string>
     <!-- The credit on the main screen: the heart is coloured and "SirDank" opens the author's site (see setupCredit). -->
     <string name="credit_built_with">SirDankにより\u2665\uFE0Eを込めて作成</string>
@@ -143,7 +138,6 @@
     <string name="editor_game_running_message">Spiral Knightsがバックグラウンドで実行中のため、操作レイアウトが上書きされる可能性があります。安全のためゲームを終了してから編集してください。</string>
     <string name="editor_edit_anyway">そのまま編集</string>
     <string name="pref_crash_reporting">クラッシュレポートを送信</string>
-    <string name="pref_crash_reporting_note">認証情報やメールアドレスを除去した端末モデル、Androidバージョン、アプリビルド、クラッシュログ。</string>
     <string name="pref_max_ram">最大RAM</string>
     <string name="ram_decrease">\u2212</string>
     <string name="ram_increase">+</string>
@@ -151,13 +145,9 @@
     <string name="ram_free">%1$d MB 空き / %2$d MB</string>
     <string name="subtitle_android">Spiral Knights Android版</string>
     <string name="sidebar_download_mods">Modパックをダウンロード</string>
-    <string name="sidebar_apply_mods">Modを適用</string>
-    <string name="sidebar_remove_mods">Modを削除</string>
     <string name="mod_sync_title">Modをダウンロード中</string>
     <string name="mod_apply_title">Modを適用中</string>
-    <string name="mod_remove_title">Modを削除中</string>
     <string name="mod_completed">操作が正常に完了しました。</string>
-    <string name="mod_removed">Modを正常に削除しました！\n展開されたリソース: %1$d個。</string>
     <string name="update_downloading">SKapsuleをアップデート中</string>
     <string name="layouts_button">レイアウト…</string>
     <string name="layouts_title">レイアウト</string>
@@ -190,8 +180,13 @@
     <string name="sidebar_mods_current">Modパックは最新です</string>
     <string name="editor_tab_edit">編集</string>
     <string name="editor_tab_settings">設定</string>
-    <string name="editor_tab_close">閉じる</string>
     <string name="touch_floating_left">フローティング左スティック</string>
     <string name="touch_floating_right">フローティング右スティック</string>
-    <string name="touch_floating_hint">親指を置いた位置にスティックが現れ、指の動きに追従します。</string>
+    <string name="sidebar_reset_game">Reset Game Files</string>
+    <string name="mod_remove_title">Resetting Game Files</string>
+    <string name="remove_failed">Reset Failed</string>
+    <string name="progress_starting_remove">Starting reset…</string>
+    <string name="mod_removed">Game files reset.\nUnpacked %1$d resources.</string>
+    <string name="mod_applied_warnings">Mods applied with warnings</string>
+    <string name="gfx_show_cursor">Show mouse cursor</string>
 </resources>

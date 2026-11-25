@@ -16,9 +16,6 @@
     <string name="gfx_sharpen_value">Резкость: %1$d%%</string>
     <string name="gfx_sharpen_reset">Сбросить</string>
     <string name="gfx_sharp_hud">Четкий интерфейс (эксперим.)</string>
-    <string name="gfx_hint_offscreen">Резкость и четкий интерфейс сначала отрисовывают игру вне экрана.</string>
-    <string name="gfx_hint_sharp_hud">Четкий интерфейс отрисовывается в полном разрешении (становится мельче): увеличьте масштаб интерфейса в игре для компенсации.</string>
-    <string name="gfx_hint_sharp_hud_needs_scale">Для четкого интерфейса требуется разрешение ниже 100%.</string>
     <string name="game_stopped_title">Игра остановлена</string>
     <string name="game_stopped_message">Произошла ошибка, продолжение невозможно. Поделитесь журналом для устранения неполадок, затем выйдите и запустите снова.</string>
     <string name="boot_keep_waiting">Продолжать ожидание</string>
@@ -49,7 +46,6 @@
     <string name="launching">Запуск...</string>
     <string name="progress_starting_download">Начало загрузки…</string>
     <string name="progress_starting_apply">Начало применения…</string>
-    <string name="progress_starting_remove">Начало удаления…</string>
     <string name="runtime_setup_failed">Сбой настройки среды выполнения: %1$s%2$s</string>
     <string name="update_available_title">Доступно обновление — v%1$s</string>
     <string name="sidebar_language">Язык</string>
@@ -67,7 +63,6 @@
     <string name="update_no_apk">В этом релизе нет прикрепленного APK — откройте его на GitHub.</string>
     <string name="download_failed">Сбой загрузки</string>
     <string name="apply_failed">Сбой применения</string>
-    <string name="remove_failed">Сбой удаления</string>
     <string name="unknown_error">Неизвестная ошибка</string>
     <!-- The credit on the main screen: the heart is coloured and "SirDank" opens the author's site (see setupCredit). -->
     <string name="credit_built_with">Сделано с \u2665\uFE0E от SirDank</string>
@@ -143,7 +138,6 @@
     <string name="editor_game_running_message">Spiral Knights работает в фоновом режиме и сохраняет свою копию раскладки. Во избежание перезаписи закройте игру сначала.</string>
     <string name="editor_edit_anyway">Все равно изменить</string>
     <string name="pref_crash_reporting">Отправлять отчеты о сбоях</string>
-    <string name="pref_crash_reporting_note">Модель устройства, версия Android, сборка и журнал сбоев без учетных данных и email.</string>
     <string name="pref_max_ram">Макс. RAM</string>
     <string name="ram_decrease">\u2212</string>
     <string name="ram_increase">+</string>
@@ -151,13 +145,9 @@
     <string name="ram_free">%1$d МБ свободно из %2$d МБ</string>
     <string name="subtitle_android">Spiral Knights для Android</string>
     <string name="sidebar_download_mods">Скачать модпак</string>
-    <string name="sidebar_apply_mods">Применить моды</string>
-    <string name="sidebar_remove_mods">Удалить моды</string>
     <string name="mod_sync_title">Загрузка модов</string>
     <string name="mod_apply_title">Применение модов</string>
-    <string name="mod_remove_title">Удаление модов</string>
     <string name="mod_completed">Операция успешно завершена.</string>
-    <string name="mod_removed">Моды успешно удалены!\nРаспаковано ресурсов: %1$d.</string>
     <string name="update_downloading">Обновление SKapsule</string>
     <string name="layouts_button">Раскладки…</string>
     <string name="layouts_title">Раскладки</string>
@@ -190,8 +180,13 @@
     <string name="sidebar_mods_current">Модпак актуален</string>
     <string name="editor_tab_edit">Изменить</string>
     <string name="editor_tab_settings">Настройки</string>
-    <string name="editor_tab_close">Закрыть</string>
     <string name="touch_floating_left">Плавающий левый стик</string>
     <string name="touch_floating_right">Плавающий правый стик</string>
-    <string name="touch_floating_hint">Плавающий стик появляется в месте касания большого пальца и следует за ним.</string>
+    <string name="sidebar_reset_game">Reset Game Files</string>
+    <string name="mod_remove_title">Resetting Game Files</string>
+    <string name="remove_failed">Reset Failed</string>
+    <string name="progress_starting_remove">Starting reset…</string>
+    <string name="mod_removed">Game files reset.\nUnpacked %1$d resources.</string>
+    <string name="mod_applied_warnings">Mods applied with warnings</string>
+    <string name="gfx_show_cursor">Show mouse cursor</string>
 </resources>

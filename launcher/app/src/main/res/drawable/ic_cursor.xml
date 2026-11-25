@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A plain arrow, white with a dark edge. Straight lines only. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="22dp"
+    android:height="28dp"
+    android:viewportWidth="22"
+    android:viewportHeight="28">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M2,1 L2,22 L7,17 L11,26 L14.5,24.5 L10.5,15.5 L17.5,15.5 Z"
+        android:strokeColor="#000000"
+        android:strokeLineJoin="round"
+        android:strokeWidth="1.4" />
+</vector>

@@ -91,13 +91,12 @@ class LauncherActivity : AppCompatActivity() {
             val topInset = maxOf(systemBars.top, cutout.top)
             val leftInset = maxOf(systemBars.left, cutout.left)
             val rightInset = maxOf(systemBars.right, cutout.right)
-            val bottomInset = maxOf(systemBars.bottom, cutout.bottom)
 
             view.setPadding(
                 originalPaddingLeft + leftInset,
                 originalPaddingTop + topInset,
                 originalPaddingRight + rightInset,
-                originalPaddingBottom + bottomInset,
+                originalPaddingBottom, // runs to the bottom edge: no safe-area padding under the last row
             )
             insets
         }
@@ -164,8 +163,8 @@ class LauncherActivity : AppCompatActivity() {
         // Sidebar click listeners
         binding.sidebarBtnShareLogs.setOnClickListener { LogExporter.captureAndShare(this) }
         binding.sidebarBtnDownloadMods.setOnClickListener { downloadMods() }
-        binding.sidebarBtnApplyMods.setOnClickListener { applyMods() }
-        binding.sidebarBtnRemoveMods.setOnClickListener { removeMods() }
+        // No Apply button: the mods are applied by themselves when the folder changes (syncModsIfNeeded).
+        binding.sidebarBtnResetGame.setOnClickListener { resetGameFiles() }
         binding.sidebarBtnOpenFolder.setOnClickListener { openFolder() }
         binding.sidebarBtnEditControls.setOnClickListener { openControlsEditor() }
         binding.sidebarBtnCheckUpdates.setOnClickListener { checkForUpdateNow() }
@@ -240,6 +239,7 @@ class LauncherActivity : AppCompatActivity() {
         // The game process can have found damaged files and invalidated them; repair before
         // the next Play rather than failing the same way again.
         ensureRuntime()
+        syncModsIfNeeded()
         val hasLogs = LogExporter.wasLaunchAttempted(this) || LogExporter.latestCrash(this) != null
         binding.sidebarBtnShareLogs.isEnabled = hasLogs
 
@@ -1105,6 +1105,7 @@ class LauncherActivity : AppCompatActivity() {
                     "Download complete: ${stats.downloaded} downloaded, ${stats.skipped} skipped, ${stats.deleted} deleted",
                     Toast.LENGTH_LONG,
                 ).show()
+                syncModsIfNeeded()
             } catch (e: Exception) {
                 progressInfo.dialog.dismissSafely()
                 val offline = CrashReporting.isConnectionProblem(e)
@@ -1125,48 +1126,65 @@ class LauncherActivity : AppCompatActivity() {
         return true
     }
 
-    private fun applyMods() {
-        if (refuseWhileGameRuns()) return
-        val progressInfo = showProgressDialog(R.string.mod_apply_title, getString(R.string.progress_starting_apply))
+    private var modSyncRunning = false
+    private var modSyncFailedKey: String? = null
 
+    /**
+     * Applies or restores the mods by itself when the mods folder or the game changed (see [ModsSync]). A progress
+     * dialog while it runs, nothing after it when it worked; warnings and failures say so. A failed state is
+     * reported once, not on every return to the launcher.
+     */
+    private fun syncModsIfNeeded() {
+        if (modSyncRunning || isGameProcessRunning()) return
+        val gameHome = SkInstaller.homeDir(this)
+        val action = ModsSync.pending(this, gameHome)
+        val key = ModsSync.key(gameHome)
+        if (action == ModsSyncAction.NONE || key == modSyncFailedKey) return
+
+        modSyncRunning = true
+        val apply = action == ModsSyncAction.APPLY
+        val progressInfo = showProgressDialog(
+            if (apply) R.string.mod_apply_title else R.string.mod_remove_title,
+            getString(if (apply) R.string.progress_starting_apply else R.string.progress_starting_remove),
+        )
         lifecycleScope.launch {
             try {
-                val gameHome = SkInstaller.homeDir(this@LauncherActivity)
-                val stats = ModsApplier.apply(gameHome, progressInfo.updateProgress)
+                var warnings = emptyList<String>()
+                if (apply) warnings = ModsApplier.apply(gameHome, progressInfo.updateProgress).warnings
+                else ModsApplier.remove(gameHome, progressInfo.updateProgress)
+                ModsSync.record(this@LauncherActivity, gameHome)
                 progressInfo.dialog.dismissSafely()
-                val message = buildString {
-                    append("Applied: ${stats.getTotalModsApplied()} mods (${stats.resourceModsApplied} resource, ${stats.classModsApplied} class, ${stats.modpacksApplied} modpacks).\n")
-                    append("Unpacked ${stats.jarsUnpacked} resources.")
-                    if (stats.warnings.isNotEmpty()) {
-                        append("\n\nWarnings:\n")
-                        stats.warnings.forEach { append("- ").append(it).append("\n") }
-                    }
+                if (warnings.isNotEmpty()) {
+                    AlertDialog.Builder(this@LauncherActivity)
+                        .setTitle(R.string.mod_applied_warnings)
+                        .setMessage(warnings.joinToString("\n") { "- $it" })
+                        .setPositiveButton(android.R.string.ok, null)
+                        .show()
                 }
-                AlertDialog.Builder(this@LauncherActivity)
-                    .setTitle(R.string.mod_completed)
-                    .setMessage(message.trim())
-                    .setPositiveButton(android.R.string.ok, null)
-                    .show()
             } catch (e: Exception) {
                 progressInfo.dialog.dismissSafely()
-                if (e !is UserActionException) CrashReporting.report("mods_apply_failed", e.toString())
+                modSyncFailedKey = key
+                if (e !is UserActionException) CrashReporting.report(if (apply) "mods_apply_failed" else "mods_reset_failed", e.toString())
                 AlertDialog.Builder(this@LauncherActivity)
-                    .setTitle(R.string.apply_failed)
+                    .setTitle(if (apply) R.string.apply_failed else R.string.remove_failed)
                     .setMessage(e.message ?: getString(R.string.unknown_error))
                     .setPositiveButton(android.R.string.ok, null)
                     .show()
+            } finally {
+                modSyncRunning = false
             }
         }
     }
 
-    private fun removeMods() {
-        if (refuseWhileGameRuns()) return
+    private fun resetGameFiles() {
+        if (refuseWhileGameRuns() || modSyncRunning) return
         val progressInfo = showProgressDialog(R.string.mod_remove_title, getString(R.string.progress_starting_remove))
 
         lifecycleScope.launch {
             try {
                 val gameHome = SkInstaller.homeDir(this@LauncherActivity)
                 val jarsUnpacked = ModsApplier.remove(gameHome, progressInfo.updateProgress)
+                ModsSync.record(this@LauncherActivity, gameHome)
                 progressInfo.dialog.dismissSafely()
                 AlertDialog.Builder(this@LauncherActivity)
                     .setTitle(R.string.mod_completed)
@@ -1249,6 +1267,9 @@ class LauncherActivity : AppCompatActivity() {
     private var gfxUiUpdating = false
 
     private fun setUpGraphicsSettings() {
+        binding.switchCursor.setOnCheckedChangeListener { _, on ->
+            if (!gfxUiUpdating) GfxSettings.setShowCursor(this, on)
+        }
         binding.switchFps.setOnCheckedChangeListener { _, on ->
             if (!gfxUiUpdating) GfxSettings.setShowFps(this, on)
         }
@@ -1277,6 +1298,7 @@ class LauncherActivity : AppCompatActivity() {
     private fun refreshGraphicsSettings() {
         gfxUiUpdating = true
         binding.switchFps.isChecked = GfxSettings.showFps(this)
+        binding.switchCursor.isChecked = GfxSettings.showCursor(this)
         val sharpen = GfxSettings.sharpenPercent(this)
         binding.seekSharpen.progress = sharpen
         binding.textSharpen.text = sharpenText(sharpen)
@@ -1293,8 +1315,6 @@ class LauncherActivity : AppCompatActivity() {
         val applies = GfxSettings.sharpHudApplies(com.skarm.launcher.touch.TouchControlManager.loadLayout(this).renderScale)
         binding.switchSharpHud.isEnabled = applies
         binding.switchSharpHud.alpha = if (applies) 1f else 0.4f
-        binding.textGfxHint.text = getString(R.string.gfx_hint_offscreen) + "\n" +
-            getString(if (applies) R.string.gfx_hint_sharp_hud else R.string.gfx_hint_sharp_hud_needs_scale)
     }
 }
 

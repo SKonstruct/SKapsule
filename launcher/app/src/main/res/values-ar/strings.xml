@@ -16,9 +16,6 @@
     <string name="gfx_sharpen_value">الحدة: %1$d%%</string>
     <string name="gfx_sharpen_reset">إعادة تعيين</string>
     <string name="gfx_sharp_hud">واجهة مستخدم واضحة (تجريبي)</string>
-    <string name="gfx_hint_offscreen">تقوم الحدة والواجهة الواضحة برسم اللعبة خارج الشاشة أولاً.</string>
-    <string name="gfx_hint_sharp_hud">ترسم الواجهة الواضحة بدقة كاملة (تصبح أصغر): ارفع مقياس واجهة اللعبة للتعويض.</string>
-    <string name="gfx_hint_sharp_hud_needs_scale">تتطلب الواجهة الواضحة دقة أقل من 100%.</string>
     <string name="game_stopped_title">توقفت اللعبة</string>
     <string name="game_stopped_message">حدث خطأ ولا يمكن المتابعة. شارك السجل لإصلاحه، ثم اخرج وشغّلها مجددًا.</string>
     <string name="boot_keep_waiting">مواصلة الانتظار</string>
@@ -49,7 +46,6 @@
     <string name="launching">جارٍ التشغيل...</string>
     <string name="progress_starting_download">جارٍ بدء التنزيل…</string>
     <string name="progress_starting_apply">جارٍ بدء التطبيق…</string>
-    <string name="progress_starting_remove">جارٍ بدء الإزالة…</string>
     <string name="runtime_setup_failed">فشل إعداد بيئة التشغيل: %1$s%2$s</string>
     <string name="update_available_title">يتوفر تحديث — v%1$s</string>
     <string name="sidebar_language">اللغة</string>
@@ -67,7 +63,6 @@
     <string name="update_no_apk">لا يحتوي هذا الإصدار على ملف APK مرفق — افتحه على GitHub بدلًا من ذلك.</string>
     <string name="download_failed">فشل التنزيل</string>
     <string name="apply_failed">فشل التطبيق</string>
-    <string name="remove_failed">فشل الإزالة</string>
     <string name="unknown_error">خطأ غير معروف</string>
     <!-- The credit on the main screen: the heart is coloured and "SirDank" opens the author's site (see setupCredit). -->
     <string name="credit_built_with">صُنع بـ \u2665\uFE0E بواسطة SirDank</string>
@@ -143,7 +138,6 @@
     <string name="editor_game_running_message">لا تزال Spiral Knights مفتوحة في الخلفية وتحتفظ بنسختها الخاصة من مخطط التحكم. اخرج من اللعبة أولاً لتجنب الاستبدال.</string>
     <string name="editor_edit_anyway">تعديل على أي حال</string>
     <string name="pref_crash_reporting">إرسال تقارير الأعطال</string>
-    <string name="pref_crash_reporting_note">طراز الجهاز وإصدار Android وبنية التطبيق وسجل الأعطال دون بيانات الاعتماد ورسائل البريد.</string>
     <string name="pref_max_ram">الحد الأقصى لـ RAM</string>
     <string name="ram_decrease">\u2212</string>
     <string name="ram_increase">+</string>
@@ -151,13 +145,9 @@
     <string name="ram_free">%1$d ميغابايت متاح من %2$d ميغابايت</string>
     <string name="subtitle_android">Spiral Knights لنظام Android</string>
     <string name="sidebar_download_mods">تنزيل حزمة التعديلات</string>
-    <string name="sidebar_apply_mods">تطبيق التعديلات</string>
-    <string name="sidebar_remove_mods">إزالة التعديلات</string>
     <string name="mod_sync_title">جارٍ تنزيل التعديلات</string>
     <string name="mod_apply_title">جارٍ تطبيق التعديلات</string>
-    <string name="mod_remove_title">جارٍ إزالة التعديلات</string>
     <string name="mod_completed">اكتملت العملية بنجاح.</string>
-    <string name="mod_removed">تمت إزالة التعديلات بنجاح!\nتم فك ضغط %1$d من الموارد.</string>
     <string name="update_downloading">جارٍ تحديث SKapsule</string>
     <string name="layouts_button">المخططات…</string>
     <string name="layouts_title">المخططات</string>
@@ -190,8 +180,13 @@
     <string name="sidebar_mods_current">حزمة التعديلات محدثة</string>
     <string name="editor_tab_edit">تعديل</string>
     <string name="editor_tab_settings">الإعدادات</string>
-    <string name="editor_tab_close">إغلاق</string>
     <string name="touch_floating_left">عصا يسرى عائمة</string>
     <string name="touch_floating_right">عصا يمنى عائمة</string>
-    <string name="touch_floating_hint">تظهر العصا العائمة حيث يلامس إبهامك الشاشة وتتبعه.</string>
+    <string name="sidebar_reset_game">Reset Game Files</string>
+    <string name="mod_remove_title">Resetting Game Files</string>
+    <string name="remove_failed">Reset Failed</string>
+    <string name="progress_starting_remove">Starting reset…</string>
+    <string name="mod_removed">Game files reset.\nUnpacked %1$d resources.</string>
+    <string name="mod_applied_warnings">Mods applied with warnings</string>
+    <string name="gfx_show_cursor">Show mouse cursor</string>
 </resources>

@@ -60,19 +60,10 @@ class TouchControlOverlay @JvmOverloads constructor(
 
     private var page = EditorPage.EDIT
 
-    // The selected control's dialog and the Edit | Settings | Close strip (both built in init).
+    // The selected control's dialog and the Edit | Settings strip (both built in init).
     private val nodePanel: LinearLayout
     private val tabStrip: LinearLayout
 
-    /** The Close tab was pressed. Unset it closes the editor; the standalone editor leaves its Activity. */
-    var closeRequestListener: (() -> Unit)? = null
-
-    /** The standalone editor has its own Done button, so it hides the Close tab. */
-    var closeTabVisible: Boolean = true
-        set(value) {
-            field = value
-            tabStrip.findViewWithTag<View>("tabClose")?.visibility = if (value) View.VISIBLE else View.GONE
-        }
 
     // Editor UI Panel
     private val editorPanel: LinearLayout
@@ -199,6 +190,18 @@ class TouchControlOverlay @JvmOverloads constructor(
             }
             addView(fpsSwitch)
 
+            val cursorSwitch = Switch(context).apply {
+                text = context.getString(R.string.gfx_show_cursor)
+                setTextColor(Color.WHITE)
+                tag = "cursorSwitch"
+                isChecked = GfxSettings.showCursor(context)
+                setOnCheckedChangeListener { _, isChecked ->
+                    GfxSettings.setShowCursor(context, isChecked)
+                    cursorChangeListener?.invoke(isChecked)
+                }
+            }
+            addView(cursorSwitch)
+
             val sharpenLabel = TextView(context).apply {
                 setTextColor(Color.WHITE)
                 tag = "sharpenLabel"
@@ -250,13 +253,6 @@ class TouchControlOverlay @JvmOverloads constructor(
                 }
             }
             addView(sharpHudSwitch)
-            addView(
-                TextView(context).apply {
-                    setTextColor(0xFFB0B0B0.toInt())
-                    textSize = 12f
-                    tag = "gfxHint"
-                },
-            )
             updateGfxEnabled(panel)
 
             // Floating sticks: a stick that appears where the thumb lands and follows it.
@@ -269,13 +265,6 @@ class TouchControlOverlay @JvmOverloads constructor(
             }.also { addView(it) }
             floatingSwitch(R.string.touch_floating_left, "floatLeftSwitch", ControlType.JOYSTICK_LEFT)
             floatingSwitch(R.string.touch_floating_right, "floatRightSwitch", ControlType.JOYSTICK_RIGHT)
-            addView(
-                TextView(context).apply {
-                    text = context.getString(R.string.touch_floating_hint)
-                    setTextColor(0xFFB0B0B0.toInt())
-                    textSize = 12f
-                },
-            )
 
             // Layout library: presets, export, import. The host Activity provides it (it needs
             // the file pickers of an Activity), so the button stays hidden until a host sets one.
@@ -354,7 +343,7 @@ class TouchControlOverlay @JvmOverloads constructor(
             }.also { addView(it) }
         }
 
-        // Edit | Settings | Close, top centre, while the editor is open.
+        // Edit | Settings, top centre, while the editor is open. The gear button closes the editor.
         tabStrip = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             setBackgroundColor(HudPalette.SURFACE)
@@ -370,7 +359,6 @@ class TouchControlOverlay @JvmOverloads constructor(
             }.also { addView(it) }
             tab(R.string.editor_tab_edit, "tabEdit") { showPage(EditorPage.EDIT) }
             tab(R.string.editor_tab_settings, "tabSettings") { showPage(EditorPage.SETTINGS) }
-            tab(R.string.editor_tab_close, "tabClose") { closeRequestListener?.invoke() ?: toggleEditMode() }
         }
 
         buildControls()
@@ -383,8 +371,7 @@ class TouchControlOverlay @JvmOverloads constructor(
         if (percent <= 0) context.getString(R.string.gfx_sharpen_off) else context.getString(R.string.gfx_sharpen_value, percent)
 
     /**
-     * Sharp HUD needs a scene smaller than the window, so it is greyed out at 100% resolution, with
-     * the hint saying what to change. The hint also says what the offscreen features have in common.
+     * Sharp HUD needs a scene smaller than the window, so it is greyed out at 100% resolution.
      */
     private fun updateGfxEnabled(panel: LinearLayout) {
         val applies = GfxSettings.sharpHudApplies(layoutData.renderScale)
@@ -392,8 +379,6 @@ class TouchControlOverlay @JvmOverloads constructor(
             isEnabled = applies
             alpha = if (applies) 1f else 0.4f
         }
-        panel.findViewWithTag<TextView>("gfxHint")?.text = context.getString(R.string.gfx_hint_offscreen) + "\n" +
-            context.getString(if (applies) R.string.gfx_hint_sharp_hud else R.string.gfx_hint_sharp_hud_needs_scale)
     }
 
     private fun buildControls() {
@@ -520,6 +505,9 @@ class TouchControlOverlay @JvmOverloads constructor(
     var gfxChangeListener: (() -> Unit)? = null
     var fpsChangeListener: ((Boolean) -> Unit)? = null
 
+    /** The mouse cursor was switched on or off (read it back from [GfxSettings.showCursor]). */
+    var cursorChangeListener: ((Boolean) -> Unit)? = null
+
     // Notified whenever edit mode is entered/exited so the host can toggle
     // drag-to-reposition on the static chrome buttons (gear/keyboard).
     var editModeChangeListener: ((Boolean) -> Unit)? = null
@@ -593,7 +581,6 @@ class TouchControlOverlay @JvmOverloads constructor(
      */
     private fun applyPage() {
         tabStrip.visibility = if (inEditMode) View.VISIBLE else View.GONE
-        tabStrip.findViewWithTag<View>("tabClose")?.visibility = if (closeTabVisible) View.VISIBLE else View.GONE
         tabStrip.findViewWithTag<View>("tabEdit")?.alpha = if (page == EditorPage.EDIT) 1f else 0.55f
         tabStrip.findViewWithTag<View>("tabSettings")?.alpha = if (page == EditorPage.SETTINGS) 1f else 0.55f
         editorScroll.visibility = if (inEditMode && page == EditorPage.SETTINGS) View.VISIBLE else View.GONE

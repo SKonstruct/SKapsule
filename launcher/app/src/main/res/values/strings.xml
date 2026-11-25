@@ -16,9 +16,6 @@
     <string name="gfx_sharpen_value">Sharpening: %1$d%%</string>
     <string name="gfx_sharpen_reset">Reset</string>
     <string name="gfx_sharp_hud">Sharp HUD (experimental)</string>
-    <string name="gfx_hint_offscreen">Sharpening and Sharp HUD draw the game off-screen first.</string>
-    <string name="gfx_hint_sharp_hud">Sharp HUD draws the HUD at full resolution, so it gets smaller: raise the game\'s UI scale to compensate.</string>
-    <string name="gfx_hint_sharp_hud_needs_scale">Sharp HUD needs Resolution below 100%.</string>
     <string name="game_stopped_title">The game stopped</string>
     <string name="game_stopped_message">It hit an error and can\'t continue. Share the log so it can be fixed, then exit and start it again.</string>
     <string name="boot_keep_waiting">Keep waiting</string>
@@ -49,7 +46,6 @@
     <string name="launching">Launching...</string>
     <string name="progress_starting_download">Starting download…</string>
     <string name="progress_starting_apply">Starting apply…</string>
-    <string name="progress_starting_remove">Starting remove…</string>
     <string name="runtime_setup_failed">Runtime setup failed: %1$s%2$s</string>
     <string name="update_available_title">Update available — v%1$s</string>
     <string name="sidebar_language">Language</string>
@@ -81,7 +77,6 @@
     <string name="update_no_apk">This release has no APK attached — open it on GitHub instead.</string>
     <string name="download_failed">Download Failed</string>
     <string name="apply_failed">Apply Failed</string>
-    <string name="remove_failed">Remove Failed</string>
     <string name="unknown_error">Unknown error</string>
     <!-- The credit on the main screen: the heart is coloured and "SirDank" opens the author's site (see setupCredit). -->
     <string name="credit_built_with">Built with \u2665\uFE0E by SirDank</string>
@@ -157,7 +152,6 @@
     <string name="editor_game_running_message">Spiral Knights is still open in the background and keeps its own copy of the control layout, so whichever closes last overwrites the other. Exit the game first to be safe.</string>
     <string name="editor_edit_anyway">Edit anyway</string>
     <string name="pref_crash_reporting">Send crash reports</string>
-    <string name="pref_crash_reporting_note">Device model, Android version, app build and the crash log, with credentials and emails removed.</string>
     <string name="pref_max_ram">Max RAM</string>
     <string name="ram_decrease">\u2212</string>
     <string name="ram_increase">+</string>
@@ -165,13 +159,9 @@
     <string name="ram_free">%1$d MB free of %2$d MB</string>
     <string name="subtitle_android">Spiral Knights for Android</string>
     <string name="sidebar_download_mods">Download Modpack</string>
-    <string name="sidebar_apply_mods">Apply Mods</string>
-    <string name="sidebar_remove_mods">Remove Mods</string>
     <string name="mod_sync_title">Downloading Mods</string>
     <string name="mod_apply_title">Applying Mods</string>
-    <string name="mod_remove_title">Removing Mods</string>
     <string name="mod_completed">Operation completed successfully.</string>
-    <string name="mod_removed">Mods removed successfully!\nUnpacked %1$d resources.</string>
     <string name="update_downloading">Updating SKapsule</string>
     <string name="layouts_button">Layouts…</string>
     <string name="layouts_title">Layouts</string>
@@ -204,8 +194,13 @@
     <string name="sidebar_mods_current">Modpack up to date</string>
     <string name="editor_tab_edit">Edit</string>
     <string name="editor_tab_settings">Settings</string>
-    <string name="editor_tab_close">Close</string>
     <string name="touch_floating_left">Floating left stick</string>
     <string name="touch_floating_right">Floating right stick</string>
-    <string name="touch_floating_hint">A floating stick appears where your thumb lands and follows it.</string>
+    <string name="sidebar_reset_game">Reset Game Files</string>
+    <string name="mod_remove_title">Resetting Game Files</string>
+    <string name="remove_failed">Reset Failed</string>
+    <string name="progress_starting_remove">Starting reset…</string>
+    <string name="mod_removed">Game files reset.\nUnpacked %1$d resources.</string>
+    <string name="mod_applied_warnings">Mods applied with warnings</string>
+    <string name="gfx_show_cursor">Show mouse cursor</string>
 </resources>

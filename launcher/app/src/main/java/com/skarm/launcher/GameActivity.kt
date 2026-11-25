@@ -293,6 +293,7 @@ open class GameActivity :
             applyRenderScale()
         }
         binding.touchOverlay.fpsChangeListener = { show -> setFpsVisible(show) }
+        binding.touchOverlay.cursorChangeListener = { refreshCursorVisible() }
         setFpsVisible(GfxSettings.showFps(this))
         binding.root.doOnLayout { positionFpsCounter() }
         surface.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> positionFpsCounter() }
@@ -394,6 +395,7 @@ open class GameActivity :
      * holder.setFixedSize), so translate then scale before pushing.
      */
     private fun pushCursorTouch(action: Int, overlayX: Float, overlayY: Float, button: Int) {
+        placeCursor(overlayX, overlayY)
         val viewX = overlayX - surface.left
         val viewY = overlayY - surface.top
         val (gameWidth, gameHeight) = gameSize()
@@ -899,6 +901,21 @@ open class GameActivity :
         } else {
             Pair(currentBufferWidth, currentBufferHeight)
         }
+
+    private var cursorSeen = false
+
+    /** The arrow's tip goes on the point the game sees as the cursor; shown only when the setting is on. */
+    private fun placeCursor(x: Float, y: Float) {
+        val density = resources.displayMetrics.density
+        binding.mouseCursor.translationX = x - 2 * density
+        binding.mouseCursor.translationY = y - density
+        cursorSeen = true
+        refreshCursorVisible()
+    }
+
+    private fun refreshCursorVisible() {
+        binding.mouseCursor.visibility = if (GfxSettings.showCursor(this) && cursorSeen) View.VISIBLE else View.GONE
+    }
 
     private fun setFpsVisible(show: Boolean) {
         bootHandler.removeCallbacks(fpsTicker)

@@ -16,9 +16,6 @@
     <string name="gfx_sharpen_value">Teravustamine: %1$d%%</string>
     <string name="gfx_sharpen_reset">Lähtesta</string>
     <string name="gfx_sharp_hud">Terav HUD (eksperimentaalne)</string>
-    <string name="gfx_hint_offscreen">Teravustamine ja terav HUD renderdavad mängu esmalt ekraaniväliselt.</string>
-    <string name="gfx_hint_sharp_hud">Terav HUD joonistatakse täiseraldusvõimega (muutub väiksemaks): kompenseerimiseks suurenda mängu liidese skaalat.</string>
-    <string name="gfx_hint_sharp_hud_needs_scale">Terav HUD vajab eraldusvõimet alla 100%.</string>
     <string name="game_stopped_title">Mäng seiskus</string>
     <string name="game_stopped_message">Tekkis viga ja mäng ei saa jätkuda. Jaga logi vea parandamiseks, seejärel välju ja käivita uuesti.</string>
     <string name="boot_keep_waiting">Oota edasi</string>
@@ -49,7 +46,6 @@
     <string name="launching">Käivitamine...</string>
     <string name="progress_starting_download">Allalaadimise alustamine…</string>
     <string name="progress_starting_apply">Rakendamise alustamine…</string>
-    <string name="progress_starting_remove">Eemaldamise alustamine…</string>
     <string name="runtime_setup_failed">Käituskeskkonna seadistus nurjus: %1$s%2$s</string>
     <string name="update_available_title">Värskendus on saadaval — v%1$s</string>
     <string name="sidebar_language">Keel</string>
@@ -67,7 +63,6 @@
     <string name="update_no_apk">Sellel väljalaskel pole kaasas APK-d — ava see GitHubis.</string>
     <string name="download_failed">Allalaadimine nurjus</string>
     <string name="apply_failed">Rakendamine nurjus</string>
-    <string name="remove_failed">Eemaldamine nurjus</string>
     <string name="unknown_error">Tundmatu viga</string>
     <!-- The credit on the main screen: the heart is coloured and "SirDank" opens the author's site (see setupCredit). -->
     <string name="credit_built_with">Loodud südamest \u2665\uFE0E poolt SirDank</string>
@@ -143,7 +138,6 @@
     <string name="editor_game_running_message">Spiral Knights on taustal endiselt avatud ja hoiab juhtnuppude paigutuse oma koopiat. Ülekirjutamise vältimiseks välju esmalt mängust.</string>
     <string name="editor_edit_anyway">Muuda ikkagi</string>
     <string name="pref_crash_reporting">Saada krahhiraporteid</string>
-    <string name="pref_crash_reporting_note">Seadme mudel, Androidi versioon, järk ja krahhilogi ilma kontotunnuste ja e-posti aadressideta.</string>
     <string name="pref_max_ram">Maksimaalne RAM</string>
     <string name="ram_decrease">\u2212</string>
     <string name="ram_increase">+</string>
@@ -151,13 +145,9 @@
     <string name="ram_free">%1$d MB vaba / %2$d MB</string>
     <string name="subtitle_android">Spiral Knights Androidile</string>
     <string name="sidebar_download_mods">Laadi modipakk alla</string>
-    <string name="sidebar_apply_mods">Rakenda modid</string>
-    <string name="sidebar_remove_mods">Eemalda modid</string>
     <string name="mod_sync_title">Modide allalaadimine</string>
     <string name="mod_apply_title">Modide rakendamine</string>
-    <string name="mod_remove_title">Modide eemaldamine</string>
     <string name="mod_completed">Toiming viidi edukalt lõpule.</string>
-    <string name="mod_removed">Modid edukalt eemaldatud!\nLahti pakitud %1$d ressurssi.</string>
     <string name="update_downloading">SKapsule\'i värskendamine</string>
     <string name="layouts_button">Paigutused…</string>
     <string name="layouts_title">Paigutused</string>
@@ -190,8 +180,13 @@
     <string name="sidebar_mods_current">Modipakk on ajakohane</string>
     <string name="editor_tab_edit">Muuda</string>
     <string name="editor_tab_settings">Seaded</string>
-    <string name="editor_tab_close">Sulge</string>
     <string name="touch_floating_left">Ujuv vasak kang</string>
     <string name="touch_floating_right">Ujuv parem kang</string>
-    <string name="touch_floating_hint">Ujuv kang ilmub kohta, kuhu pöial maandub, ja järgib seda.</string>
+    <string name="sidebar_reset_game">Reset Game Files</string>
+    <string name="mod_remove_title">Resetting Game Files</string>
+    <string name="remove_failed">Reset Failed</string>
+    <string name="progress_starting_remove">Starting reset…</string>
+    <string name="mod_removed">Game files reset.\nUnpacked %1$d resources.</string>
+    <string name="mod_applied_warnings">Mods applied with warnings</string>
+    <string name="gfx_show_cursor">Show mouse cursor</string>
 </resources>
