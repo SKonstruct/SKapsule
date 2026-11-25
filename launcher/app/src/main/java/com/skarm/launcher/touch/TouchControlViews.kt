@@ -18,6 +18,9 @@ import kotlin.math.sqrt
 
 abstract class BaseTouchControl(context: Context, val node: ControlNode) : View(context) {
     var inEditMode: Boolean = false
+
+    /** The dashed edit outline. The settings page keeps controls static (no game input) but unoutlined. */
+    var outlineVisible: Boolean = true
     var isSelectedNode: Boolean = false
 
     private val editPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -28,7 +31,7 @@ abstract class BaseTouchControl(context: Context, val node: ControlNode) : View(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        if (inEditMode) {
+        if (inEditMode && outlineVisible) {
             editPaint.color = if (isSelectedNode) Color.YELLOW else Color.GRAY
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), editPaint)
         }
@@ -55,6 +58,9 @@ object HudPalette {
     const val JOY_KNOB: Int = 0xCC808080.toInt() // joystick knob
 }
 
+/** How visible an idle floating stick's resting spot is (0..255). */
+private const val GHOST_ALPHA = 0x30
+
 class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(context, node) {
     private val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = HudPalette.JOY_BG
@@ -66,10 +72,46 @@ class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(
         style = Paint.Style.FILL
     }
 
+    // What a floating stick shows while nobody holds it: a faint base where it would start from.
+    private val ghostPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = HudPalette.JOY_BG
+        alpha = GHOST_ALPHA
+        style = Paint.Style.FILL
+    }
+
     private var knobX = 0f
     private var knobY = 0f
     private var isDragging = false
     private var pointerId = -1
+
+    /** True while a finger holds this stick; a held floating stick must not be put back by a layout pass. */
+    val isHeld: Boolean get() = isDragging
+
+    /**
+     * Puts the stick's centre at [x],[y] (overlay coordinates), kept fully on screen. Floating only:
+     * the saved position stays where [layout] put it, and the move is a translation on top.
+     */
+    fun floatTo(x: Float, y: Float) {
+        val p = parent as? android.view.View ?: return
+        val r = min(width, height) / 2f
+        val cx = x.coerceIn(r, maxOf(r, p.width - r))
+        val cy = y.coerceIn(r, maxOf(r, p.height - r))
+        translationX = cx - (left + width / 2f)
+        translationY = cy - (top + height / 2f)
+    }
+
+    /** Moves the base by up to ([dx],[dy]), kept on screen; returns what it actually moved. */
+    private fun shiftBase(dx: Float, dy: Float): Pair<Float, Float> {
+        val p = parent as? android.view.View ?: return Pair(0f, 0f)
+        val r = min(width, height) / 2f
+        val cx = left + width / 2f + translationX
+        val cy = top + height / 2f + translationY
+        val newCx = (cx + dx).coerceIn(r, maxOf(r, p.width - r))
+        val newCy = (cy + dy).coerceIn(r, maxOf(r, p.height - r))
+        translationX += newCx - cx
+        translationY += newCy - cy
+        return Pair(newCx - cx, newCy - cy)
+    }
 
     // Specific mapping info
     private val axisX = if (node.type == ControlType.JOYSTICK_LEFT) GameActivity.GP_AXIS_LEFT_X else GameActivity.GP_AXIS_RIGHT_X
@@ -105,8 +147,12 @@ class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(
         val centerX = width / 2f
         val centerY = height / 2f
 
-        canvas.drawCircle(centerX, centerY, radius, bgPaint)
-        canvas.drawCircle(knobX, knobY, radius * 0.4f, knobPaint)
+        if (node.floating && !isDragging && !inEditMode) {
+            canvas.drawCircle(centerX, centerY, radius, ghostPaint)
+        } else {
+            canvas.drawCircle(centerX, centerY, radius, bgPaint)
+            canvas.drawCircle(knobX, knobY, radius * 0.4f, knobPaint)
+        }
 
         super.onDraw(canvas)
     }
@@ -168,6 +214,11 @@ class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(
     private fun release() {
         isDragging = false
         pointerId = -1
+        // A floating stick goes back to where it rests.
+        if (node.floating) {
+            translationX = 0f
+            translationY = 0f
+        }
         resetKnob()
 
         if (node.type == ControlType.JOYSTICK_RIGHT) {
@@ -183,13 +234,23 @@ class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(
         val maxDist = radius * 0.6f
         if (maxDist <= 0f) return  // degenerate bounds would push NaN into the axis
 
-        val dx = x - centerX
-        val dy = y - centerY
-        val dist = sqrt((dx * dx + dy * dy).toDouble()).toFloat()
+        var dx = x - centerX
+        var dy = y - centerY
+        var dist = sqrt((dx * dx + dy * dy).toDouble()).toFloat()
+
+        // A floating stick's base follows a thumb dragged past its range, so it never runs out of
+        // travel. The base moves by the excess, so the thumb ends up at the stick's edge.
+        if (node.floating && dist > maxDist) {
+            val over = dist - maxDist
+            val (movedX, movedY) = shiftBase(dx / dist * over, dy / dist * over)
+            dx -= movedX
+            dy -= movedY
+            dist = sqrt((dx * dx + dy * dy).toDouble()).toFloat()
+        }
 
         if (dist <= maxDist) {
-            knobX = x
-            knobY = y
+            knobX = centerX + dx
+            knobY = centerY + dy
         } else {
             val angle = atan2(dy.toDouble(), dx.toDouble())
             knobX = centerX + (maxDist * cos(angle)).toFloat()

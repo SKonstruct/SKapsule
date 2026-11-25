@@ -168,6 +168,42 @@ class TouchLayoutShareTest {
     }
 
     @Test
+    fun aFloatingStickTravelsInTheFileAndAFileWithoutItIsNotFloating() {
+        val layout = TouchControlManager.createDefaultLayout()
+        layout.nodes.first { it.id == "joy_move" }.floating = true
+        val json = TouchLayoutShare.toJson(TouchLayoutShare.capture(layout, "Floaty"))
+        val back = TouchLayoutShare.parse(json)
+        assertTrue(back.nodes.getValue("joy_move").floating)
+        assertFalse(back.nodes.getValue("joy_face").floating)
+        // Written only when on, so a file from before floating sticks reads as not floating.
+        assertFalse(json.contains("\"floating\": false"))
+        assertFalse(TouchLayoutShare.parse(fixture("controls-android-export.json")).nodes.getValue("joy_move").floating)
+    }
+
+    @Test
+    fun floatingMustBeABoolean() {
+        val bad = valid().put(
+            "nodes",
+            JSONArray("""[{"id":"joy_move","xPercent":0.1,"yPercent":0.2,"scale":1,"visible":true,"floating":"yes"}]"""),
+        )
+        assertEquals(Reason.INVALID, reason(bad.toString()))
+    }
+
+    @Test
+    fun onlyAJoystickCanFloat() {
+        val text = valid().put(
+            "nodes",
+            JSONArray(
+                """[{"id":"joy_move","xPercent":0.1,"yPercent":0.2,"scale":1,"visible":true,"floating":true},
+                    {"id":"btn_esc","xPercent":0.1,"yPercent":0.2,"scale":1,"visible":true,"floating":true}]""",
+            ),
+        ).toString()
+        val applied = TouchLayoutShare.applyTo(TouchLayoutShare.parse(text), TouchControlManager.createDefaultLayout())
+        assertTrue(applied.nodes.first { it.id == "joy_move" }.floating)
+        assertFalse("a file cannot make a button float", applied.nodes.first { it.id == "btn_esc" }.floating)
+    }
+
+    @Test
     fun aNewerFileIsRefusedWithTheNewerReason() {
         try {
             TouchLayoutShare.parse(valid().put("version", 99).toString())

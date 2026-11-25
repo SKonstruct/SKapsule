@@ -38,6 +38,8 @@ data class ControlNode(
     val label: String = "",
     /** GLFW keycode this button taps (e.g. 256 = ESC); -1 = not a key button */
     val keyCode: Int = -1,
+    /** A joystick that appears where the thumb lands instead of sitting at its saved spot. */
+    var floating: Boolean = false,
 ) {
     /** Part of the bottom action row (attacks + items), which has its own show/hide
      *  switch. Derived from the id rather than persisted, so layouts saved by older

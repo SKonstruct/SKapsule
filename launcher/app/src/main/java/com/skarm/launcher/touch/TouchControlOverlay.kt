@@ -55,6 +55,25 @@ class TouchControlOverlay @JvmOverloads constructor(
     private var dX = 0f
     private var dY = 0f
 
+    /** The editor has two pages: arranging the controls, and the full settings with the controls locked. */
+    enum class EditorPage { EDIT, SETTINGS }
+
+    private var page = EditorPage.EDIT
+
+    // The selected control's dialog and the Edit | Settings | Close strip (both built in init).
+    private val nodePanel: LinearLayout
+    private val tabStrip: LinearLayout
+
+    /** The Close tab was pressed. Unset it closes the editor; the standalone editor leaves its Activity. */
+    var closeRequestListener: (() -> Unit)? = null
+
+    /** The standalone editor has its own Done button, so it hides the Close tab. */
+    var closeTabVisible: Boolean = true
+        set(value) {
+            field = value
+            tabStrip.findViewWithTag<View>("tabClose")?.visibility = if (value) View.VISIBLE else View.GONE
+        }
+
     // Editor UI Panel
     private val editorPanel: LinearLayout
 
@@ -240,6 +259,24 @@ class TouchControlOverlay @JvmOverloads constructor(
             )
             updateGfxEnabled(panel)
 
+            // Floating sticks: a stick that appears where the thumb lands and follows it.
+            fun floatingSwitch(label: Int, name: String, type: ControlType) = Switch(context).apply {
+                text = context.getString(label)
+                setTextColor(Color.WHITE)
+                tag = name
+                isChecked = layoutData.nodes.any { it.type == type && it.floating }
+                setOnCheckedChangeListener { _, on -> setFloating(type, on) }
+            }.also { addView(it) }
+            floatingSwitch(R.string.touch_floating_left, "floatLeftSwitch", ControlType.JOYSTICK_LEFT)
+            floatingSwitch(R.string.touch_floating_right, "floatRightSwitch", ControlType.JOYSTICK_RIGHT)
+            addView(
+                TextView(context).apply {
+                    text = context.getString(R.string.touch_floating_hint)
+                    setTextColor(0xFFB0B0B0.toInt())
+                    textSize = 12f
+                },
+            )
+
             // Layout library: presets, export, import. The host Activity provides it (it needs
             // the file pickers of an Activity), so the button stays hidden until a host sets one.
             val layoutsButton = Button(context).apply {
@@ -258,79 +295,88 @@ class TouchControlOverlay @JvmOverloads constructor(
             }
             addView(resetButton)
 
-            // Separator
-            addView(
-                View(context).apply {
-                    setBackgroundColor(0x66FFFFFF.toInt())
-                    layoutParams = LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, 2).apply {
-                        setMargins(0, 16, 0, 16)
-                    }
-                },
-            )
+        }
 
-            // Node Settings (Hidden by default)
-            val nodeTitle = TextView(context).apply {
-                text = "Node Settings"
-                setTextColor(Color.WHITE)
-                tag = "nodeTitle"
-                visibility = View.GONE
-            }
-            addView(nodeTitle)
-            cachedNodeTitle = nodeTitle
+        editorScroll = android.widget.ScrollView(context).apply {
+            visibility = View.GONE
+            // Below the tab strip, and scrolling in what is left: the panel is taller than a landscape phone.
+            val d = resources.displayMetrics.density
+            layoutParams = LayoutParams((320 * d).toInt(), LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL)
+                .apply {
+                    topMargin = (64 * d).toInt()
+                    bottomMargin = (8 * d).toInt()
+                }
+            addView(editorPanel)
+        }
 
-            val visibleSwitch = Switch(context).apply {
+        // The selected control's dialog: its own small panel, docked away from the control (see
+        // dockNodePanel) so the control being dragged is never under it. Edit page only.
+        val density = resources.displayMetrics.density
+        nodePanel = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(HudPalette.SURFACE)
+            setPadding(24, 24, 24, 24)
+            visibility = View.GONE
+            isClickable = true // a tap on the panel itself must not fall through and deselect
+            layoutParams = LayoutParams((NODE_PANEL_DP * density).toInt(), LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.START)
+            cachedNodeTitle = TextView(context).apply { setTextColor(Color.WHITE) }.also { addView(it) }
+            cachedVisibleSwitch = Switch(context).apply {
                 text = "Visible"
                 setTextColor(Color.WHITE)
-                tag = "visibleSwitch"
-                visibility = View.GONE
                 setOnCheckedChangeListener { _, isChecked ->
                     selectedView?.let {
                         it.node.visible = isChecked
                         it.alpha = if (isChecked) layoutData.globalOpacity else 0.3f // keep visible in edit mode
                     }
                 }
-            }
-            addView(visibleSwitch)
-            cachedVisibleSwitch = visibleSwitch
-
-            val scaleLabel = TextView(context).apply {
+            }.also { addView(it) }
+            cachedScaleLabel = TextView(context).apply {
                 text = "Scale"
                 setTextColor(Color.WHITE)
-                tag = "scaleLabel"
-                visibility = View.GONE
-            }
-            addView(scaleLabel)
-            cachedScaleLabel = scaleLabel
-
-            val scaleSlider = SeekBar(context).apply {
+            }.also { addView(it) }
+            cachedScaleSlider = SeekBar(context).apply {
                 max = 200 // 0.5x to 2.5x
-                tag = "scaleSlider"
-                visibility = View.GONE
                 setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                     override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                         selectedView?.let {
-                            val scale = 0.5f + (progress / 100f)
-                            it.node.scale = scale
+                            it.node.scale = 0.5f + (progress / 100f)
                             requestLayout()
                         }
                     }
+
                     override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-                    override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+
+                    // The control grew or shrank: dock again, so it stays clear of the dialog.
+                    override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                        post { dockNodePanel() }
+                    }
                 })
-            }
-            addView(scaleSlider)
-            cachedScaleSlider = scaleSlider
+            }.also { addView(it) }
         }
 
-        editorScroll = android.widget.ScrollView(context).apply {
+        // Edit | Settings | Close, top centre, while the editor is open.
+        tabStrip = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setBackgroundColor(HudPalette.SURFACE)
+            setPadding(8, 8, 8, 8)
             visibility = View.GONE
-            layoutParams = LayoutParams(
-                (320 * resources.displayMetrics.density).toInt(), LayoutParams.WRAP_CONTENT, Gravity.CENTER,
-            )
-            addView(editorPanel)
+            isClickable = true
+            layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT, Gravity.TOP or Gravity.CENTER_HORIZONTAL)
+                .apply { topMargin = (8 * density).toInt() }
+            fun tab(label: Int, name: String, onClick: () -> Unit) = Button(context).apply {
+                text = context.getString(label)
+                tag = name
+                setOnClickListener { onClick() }
+            }.also { addView(it) }
+            tab(R.string.editor_tab_edit, "tabEdit") { showPage(EditorPage.EDIT) }
+            tab(R.string.editor_tab_settings, "tabSettings") { showPage(EditorPage.SETTINGS) }
+            tab(R.string.editor_tab_close, "tabClose") { closeRequestListener?.invoke() ?: toggleEditMode() }
         }
+
         buildControls()
         addView(editorScroll)
+        addView(nodePanel)
+        addView(tabStrip)
     }
 
     private fun sharpenText(percent: Int): String =
@@ -404,7 +450,8 @@ class TouchControlOverlay @JvmOverloads constructor(
         val enabled = layoutData.controlsEnabled
         if (!enabled) cancelActivePointers()
         for (view in controlViews) {
-            if (inEditMode) {
+            // The Settings page shows the controls as they play, so opacity and Show Buttons can be judged.
+            if (inEditMode && page == EditorPage.EDIT) {
                 applyEditModeAppearance(view)
             } else {
                 applyPlayModeAppearance(view, enabled)
@@ -503,13 +550,16 @@ class TouchControlOverlay @JvmOverloads constructor(
             val r = (cx + size / 2).toInt()
             val b = (cy + size / 2).toInt()
 
-            view.translationX = 0f
-            view.translationY = 0f
+            // A held floating stick sits where the thumb put it; every other control is back at its saved spot.
+            if (!(view is TouchJoystickView && view.isHeld)) {
+                view.translationX = 0f
+                view.translationY = 0f
+            }
             view.layout(l, t, r, b)
         }
 
-        // Ensure editor panel is brought to front and centered
-        editorScroll.bringToFront()
+        bringChromeToFront()
+        dockNodePanel()
     }
 
     fun toggleEditMode() {
@@ -517,7 +567,6 @@ class TouchControlOverlay @JvmOverloads constructor(
         // of this switch, so release it first.
         cancelActivePointers()
         inEditMode = !inEditMode
-        editorScroll.visibility = if (inEditMode) View.VISIBLE else View.GONE
 
         if (!inEditMode) {
             // Save layout when exiting edit mode
@@ -525,15 +574,53 @@ class TouchControlOverlay @JvmOverloads constructor(
             selectedView = null
         }
 
+        applyPage()
+        editModeChangeListener?.invoke(inEditMode)
+    }
+
+    /** Switches between the Edit and Settings pages (the tab strip). Only while the editor is open. */
+    fun showPage(next: EditorPage) {
+        if (!inEditMode) return
+        page = next
+        if (next != EditorPage.EDIT) selectView(null)
+        applyPage()
+    }
+
+    /**
+     * Shows what the current page needs and nothing else. Edit: the controls draggable and outlined, plus the
+     * selected control's small dialog. Settings: the controls as they play but locked (no game input), plus
+     * the full panel. Closed: neither.
+     */
+    private fun applyPage() {
+        tabStrip.visibility = if (inEditMode) View.VISIBLE else View.GONE
+        tabStrip.findViewWithTag<View>("tabClose")?.visibility = if (closeTabVisible) View.VISIBLE else View.GONE
+        tabStrip.findViewWithTag<View>("tabEdit")?.alpha = if (page == EditorPage.EDIT) 1f else 0.55f
+        tabStrip.findViewWithTag<View>("tabSettings")?.alpha = if (page == EditorPage.SETTINGS) 1f else 0.55f
+        editorScroll.visibility = if (inEditMode && page == EditorPage.SETTINGS) View.VISIBLE else View.GONE
+
         for (view in controlViews) {
+            // Locked, not "playing": both pages keep inEditMode so no touch reaches the game.
             view.inEditMode = inEditMode
+            view.outlineVisible = page == EditorPage.EDIT
             view.isSelectedNode = false
             view.invalidate()
         }
 
         applyControlAppearance()
         updateEditorPanel()
-        editModeChangeListener?.invoke(inEditMode)
+        bringChromeToFront()
+    }
+
+    /** The panels and the strip sit above the controls, whatever order they were added in. */
+    private fun bringChromeToFront() {
+        editorScroll.bringToFront()
+        nodePanel.bringToFront()
+        tabStrip.bringToFront()
+    }
+
+    private fun setFloating(type: ControlType, on: Boolean) {
+        layoutData.nodes.filter { it.type == type }.forEach { it.floating = on }
+        controlViews.forEach { it.invalidate() }
     }
 
     private fun handleResetTap(button: Button) {
@@ -582,7 +669,12 @@ class TouchControlOverlay @JvmOverloads constructor(
             renderScaleChangeListener?.invoke(layoutData.renderScale)
         }
 
-        editorScroll.bringToFront()
+        editorPanel.findViewWithTag<Switch>("floatLeftSwitch")?.isChecked =
+            layoutData.nodes.any { it.type == ControlType.JOYSTICK_LEFT && it.floating }
+        editorPanel.findViewWithTag<Switch>("floatRightSwitch")?.isChecked =
+            layoutData.nodes.any { it.type == ControlType.JOYSTICK_RIGHT && it.floating }
+
+        bringChromeToFront()
     }
 
     /**
@@ -618,6 +710,8 @@ class TouchControlOverlay @JvmOverloads constructor(
         if (!inEditMode) {
             return handlePlayTouch(event)
         }
+        // The Settings page shows the controls but does not let them be moved or pressed.
+        if (page == EditorPage.SETTINGS) return true
 
         // --- Edit Mode Logic ---
         val action = event.actionMasked
@@ -658,7 +752,8 @@ class TouchControlOverlay @JvmOverloads constructor(
                 return true
             }
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                // Done dragging
+                // Done dragging: the control may have moved, so the dialog finds its spot again.
+                dockNodePanel()
                 return true
             }
         }
@@ -677,6 +772,15 @@ class TouchControlOverlay @JvmOverloads constructor(
         event.buttonState and MotionEvent.BUTTON_TERTIARY != 0 -> 2
         else -> 0
     }
+
+    private fun isFloatingStick(view: BaseTouchControl) = view is TouchJoystickView && view.node.floating
+
+    /** The free floating stick for a touch at [x]: the left stick takes the left half, the right stick the right half. */
+    private fun floatingStickFor(x: Float): TouchJoystickView? =
+        controlViews.filterIsInstance<TouchJoystickView>().firstOrNull {
+            it.node.floating && it.visibility == View.VISIBLE && !it.isHeld &&
+                (if (it.node.type == ControlType.JOYSTICK_LEFT) x < width / 2f else x >= width / 2f)
+        }
 
     private fun isPointInsideView(x: Float, y: Float, view: View): Boolean {
         return x >= view.left && x <= view.right && y >= view.top && y <= view.bottom
@@ -700,9 +804,11 @@ class TouchControlOverlay @JvmOverloads constructor(
                 val x = event.getX(index)
                 val y = event.getY(index)
 
+                // A floating stick has no fixed spot to hit, so it is not found by position: a touch that
+                // lands on nothing else, in its half of the screen, starts it there.
                 val target = controlViews.lastOrNull { view ->
-                    view.visibility == View.VISIBLE && isPointInsideView(x, y, view)
-                }
+                    view.visibility == View.VISIBLE && !isFloatingStick(view) && isPointInsideView(x, y, view)
+                } ?: floatingStickFor(x)?.also { it.floatTo(x, y) }
                 if (target != null && pointerTargets.indexOfValue(target) >= 0) {
                     // A second finger on a control another finger already holds: swallow
                     // it rather than letting it click through into the game world.
@@ -798,8 +904,9 @@ class TouchControlOverlay @JvmOverloads constructor(
             event.downTime,
             event.eventTime,
             action,
-            event.getX(pointerIndex) - view.left,
-            event.getY(pointerIndex) - view.top,
+            // A floating stick is translated away from where it was laid out; every other control has none.
+            event.getX(pointerIndex) - view.left - view.translationX,
+            event.getY(pointerIndex) - view.top - view.translationY,
             event.metaState,
         )
         val handled = view.dispatchTouchEvent(copy)
@@ -873,29 +980,56 @@ class TouchControlOverlay @JvmOverloads constructor(
     private fun updateEditorPanel() {
         val nodeTitle = cachedNodeTitle ?: return
         val visibleSwitch = cachedVisibleSwitch ?: return
-        val scaleLabel = cachedScaleLabel ?: return
         val scaleSlider = cachedScaleSlider ?: return
 
-        if (selectedView != null) {
-            val node = selectedView!!.node
-            nodeTitle.visibility = View.VISIBLE
+        val selected = selectedView
+        if (selected != null && inEditMode && page == EditorPage.EDIT) {
+            val node = selected.node
             nodeTitle.text = "Settings: ${node.label.ifEmpty { node.id }}"
-
-            visibleSwitch.visibility = View.VISIBLE
             visibleSwitch.isChecked = node.visible
-
-            scaleLabel.visibility = View.VISIBLE
-            scaleSlider.visibility = View.VISIBLE
             scaleSlider.progress = ((node.scale - 0.5f) * 100).toInt()
+            nodePanel.visibility = View.VISIBLE
+            dockNodePanel()
         } else {
-            nodeTitle.visibility = View.GONE
-            visibleSwitch.visibility = View.GONE
-            scaleLabel.visibility = View.GONE
-            scaleSlider.visibility = View.GONE
+            nodePanel.visibility = View.GONE
         }
     }
 
+    /**
+     * Puts the selected control's dialog where it does not cover that control: the player is dragging the
+     * control, and a dialog on top of it would be in the way (DialogDock picks the spot).
+     */
+    private fun dockNodePanel() {
+        val selected = selectedView ?: return
+        if (nodePanel.visibility != View.VISIBLE || width == 0 || height == 0) return
+        val d = resources.displayMetrics.density
+        nodePanel.measure(
+            MeasureSpec.makeMeasureSpec((NODE_PANEL_DP * d).toInt(), MeasureSpec.EXACTLY),
+            MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED),
+        )
+        val reserved = listOf(
+            // The tab strip, and the standalone editor's Done button at the top end.
+            Box(width / 2f - 160 * d, 0f, width / 2f + 160 * d, 64 * d),
+            Box(width - 140 * d, 0f, width.toFloat(), 80 * d),
+        )
+        val (x, y) = DialogDock.place(
+            screenW = width.toFloat(),
+            screenH = height.toFloat(),
+            dialogW = nodePanel.measuredWidth.toFloat(),
+            dialogH = nodePanel.measuredHeight.toFloat(),
+            control = Box(selected.left.toFloat(), selected.top.toFloat(), selected.right.toFloat(), selected.bottom.toFloat()),
+            reserved = reserved,
+            margin = 12 * d,
+            gap = 12 * d,
+            others = controlViews.filter { it !== selected && it.node.visible }
+                .map { Box(it.left.toFloat(), it.top.toFloat(), it.right.toFloat(), it.bottom.toFloat()) },
+        )
+        nodePanel.translationX = x
+        nodePanel.translationY = y
+    }
+
     companion object {
+        private const val NODE_PANEL_DP = 240
         private const val RESET_LABEL = "Reset Layout"
         private const val RESET_CONFIRM_LABEL = "Tap again to confirm"
         private const val RESET_CONFIRM_WINDOW_MS = 2500L

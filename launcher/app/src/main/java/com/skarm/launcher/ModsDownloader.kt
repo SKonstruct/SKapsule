@@ -39,7 +39,65 @@ object ModsDownloader {
         val name: String,
         val downloadUrl: String,
         val sha: String,
+        /** The listing's byte size, or -1 when it did not say. */
+        val size: Long = -1,
     )
+
+    enum class PackState { NOT_INSTALLED, UPDATE, CURRENT }
+
+    data class PackStatus(val state: PackState, val toDownload: Int, val toDelete: Int)
+
+    /** The last status found since the app started, so the launcher asks GitHub once per start. */
+    @Volatile
+    var lastStatus: PackStatus? = null
+
+    /**
+     * What a sync would do, as SKradle decides it: the modpack counts as installed when any of its
+     * files is here; with a file to fetch or to drop it is an update, with none it is current, and
+     * with nothing installed yet it is "not installed". [isCurrent] says whether a local file matches
+     * the listing; [exists] whether a name is in the mods folder at all. Only names an earlier sync
+     * wrote are ever dropped (the folder also holds the player's own mods).
+     */
+    internal fun packStatus(
+        remote: List<ModFile>,
+        previouslySynced: Set<String>,
+        exists: (String) -> Boolean,
+        isCurrent: (ModFile) -> Boolean,
+    ): PackStatus {
+        val remoteNames = remote.mapTo(HashSet()) { it.name }
+        val toDownload = remote.count { !isCurrent(it) }
+        val toDelete = previouslySynced.count { isSafeModName(it) && it !in remoteNames && exists(it) }
+        val installed = remote.any { exists(it.name) } || previouslySynced.any { exists(it) }
+        val state = when {
+            installed && toDownload + toDelete > 0 -> PackState.UPDATE
+            !installed && toDownload > 0 -> PackState.NOT_INSTALLED
+            else -> PackState.CURRENT
+        }
+        return PackStatus(state, toDownload, toDelete)
+    }
+
+    /**
+     * Reads the modpack listing and compares it with [modsDir] without changing anything. A file whose
+     * size differs from the listing's is out of date without being read; only the others are hashed.
+     */
+    suspend fun checkStatus(modsDir: File): PackStatus = withContext(Dispatchers.IO) {
+        val remote = fetchRemoteModsList()
+        if (remote.isEmpty()) throw IOException("No mods found in the remote repository.")
+        val synced = runCatching { File(modsDir, SYNCED_MANIFEST).readLines().filter { it.isNotBlank() }.toSet() }
+            .getOrDefault(emptySet())
+        val status = packStatus(
+            remote,
+            synced,
+            exists = { File(modsDir, it).isFile },
+            isCurrent = { mod ->
+                val file = File(modsDir, mod.name)
+                file.isFile && mod.sha.isNotEmpty() && (mod.size < 0 || file.length() == mod.size) &&
+                    runCatching { calculateGitBlobSha(file) == mod.sha }.getOrDefault(false)
+            },
+        )
+        lastStatus = status
+        status
+    }
 
     suspend fun sync(
         modsDir: File,
@@ -101,6 +159,8 @@ object ModsDownloader {
 
         runCatching { manifest.writeText(remoteMods.joinToString("\n") { it.name }) }
             .onFailure { Log.w(TAG, "could not record the synced mods", it) }
+        // A failed download throws, so reaching here means every file now matches the listing.
+        lastStatus = PackStatus(PackState.CURRENT, 0, 0)
         stats
     }
 
@@ -125,6 +185,7 @@ object ModsDownloader {
                     var name = ""
                     var downloadUrl = ""
                     var sha = ""
+                    var size = -1L
                     while (reader.hasNext()) {
                         val key = reader.nextName()
                         if (reader.peek() == JsonToken.NULL) {
@@ -136,6 +197,7 @@ object ModsDownloader {
                             "name" -> name = reader.nextString()
                             "download_url" -> downloadUrl = reader.nextString()
                             "sha" -> sha = reader.nextString()
+                            "size" -> size = if (reader.peek() == JsonToken.NUMBER) reader.nextLong() else { reader.skipValue(); -1L }
                             else -> reader.skipValue()
                         }
                     }
@@ -145,7 +207,7 @@ object ModsDownloader {
                         Log.w(TAG, "Ignoring listing entry with an unexpected name or URL: $name")
                         continue
                     }
-                    mods.add(ModFile(name, downloadUrl, sha))
+                    mods.add(ModFile(name, downloadUrl, sha, size))
                 }
                 reader.endArray()
             }

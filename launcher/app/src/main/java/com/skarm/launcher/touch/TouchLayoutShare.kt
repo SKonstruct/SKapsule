@@ -19,7 +19,14 @@ class SharedLayout(
     val actionBarVisible: Boolean,
     val nodes: Map<String, NodeState>,
 ) {
-    class NodeState(val xPercent: Float, val yPercent: Float, val scale: Float, val visible: Boolean)
+    class NodeState(
+        val xPercent: Float,
+        val yPercent: Float,
+        val scale: Float,
+        val visible: Boolean,
+        /** Optional in a file (absent means false); only a joystick can take it. */
+        val floating: Boolean = false,
+    )
 }
 
 /** Why a file was refused. The whole file is refused: nothing is ever applied partially. */
@@ -56,7 +63,7 @@ object TouchLayoutShare {
         globalOpacity = layout.globalOpacity,
         actionBarVisible = layout.actionBarVisible,
         nodes = layout.nodes.associate {
-            it.id to SharedLayout.NodeState(it.xPercent, it.yPercent, it.scale, it.visible)
+            it.id to SharedLayout.NodeState(it.xPercent, it.yPercent, it.scale, it.visible, it.floating)
         },
     )
 
@@ -77,6 +84,7 @@ object TouchLayoutShare {
                             put("yPercent", n.yPercent.toDouble())
                             put("scale", n.scale.toDouble())
                             put("visible", n.visible)
+                            if (n.floating) put("floating", true)
                         },
                     )
                 }
@@ -109,6 +117,8 @@ object TouchLayoutShare {
                     scale = o.finite("scale").toFloat()
                         .coerceIn(TouchControlManager.MIN_NODE_SCALE, TouchControlManager.MAX_NODE_SCALE),
                     visible = o.opt("visible") as? Boolean ?: throw invalid("node $i has no visibility"),
+                    // Optional, so a file from before floating sticks still parses; present, it must be a boolean.
+                    floating = if (o.has("floating")) o.opt("floating") as? Boolean ?: throw invalid("node $i floating is not a boolean") else false,
                 )
                 // An id this build doesn't have (a newer control) is skipped, but a repeat of a
                 // known one means the file is inconsistent, so it is refused.
@@ -137,7 +147,14 @@ object TouchLayoutShare {
     fun applyTo(shared: SharedLayout, base: TouchLayoutData): TouchLayoutData {
         val nodes = TouchControlManager.createDefaultLayout().nodes.map { canonical ->
             val s = shared.nodes[canonical.id] ?: return@map canonical
-            canonical.copy(xPercent = s.xPercent, yPercent = s.yPercent, scale = s.scale, visible = s.visible)
+            canonical.copy(
+                xPercent = s.xPercent,
+                yPercent = s.yPercent,
+                scale = s.scale,
+                visible = s.visible,
+                // Only a joystick floats: a file cannot make a button do it.
+                floating = s.floating && canonical.type != ControlType.BUTTON,
+            )
         }.toMutableList()
         return TouchLayoutData(
             globalOpacity = shared.globalOpacity,

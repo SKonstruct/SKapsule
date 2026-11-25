@@ -26,6 +26,18 @@ Notable changes per release. Versions are the git tags the APKs are built from
   arrangement travels: where each control sits, its size and whether it shows, plus opacity and **Show Buttons**.
   Resolution and **Show Controls** stay yours, and a file can never change what a control does. Importing saves a
   new preset and asks before applying it.
+- **A calmer touch-controls editor.** A tab strip at the top switches between **Edit** and **Settings**. On Edit,
+  the small dialog for the selected control only appears when something is selected, and it docks away from
+  that control so it never covers what you are dragging. Settings shows the full panel with the controls
+  visible but untouchable.
+- **Floating thumb sticks.** Turn on **Floating left stick** and/or **Floating right stick** in Settings: the stick
+  appears where your thumb lands on that half of the screen and follows it, leaving a faint ghost where it
+  waits. Buttons still win a touch. The choice is saved in layouts, presets and exported files (older versions
+  ignore it).
+- **Graphics settings in the sidebar.** **Show FPS counter**, **Sharpening** and **Sharp HUD** are now also in
+  the Settings sidebar, so you can set them without starting the game. They are the same settings as the in-game panel.
+- **The modpack button says what to do.** It reads **Download Modpack**, **Update Modpack** when the modpack
+  has changed, or **Modpack up to date**. SKapsule asks GitHub once when it starts.
 - **Memory breakdown in Share Logs.** The once-a-minute memory line now splits the process into Java heap,
   native heap, graphics and code, so a long-session out-of-memory crash can be traced to the part that grows.
 

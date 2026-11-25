@@ -20,6 +20,7 @@ import android.view.View
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ProgressBar
+import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -190,6 +191,12 @@ class LauncherActivity : AppCompatActivity() {
             CrashReporting.setEnabled(this, isChecked)
         }
 
+        setUpGraphicsSettings()
+
+        // The button says Update when the modpack changed. GitHub is asked once per app start.
+        refreshModpackButton()
+        if (ModsDownloader.lastStatus == null) checkModpackStatus()
+
         // Max RAM stepper
         binding.btnRamMinus.setOnClickListener { stepRam(-RamSettings.STEP_MB) }
         binding.btnRamPlus.setOnClickListener { stepRam(RamSettings.STEP_MB) }
@@ -228,6 +235,7 @@ class LauncherActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        refreshGraphicsSettings()
         setLaunchButtonLoading(false)
         // The game process can have found damaged files and invalidated them; repair before
         // the next Play rather than failing the same way again.
@@ -1091,6 +1099,7 @@ class LauncherActivity : AppCompatActivity() {
                 val modsDir = File(SkInstaller.homeDir(this@LauncherActivity), "mods")
                 val stats = ModsDownloader.sync(modsDir, progressInfo.updateProgress)
                 progressInfo.dialog.dismissSafely()
+                refreshModpackButton()
                 Toast.makeText(
                     this@LauncherActivity,
                     "Download complete: ${stats.downloaded} downloaded, ${stats.skipped} skipped, ${stats.deleted} deleted",
@@ -1215,6 +1224,77 @@ class LauncherActivity : AppCompatActivity() {
         binding.btnRamPlus.isEnabled = current < max
         binding.textRamFree.text =
             getString(R.string.ram_free, RamSettings.availableMb(this), RamSettings.totalMb(this))
+    }
+
+    /** "Download Modpack", "Update Modpack" when the modpack changed, "Modpack up to date" when it matches. */
+    private fun refreshModpackButton() {
+        binding.sidebarBtnDownloadMods.setText(
+            when (ModsDownloader.lastStatus?.state) {
+                ModsDownloader.PackState.UPDATE -> R.string.sidebar_update_mods
+                ModsDownloader.PackState.CURRENT -> R.string.sidebar_mods_current
+                else -> R.string.sidebar_download_mods
+            },
+        )
+    }
+
+    /** Offline or rate-limited is not an error here: the button just keeps its default. */
+    private fun checkModpackStatus() {
+        lifecycleScope.launch {
+            runCatching { ModsDownloader.checkStatus(File(SkInstaller.homeDir(this@LauncherActivity), "mods")) }
+            refreshModpackButton()
+        }
+    }
+
+    /** True while the controls are being set from the stored values, so that does not write them back. */
+    private var gfxUiUpdating = false
+
+    private fun setUpGraphicsSettings() {
+        binding.switchFps.setOnCheckedChangeListener { _, on ->
+            if (!gfxUiUpdating) GfxSettings.setShowFps(this, on)
+        }
+        binding.seekSharpen.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                binding.textSharpen.text = sharpenText(progress)
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+
+            // Applied on release, like the in-game slider: the game surface may be rebuilt.
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                GfxSettings.setSharpenPercent(this@LauncherActivity, seekBar?.progress ?: 0)
+            }
+        })
+        binding.switchSharpHud.setOnCheckedChangeListener { _, on ->
+            if (!gfxUiUpdating) {
+                GfxSettings.setSharpHud(this, on)
+                refreshGfxHint()
+            }
+        }
+        refreshGraphicsSettings()
+    }
+
+    /** The in-game panel changes the same settings, so they are read again whenever the launcher returns. */
+    private fun refreshGraphicsSettings() {
+        gfxUiUpdating = true
+        binding.switchFps.isChecked = GfxSettings.showFps(this)
+        val sharpen = GfxSettings.sharpenPercent(this)
+        binding.seekSharpen.progress = sharpen
+        binding.textSharpen.text = sharpenText(sharpen)
+        binding.switchSharpHud.isChecked = GfxSettings.sharpHud(this)
+        gfxUiUpdating = false
+        refreshGfxHint()
+    }
+
+    private fun sharpenText(percent: Int): String =
+        if (percent <= 0) getString(R.string.gfx_sharpen_off) else getString(R.string.gfx_sharpen_value, percent)
+
+    /** Sharp HUD needs a scene smaller than the window, so it is greyed out at 100% resolution. */
+    private fun refreshGfxHint() {
+        val applies = GfxSettings.sharpHudApplies(com.skarm.launcher.touch.TouchControlManager.loadLayout(this).renderScale)
+        binding.switchSharpHud.isEnabled = applies
+        binding.switchSharpHud.alpha = if (applies) 1f else 0.4f
+        binding.textGfxHint.text = getString(R.string.gfx_hint_offscreen) + "\n" +
+            getString(if (applies) R.string.gfx_hint_sharp_hud else R.string.gfx_hint_sharp_hud_needs_scale)
     }
 }
 
