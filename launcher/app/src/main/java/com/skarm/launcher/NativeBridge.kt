@@ -135,6 +135,41 @@ object NativeBridge {
         bootListener?.onRenderReady()
     }
 
+    // --- JVM/native -> the game's own mouse cursor --------------------------------
+    // The game's cursor is window-cursor art (RGBA pixels and a hotspot) that the GLFW shim in the bootstrap hands to
+    // native when the game selects it; native passes it here and GameActivity draws it, if the user switched the
+    // cursor on. [rgba] is null when the game has no cursor art selected.
+
+    /** Implemented by GameActivity to draw the game's cursor on the UI thread. */
+    interface CursorListener {
+        fun onCursorImage(width: Int, height: Int, rgba: ByteArray?, hotX: Int, hotY: Int)
+    }
+
+    private class CursorArt(val width: Int, val height: Int, val rgba: ByteArray?, val hotX: Int, val hotY: Int)
+
+    private val cursorLock = Any()
+    private var cursorListener: CursorListener? = null
+    private var cursorArt: CursorArt? = null
+
+    /** The art the game selected last is replayed to a newly attached listener (activity recreated). */
+    fun setCursorListener(listener: CursorListener?) {
+        val replay = synchronized(cursorLock) {
+            cursorListener = listener
+            cursorArt
+        }
+        if (listener != null && replay != null) listener.onCursorImage(replay.width, replay.height, replay.rgba, replay.hotX, replay.hotY)
+    }
+
+    /** Native (a game thread) -> the game selected this cursor art, or none. */
+    @JvmStatic
+    fun onCursorImage(width: Int, height: Int, rgba: ByteArray?, hotX: Int, hotY: Int) {
+        val listener = synchronized(cursorLock) {
+            cursorArt = CursorArt(width, height, rgba, hotX, hotY)
+            cursorListener
+        }
+        listener?.onCursorImage(width, height, rgba, hotX, hotY)
+    }
+
     // --- JVM/native -> Android Steam-login keep-alive --------------------------
     // frenchpress brackets its whole auth attempt with steamKeepAlive(true/false)
     // (via SkBootstrap.nativeSteamKeepAlive -> sklauncher.c -> here). While active,

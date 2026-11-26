@@ -721,6 +721,7 @@ static jmethodID g_nb_keep_alive;     // steamKeepAlive(Z)V
 static jmethodID g_nb_show_sign_in;   // showSignIn(Ljava/lang/String;Ljava/lang/String;)V
 static jmethodID g_nb_hide_sign_in;   // hideSignIn()V
 static jmethodID g_nb_sign_in_cancelled; // signInCancelled()Z
+static jmethodID g_nb_cursor_image;   // onCursorImage(II[BII)V
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
     g_art_vm = vm;
@@ -741,6 +742,7 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
                                                        "(Ljava/lang/String;Ljava/lang/String;)V");
         g_nb_hide_sign_in  = (*env)->GetStaticMethodID(env, cls, "hideSignIn", "()V");
         g_nb_sign_in_cancelled = (*env)->GetStaticMethodID(env, cls, "signInCancelled", "()Z");
+        g_nb_cursor_image  = (*env)->GetStaticMethodID(env, cls, "onCursorImage", "(II[BII)V");
         (*env)->DeleteLocalRef(env, cls);
         LOGI("JNI_OnLoad: cached NativeBridge boot-overlay + Steam sign-in callbacks");
     } else {
@@ -1433,6 +1435,33 @@ static jboolean JNICALL glfw_get_gamepad_state_impl(JNIEnv *env, jclass thiz,
     return JNI_TRUE;
 }
 
+// The game's cursor art (GLFW.glfwSetCursor in the shim), RGBA with a hotspot, on its way to NativeBridge in ART,
+// which draws it. No pixels (width 0) means there is no cursor to draw. Runs on a HotSpot thread.
+static void glfw_set_cursor_impl(JNIEnv *env, jclass clazz, jint w, jint h, jbyteArray rgba, jint hx, jint hy) {
+    JNIEnv *art = art_env();
+    if (!art || !g_nb_cls || !g_nb_cursor_image) return;
+    jbyteArray out = NULL;
+    if (w > 0 && h > 0 && rgba != NULL && (jlong)w * h <= 128 * 128) {
+        jsize n = (*env)->GetArrayLength(env, rgba);
+        if (n == w * h * 4) {
+            jbyte *buf = (jbyte *)malloc((size_t)n);
+            if (!buf) return;
+            (*env)->GetByteArrayRegion(env, rgba, 0, n, buf);
+            out = (*art)->NewByteArray(art, n);
+            if (out) (*art)->SetByteArrayRegion(art, out, 0, n, buf);
+            free(buf);
+            if (!out) return;
+        } else {
+            w = h = 0;
+        }
+    } else {
+        w = h = 0;
+    }
+    (*art)->CallStaticVoidMethod(art, g_nb_cls, g_nb_cursor_image, w, h, out, hx, hy);
+    if ((*art)->ExceptionCheck(art)) (*art)->ExceptionClear(art);
+    if (out) (*art)->DeleteLocalRef(art, out);
+}
+
 JNIEXPORT void JNICALL
 Java_com_skarm_launcher_bootstrap_SkBootstrap_registerGlfwNatives(JNIEnv *env, jclass thiz,
                                                                   jclass glfwClass) {
@@ -1443,6 +1472,7 @@ Java_com_skarm_launcher_bootstrap_SkBootstrap_registerGlfwNatives(JNIEnv *env, j
         { "nativeDrainInput",         "([I)I",  (void *)glfw_drain_input_impl },
         { "nativeGamepadPresent",     "()Z",    (void *)glfw_gamepad_present_impl },
         { "nativeGetGamepadState",    "([B[F)Z",(void *)glfw_get_gamepad_state_impl },
+        { "nativeSetCursor",          "(II[BII)V", (void *)glfw_set_cursor_impl },
     };
     jint rc = (*env)->RegisterNatives(env, glfwClass, m, sizeof(m) / sizeof(m[0]));
     if (rc != 0) {

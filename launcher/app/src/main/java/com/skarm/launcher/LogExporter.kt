@@ -169,7 +169,7 @@ object LogExporter {
         val metrics = context.resources.displayMetrics
         appendLine("device: ${Build.MANUFACTURER} ${Build.MODEL} (Android ${Build.VERSION.RELEASE}, API ${Build.VERSION.SDK_INT})")
         appendLine("display: ${metrics.widthPixels}x${metrics.heightPixels} @ ${metrics.densityDpi}dpi")
-        appendLine("login mode: ${prefs.getString("login_mode", "Web")}, avoid screen edges: ${prefs.getBoolean("avoid_screen_edges", false)}")
+        appendLine("login mode: ${prefs.getString("login_mode", "Web")}, avoid screen edges: ${GfxSettings.avoidEdges(context)}")
         val layout = com.skarm.launcher.touch.TouchControlManager.loadLayout(context)
         appendLine(
             "touch controls: enabled=${layout.controlsEnabled} opacity=${layout.globalOpacity} " +

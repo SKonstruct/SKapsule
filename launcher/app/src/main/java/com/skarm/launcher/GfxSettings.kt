@@ -17,6 +17,7 @@ object GfxSettings {
     private const val FILE_NAME = "gfx_settings.properties"
     private const val KEY_FPS = "fps"
     private const val KEY_CURSOR = "cursor"
+    private const val KEY_AVOID_EDGES = "avoid_edges"
     private const val KEY_SHARPEN = "sharpen"
     private const val KEY_SHARP_HUD = "hud"
 
@@ -33,6 +34,17 @@ object GfxSettings {
     fun showCursor(context: Context): Boolean = read(context).getProperty(KEY_CURSOR)?.toBooleanStrictOrNull() ?: false
 
     fun setShowCursor(context: Context, show: Boolean) = write(context, KEY_CURSOR, show.toString())
+
+    /**
+     * Keep the game clear of the camera cutout and rounded corners. In this file, not launcher_prefs: the game
+     * process switches it from the editor's Settings page, and the launcher reads it from the other process. A
+     * value saved before that (launcher_prefs) still counts until this one is written.
+     */
+    fun avoidEdges(context: Context): Boolean =
+        read(context).getProperty(KEY_AVOID_EDGES)?.toBooleanStrictOrNull()
+            ?: context.getSharedPreferences("launcher_prefs", Context.MODE_PRIVATE).getBoolean("avoid_screen_edges", false)
+
+    fun setAvoidEdges(context: Context, on: Boolean) = write(context, KEY_AVOID_EDGES, on.toString())
 
     fun sharpenPercent(context: Context): Int =
         (read(context).getProperty(KEY_SHARPEN)?.toIntOrNull() ?: 0).coerceIn(0, MAX_SHARPEN)

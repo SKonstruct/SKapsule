@@ -179,9 +179,9 @@ class LauncherActivity : AppCompatActivity() {
 
         // Avoid screen edges switch
         val avoidEdgesSwitch = binding.switchAvoidEdges
-        avoidEdgesSwitch.isChecked = launcherPrefs.getBoolean("avoid_screen_edges", false)
+        avoidEdgesSwitch.isChecked = GfxSettings.avoidEdges(this)
         avoidEdgesSwitch.setOnCheckedChangeListener { _, isChecked ->
-            launcherPrefs.edit().putBoolean("avoid_screen_edges", isChecked).apply()
+            GfxSettings.setAvoidEdges(this, isChecked)
         }
 
         val crashSwitch = binding.switchCrashReporting
@@ -1299,6 +1299,7 @@ class LauncherActivity : AppCompatActivity() {
         gfxUiUpdating = true
         binding.switchFps.isChecked = GfxSettings.showFps(this)
         binding.switchCursor.isChecked = GfxSettings.showCursor(this)
+        binding.switchAvoidEdges.isChecked = GfxSettings.avoidEdges(this)
         val sharpen = GfxSettings.sharpenPercent(this)
         binding.seekSharpen.progress = sharpen
         binding.textSharpen.text = sharpenText(sharpen)

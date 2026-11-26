@@ -80,14 +80,14 @@
         android:focusable="false"
         android:importantForAccessibility="no" />
 
-    <!-- The game's mouse cursor (a setting, off by default): an arrow whose tip sits where the game last saw the
-         pointer. Placed by GameActivity.pushCursorTouch; never takes touches. -->
+    <!-- The game's own mouse cursor (a setting, off by default): the art the game selected, hotspot on the point
+         the game last saw the pointer. Sized and placed by GameActivity; never takes touches. -->
     <ImageView
         android:id="@+id/mouse_cursor"
-        android:layout_width="22dp"
-        android:layout_height="28dp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
         android:layout_gravity="top|start"
-        android:src="@drawable/ic_cursor"
+        android:scaleType="fitXY"
         android:visibility="gone"
         android:clickable="false"
         android:focusable="false"

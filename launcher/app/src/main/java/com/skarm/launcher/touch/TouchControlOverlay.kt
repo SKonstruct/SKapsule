@@ -177,6 +177,20 @@ class TouchControlOverlay @JvmOverloads constructor(
             }
             addView(resolutionSlider)
 
+            // Avoid screen edges: the same setting as the launcher's sidebar (GfxSettings), applied to the game live.
+            addView(
+                Switch(context).apply {
+                    text = context.getString(R.string.pref_avoid_edges)
+                    setTextColor(Color.WHITE)
+                    tag = "avoidEdgesSwitch"
+                    isChecked = GfxSettings.avoidEdges(context)
+                    setOnCheckedChangeListener { _, isChecked ->
+                        GfxSettings.setAvoidEdges(context, isChecked)
+                        avoidEdgesChangeListener?.invoke()
+                    }
+                },
+            )
+
             // Graphics (cpp/skgfx.c). Stored apart from the touch layout, so Reset Layout leaves them alone.
             val fpsSwitch = Switch(context).apply {
                 text = context.getString(R.string.gfx_show_fps)
@@ -507,6 +521,9 @@ class TouchControlOverlay @JvmOverloads constructor(
 
     /** The mouse cursor was switched on or off (read it back from [GfxSettings.showCursor]). */
     var cursorChangeListener: ((Boolean) -> Unit)? = null
+
+    /** "Avoid screen edges" was switched (read it back from [GfxSettings.avoidEdges]); the game re-insets its surface. */
+    var avoidEdgesChangeListener: (() -> Unit)? = null
 
     // Notified whenever edit mode is entered/exited so the host can toggle
     // drag-to-reposition on the static chrome buttons (gear/keyboard).

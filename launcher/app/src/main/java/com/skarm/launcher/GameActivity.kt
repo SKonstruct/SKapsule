@@ -55,7 +55,8 @@ open class GameActivity :
     AppCompatActivity(),
     SurfaceHolder.Callback,
     NativeBridge.BootListener,
-    NativeBridge.SignInListener {
+    NativeBridge.SignInListener,
+    NativeBridge.CursorListener {
 
     private lateinit var binding: ActivityGameBinding
     private lateinit var surface: SurfaceView
@@ -217,44 +218,7 @@ open class GameActivity :
             dismissing = true
         }
 
-        // "Avoid screen edges" keeps the game clear of the camera cutout and rounded corners on
-        // the left and right only. The game keeps the full height: the system bars are hidden in
-        // immersive mode, and cropping vertically would shrink the playfield for no benefit.
-        val launcherPrefs = getSharedPreferences("launcher_prefs", MODE_PRIVATE)
-        val avoidEdges = launcherPrefs.getBoolean("avoid_screen_edges", false)
-        if (avoidEdges) {
-            ViewCompat.setOnApplyWindowInsetsListener(surface) { view, insets ->
-                val cutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
-                val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
-                var left = maxOf(cutout.left, systemBars.left)
-                var right = maxOf(cutout.right, systemBars.right)
-
-                // API 31+: also account for rounded display corners
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
-                    val windowInsets = view.rootWindowInsets
-                    if (windowInsets != null) {
-                        val topLeft = windowInsets.getRoundedCorner(android.view.RoundedCorner.POSITION_TOP_LEFT)
-                        val topRight = windowInsets.getRoundedCorner(android.view.RoundedCorner.POSITION_TOP_RIGHT)
-                        val bottomLeft = windowInsets.getRoundedCorner(android.view.RoundedCorner.POSITION_BOTTOM_LEFT)
-                        val bottomRight = windowInsets.getRoundedCorner(android.view.RoundedCorner.POSITION_BOTTOM_RIGHT)
-
-                        // We use a small inset (e.g. radius / 3) to clear rounded corner overlap safely
-                        val tl = (topLeft?.radius ?: 0) / 3
-                        val tr = (topRight?.radius ?: 0) / 3
-                        val bl = (bottomLeft?.radius ?: 0) / 3
-                        val br = (bottomRight?.radius ?: 0) / 3
-
-                        left = maxOf(left, maxOf(tl, bl))
-                        right = maxOf(right, maxOf(tr, br))
-                    }
-                }
-
-                val lp = view.layoutParams as android.widget.FrameLayout.LayoutParams
-                lp.setMargins(left, 0, right, 0)
-                view.layoutParams = lp
-                insets
-            }
-        }
+        applyAvoidEdges()
 
         surface.holder.addCallback(this)
         wireTouchInput()
@@ -263,6 +227,7 @@ open class GameActivity :
         // JVM via native. The overlay is visible by default (covers the black gap)
         // and shows "Starting Java runtime…" until the first status arrives.
         NativeBridge.setBootListener(this)
+        NativeBridge.setCursorListener(this)
         // The Steam sign-in QR routes here too; frenchpress polls for Cancel while it shows.
         NativeBridge.setSignInListener(this)
 
@@ -294,6 +259,7 @@ open class GameActivity :
         }
         binding.touchOverlay.fpsChangeListener = { show -> setFpsVisible(show) }
         binding.touchOverlay.cursorChangeListener = { refreshCursorVisible() }
+        binding.touchOverlay.avoidEdgesChangeListener = { applyAvoidEdges() }
         setFpsVisible(GfxSettings.showFps(this))
         binding.root.doOnLayout { positionFpsCounter() }
         surface.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> positionFpsCounter() }
@@ -902,19 +868,124 @@ open class GameActivity :
             Pair(currentBufferWidth, currentBufferHeight)
         }
 
-    private var cursorSeen = false
+    /**
+     * "Avoid screen edges" keeps the game clear of the camera cutout and rounded corners on the left and right
+     * only. The game keeps the full height: the system bars are hidden in immersive mode, and cropping vertically
+     * would shrink the playfield for no benefit. Live: the editor's Settings page switches it in game.
+     */
+    private fun applyAvoidEdges() {
+        if (GfxSettings.avoidEdges(this)) {
+            ViewCompat.setOnApplyWindowInsetsListener(surface) { view, insets ->
+                val cutout = insets.getInsets(WindowInsetsCompat.Type.displayCutout())
+                val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+                var left = maxOf(cutout.left, systemBars.left)
+                var right = maxOf(cutout.right, systemBars.right)
 
-    /** The arrow's tip goes on the point the game sees as the cursor; shown only when the setting is on. */
-    private fun placeCursor(x: Float, y: Float) {
-        val density = resources.displayMetrics.density
-        binding.mouseCursor.translationX = x - 2 * density
-        binding.mouseCursor.translationY = y - density
-        cursorSeen = true
-        refreshCursorVisible()
+                // API 31+: also account for rounded display corners
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                    val windowInsets = view.rootWindowInsets
+                    if (windowInsets != null) {
+                        val topLeft = windowInsets.getRoundedCorner(android.view.RoundedCorner.POSITION_TOP_LEFT)
+                        val topRight = windowInsets.getRoundedCorner(android.view.RoundedCorner.POSITION_TOP_RIGHT)
+                        val bottomLeft = windowInsets.getRoundedCorner(android.view.RoundedCorner.POSITION_BOTTOM_LEFT)
+                        val bottomRight = windowInsets.getRoundedCorner(android.view.RoundedCorner.POSITION_BOTTOM_RIGHT)
+
+                        // We use a small inset (e.g. radius / 3) to clear rounded corner overlap safely
+                        val tl = (topLeft?.radius ?: 0) / 3
+                        val tr = (topRight?.radius ?: 0) / 3
+                        val bl = (bottomLeft?.radius ?: 0) / 3
+                        val br = (bottomRight?.radius ?: 0) / 3
+
+                        left = maxOf(left, maxOf(tl, bl))
+                        right = maxOf(right, maxOf(tr, br))
+                    }
+                }
+
+                val lp = view.layoutParams as android.widget.FrameLayout.LayoutParams
+                lp.setMargins(left, 0, right, 0)
+                view.layoutParams = lp
+                insets
+            }
+            ViewCompat.requestApplyInsets(surface)
+        } else {
+            ViewCompat.setOnApplyWindowInsetsListener(surface, null)
+            (surface.layoutParams as? android.widget.FrameLayout.LayoutParams)?.let {
+                it.setMargins(0, 0, 0, 0)
+                surface.layoutParams = it
+            }
+        }
+        binding.root.post { layoutCursor() }
     }
 
-    private fun refreshCursorVisible() {
-        binding.mouseCursor.visibility = if (GfxSettings.showCursor(this) && cursorSeen) View.VISIBLE else View.GONE
+    // --- the game's own mouse cursor ---
+    // The art is whatever the game selected as its window cursor (NativeBridge.CursorListener). It is drawn at the
+    // game's cursor point, which a touch, a trackpad and an external mouse all move, and only while the setting is on.
+    // Sized in game pixels scaled to the surface, so it keeps the proportions it has in the game's own UI.
+    private var cursorBitmap: Bitmap? = null
+    private var cursorHotX = 0
+    private var cursorHotY = 0
+    private var cursorX = 0f
+    private var cursorY = 0f
+    private var cursorSeen = false
+
+    override fun onCursorImage(width: Int, height: Int, rgba: ByteArray?, hotX: Int, hotY: Int) {
+        val bitmap = if (rgba != null && width > 0 && height > 0 && rgba.size == width * height * 4) {
+            val pixels = IntArray(width * height) { i ->
+                val o = i * 4
+                ((rgba[o + 3].toInt() and 0xFF) shl 24) or ((rgba[o].toInt() and 0xFF) shl 16) or
+                    ((rgba[o + 1].toInt() and 0xFF) shl 8) or (rgba[o + 2].toInt() and 0xFF)
+            }
+            Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
+        } else {
+            null
+        }
+        runOnUiThread {
+            cursorBitmap = bitmap
+            cursorHotX = hotX
+            cursorHotY = hotY
+            binding.mouseCursor.setImageBitmap(bitmap)
+            layoutCursor()
+        }
+    }
+
+    private fun placeCursor(x: Float, y: Float) {
+        cursorX = x
+        cursorY = y
+        cursorSeen = true
+        layoutCursor()
+    }
+
+    /** Size, position and visibility from the art, the last pointer point and the setting. */
+    private fun layoutCursor() {
+        val view = binding.mouseCursor
+        val bitmap = cursorBitmap
+        val show = GfxSettings.showCursor(this) && cursorSeen && bitmap != null
+        view.visibility = if (show) View.VISIBLE else View.GONE
+        updateSystemPointer(show)
+        if (!show || bitmap == null) return
+        val (gameWidth, gameHeight) = gameSize()
+        val sx = if (surface.width > 0 && gameWidth > 0) surface.width.toFloat() / gameWidth else 1f
+        val sy = if (surface.height > 0 && gameHeight > 0) surface.height.toFloat() / gameHeight else 1f
+        val width = (bitmap.width * sx).toInt().coerceAtLeast(1)
+        val height = (bitmap.height * sy).toInt().coerceAtLeast(1)
+        val lp = view.layoutParams
+        if (lp.width != width || lp.height != height) {
+            lp.width = width
+            lp.height = height
+            view.layoutParams = lp
+        }
+        view.translationX = cursorX - cursorHotX * sx
+        view.translationY = cursorY - cursorHotY * sy
+    }
+
+    private fun refreshCursorVisible() = layoutCursor()
+
+    /** A mouse brings its own pointer; while the game's cursor is drawn, hide it so there is only one. */
+    private fun updateSystemPointer(gameCursorShown: Boolean) {
+        val icon = if (gameCursorShown) android.view.PointerIcon.getSystemIcon(this, android.view.PointerIcon.TYPE_NULL) else null
+        binding.root.pointerIcon = icon
+        surface.pointerIcon = icon
+        binding.touchOverlay.pointerIcon = icon
     }
 
     private fun setFpsVisible(show: Boolean) {
@@ -1075,6 +1146,7 @@ open class GameActivity :
         urlServer = null
         bootHandler.removeCallbacksAndMessages(null)
         NativeBridge.setBootListener(null)
+        NativeBridge.setCursorListener(null)
         NativeBridge.setSignInListener(null)
         // A recreated activity gets the QR replayed; one that is going away takes the sign-in with it.
         if (isFinishing) NativeBridge.cancelSignIn()

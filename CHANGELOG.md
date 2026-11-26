@@ -30,8 +30,12 @@ Notable changes per release. Versions are the git tags the APKs are built from
   mod you added) or the game updates, SKapsule applies the mods when you open the launcher, and restores the game
   once if you remove every mod. **Remove Mods** is now **Reset Game Files**; the mods already in the folder stay
   unapplied after it until the folder changes.
-- **Mouse cursor.** **Show mouse cursor** in the sidebar and in the in-game panel draws the game's cursor where it
-  last saw the pointer. Off by default.
+- **The game's own mouse cursor.** **Show mouse cursor** in the sidebar and in the editor's Settings tab shows
+  Spiral Knights' real cursor, the one the game draws on desktop, where the game last saw the pointer. It follows a
+  finger, a trackpad or an external mouse, and a mouse's own pointer is hidden while it shows, so there is only one.
+  Off by default.
+- **Avoid screen edges in the editor.** The Settings tab has the same switch as the sidebar, and it re-insets the
+  game at once.
 - **A calmer touch-controls editor.** A tab strip at the top switches between **Edit** and **Settings**. On Edit,
   the small dialog for the selected control only appears when something is selected, and it docks away from
   that control so it never covers what you are dragging. Settings shows the full panel with the controls
