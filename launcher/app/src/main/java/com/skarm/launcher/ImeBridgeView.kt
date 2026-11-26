@@ -40,14 +40,14 @@ class ImeBridgeView @JvmOverloads constructor(
 }
 
 /**
- * Translates IME edits into SK's GLFW input path: printable text as char input,
- * backspace/enter/delete as GLFW key transitions. There's no local [android.text.Editable]
+ * Translates IME edits into SK's GLFW input path: printable text as key press, char input and key release (as a
+ * desktop keyboard sends it), backspace/enter/delete as GLFW key transitions. There's no local [android.text.Editable]
  * — we forward and forget, since SK owns the actual text-field state.
  */
 private class SkInputConnection(view: View) : BaseInputConnection(view, false) {
 
     override fun commitText(text: CharSequence?, newCursorPosition: Int): Boolean {
-        text?.codePoints()?.forEach { NativeBridge.onCharInput(it) }
+        text?.codePoints()?.forEach { typeChar(it) }
         return true
     }
 
@@ -70,7 +70,7 @@ private class SkInputConnection(view: View) : BaseInputConnection(view, false) {
             KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> tapKey(GLFW_KEY_ENTER)
             else -> {
                 val u = event.unicodeChar
-                if (u != 0) NativeBridge.onCharInput(u)
+                if (u != 0) typeChar(u)
             }
         }
         return true
@@ -79,6 +79,23 @@ private class SkInputConnection(view: View) : BaseInputConnection(view, false) {
     override fun performEditorAction(editorAction: Int): Boolean {
         tapKey(GLFW_KEY_ENTER) // Done/Go/Send -> submit
         return true
+    }
+
+    /**
+     * One typed character the way a desktop keyboard delivers it: key press, the character, key release. The game's
+     * text fields act on the text (a live search, a filter) at the key release; with the character alone it shows up
+     * but does nothing until Enter or Backspace. Text with no key (accents, emoji) goes as the character only.
+     */
+    private fun typeChar(codePoint: Int) {
+        val key = GlfwKeys.keyFor(codePoint)
+        if (key == GlfwKeys.UNKNOWN) {
+            NativeBridge.onCharInput(codePoint)
+            return
+        }
+        val mods = if (GlfwKeys.shifted(codePoint)) GlfwKeys.MOD_SHIFT else 0
+        NativeBridge.onKeyEvent(key, 1, mods)
+        NativeBridge.onCharInput(codePoint)
+        NativeBridge.onKeyEvent(key, 0, mods)
     }
 
     private fun tapKey(glfwKey: Int) {

@@ -56,6 +56,9 @@ Notable changes per release. Versions are the git tags the APKs are built from
 
 ### Fixed
 
+- **Typing in the game's text boxes works as you type.** The text showed up but did nothing (a search or filter did not
+  update, a form did not enable) until Enter or Backspace was pressed. The on-screen keyboard now sends each
+  character the way a desktop keyboard does, key press then the character then key release.
 - **Changing Resolution while playing now resizes the game.** It used to keep drawing at the old size, in a
   corner of the screen, until you restarted.
 - **Reset Layout puts Opacity back to 40%.** It landed on 52%.
