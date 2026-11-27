@@ -62,12 +62,12 @@
         android:contentDescription="@string/chrome_toggle_buttons" />
 
     <!-- FPS counter: a native view above the game, so the game's own screenshots never contain it.
-         Positioned by GameActivity.positionFpsCounter; fed from the swap hook's frame count. -->
+         Centred at the top by GameActivity.positionFpsCounter; fed from the swap hook's frame count. -->
     <TextView
         android:id="@+id/fps_counter"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="top|start"
+        android:layout_gravity="top|center_horizontal"
         android:background="@drawable/bg_fps_counter"
         android:fontFamily="monospace"
         android:paddingHorizontal="6dp"
@@ -80,7 +80,7 @@
         android:focusable="false"
         android:importantForAccessibility="no" />
 
-    <!-- The game's own mouse cursor (a setting, off by default): the art the game selected, hotspot on the point
+    <!-- The game's own mouse cursor (a setting, on by default): the art the game selected, hotspot on the point
          the game last saw the pointer. Sized and placed by GameActivity; never takes touches. -->
     <ImageView
         android:id="@+id/mouse_cursor"

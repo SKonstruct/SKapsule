@@ -463,7 +463,11 @@ class TouchControlOverlay @JvmOverloads constructor(
         NativeBridge.onVirtualGamepadConnected(enabled)
 
         // Notify Activity if there's a listener to update static buttons (Keyboard, Gear)
-        opacityChangeListener?.invoke(layoutData.globalOpacity)
+        // The chrome buttons follow the controls' own opacity, including the editor's boost while arranging.
+        val editBoost = inEditMode && page == EditorPage.EDIT
+        opacityChangeListener?.invoke(
+            if (editBoost) maxOf(layoutData.globalOpacity, EDIT_MODE_MIN_OPACITY) else layoutData.globalOpacity,
+        )
         // Editing keeps them on screen regardless, or they could not be repositioned.
         controlsEnabledChangeListener?.invoke(enabled || inEditMode)
     }
@@ -545,15 +549,15 @@ class TouchControlOverlay @JvmOverloads constructor(
 
         for (view in controlViews) {
             val node = view.node
-            val size = (if (node.type == ControlType.BUTTON) baseBtnSize else baseJoySize) * node.scale
+            val base = if (node.type == ControlType.BUTTON) baseBtnSize * BUTTON_SIZE_FACTOR else baseJoySize
+            val size = base * node.scale
 
-            // A floating stick lives in a square zone in its bottom corner (left stick bottom-left,
-            // right stick bottom-right), not at a saved spot; the stick appears inside it.
+            // A floating stick lives in a square zone around its saved spot (kept on screen); the stick
+            // appears inside it, under the thumb.
             if (view is TouchJoystickView && node.floating) {
-                val margin = resources.displayMetrics.density * FLOAT_ZONE_MARGIN_DP
                 val zone = minOf(size * FLOAT_ZONE_FACTOR, h * 0.62f, w * 0.36f)
-                val zl = if (node.type == ControlType.JOYSTICK_LEFT) margin else w - margin - zone
-                val zt = h - margin - zone
+                val zl = (w * node.xPercent - zone / 2f).coerceIn(0f, maxOf(0f, w - zone))
+                val zt = (h * node.yPercent - zone / 2f).coerceIn(0f, maxOf(0f, h - zone))
                 view.stickRadius = minOf(size / 2f, zone / 2f)
                 view.layout(zl.toInt(), zt.toInt(), (zl + zone).toInt(), (zt + zone).toInt())
                 continue
@@ -754,8 +758,7 @@ class TouchControlOverlay @JvmOverloads constructor(
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
-                selectedView?.takeUnless { it is TouchJoystickView && it.node.floating }?.let { view ->
-                    // A floating stick's zone is fixed in its corner, so it is not dragged.
+                selectedView?.let { view ->
                     // The saved percent is the only position; onLayout places the view from
                     // it. Moving the view as well (view.x = ...) left a translation behind
                     // that the next layout added on top, so a control jumped on the next tap.
@@ -1000,12 +1003,9 @@ class TouchControlOverlay @JvmOverloads constructor(
         }
     }
 
-    /**
-     * Puts the selected control's dialog where it does not cover that control: the player is dragging the
-     * control, and a dialog on top of it would be in the way (DialogDock picks the spot).
-     */
+    /** Puts the selected control's dialog at the top right, below the standalone editor's Done button (DialogDock). */
     private fun dockNodePanel() {
-        val selected = selectedView ?: return
+        if (selectedView == null) return
         if (nodePanel.visibility != View.VISIBLE || width == 0 || height == 0) return
         val d = resources.displayMetrics.density
         nodePanel.measure(
@@ -1022,12 +1022,9 @@ class TouchControlOverlay @JvmOverloads constructor(
             screenH = height.toFloat(),
             dialogW = nodePanel.measuredWidth.toFloat(),
             dialogH = nodePanel.measuredHeight.toFloat(),
-            control = Box(selected.left.toFloat(), selected.top.toFloat(), selected.right.toFloat(), selected.bottom.toFloat()),
             reserved = reserved,
             margin = 12 * d,
             gap = 12 * d,
-            others = controlViews.filter { it !== selected && it.node.visible }
-                .map { Box(it.left.toFloat(), it.top.toFloat(), it.right.toFloat(), it.bottom.toFloat()) },
         )
         nodePanel.translationX = x
         nodePanel.translationY = y
@@ -1043,9 +1040,11 @@ class TouchControlOverlay @JvmOverloads constructor(
         // easy to see and drag, even if the user's global opacity is very low.
         private const val EDIT_MODE_MIN_OPACITY = 0.85f
 
-        /** A floating stick's zone is this many stick-diameters across, and this far (dp) from the screen edges. */
+        /** A floating stick's zone is this many stick-diameters across. */
         private const val FLOAT_ZONE_FACTOR = 1.5f
-        private const val FLOAT_ZONE_MARGIN_DP = 12f
+
+        /** Every button, ESC included, is drawn at this fraction of the chrome button size (times its own scale). */
+        private const val BUTTON_SIZE_FACTOR = 0.8f
 
         // Hidden controls are shown faintly in edit mode so they can be re-enabled.
         private const val EDIT_HIDDEN_OPACITY = 0.3f

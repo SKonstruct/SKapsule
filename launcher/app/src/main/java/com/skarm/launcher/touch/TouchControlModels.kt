@@ -82,12 +82,12 @@ object TouchControlManager {
     /** The one button "Show Buttons" never hides. */
     const val NODE_ESC = "btn_esc"
 
-    /** ESC's default centre. The chrome row lines up beside it, so both read this. */
-    const val ESC_X = 0.06f
-    const val ESC_Y = 0.10f
+    /** ESC's default centre; the chrome row (gear, keyboard, eye) sits on the same line to its right. */
+    const val ESC_X = 0.197f
+    const val ESC_Y = 0.05f
 
     const val MIN_OPACITY = 0.2f
-    const val DEFAULT_OPACITY = 0.4f
+    const val DEFAULT_OPACITY = 1.0f
 
     const val MIN_RENDER_SCALE = 0.6f
     const val MAX_RENDER_SCALE = 1.0f
@@ -169,63 +169,55 @@ object TouchControlManager {
      * right stick, for a thumb that would rather not use the stick. Added to layouts saved before it existed.
      */
     private fun defaultAttackNode() = ControlNode(
-        "btn_attack", ControlType.BUTTON, 0.72f, 0.55f,
+        "btn_attack", ControlType.BUTTON, 0.664f, 0.431f,
         buttonCode = AXIS_RTRIGGER, isAxisTrigger = true, label = "Attack",
     )
 
     fun createDefaultLayout(): TouchLayoutData {
-        val layout = TouchLayoutData()
+        // Positions are the author's hand-tuned layout, snapped to a grid (the iOS port holds the same numbers,
+        // SKTouchControls.m): the sticks mirror each other, the right cluster is two columns by four rows, and
+        // the bottom row is one even pitch with a wider gap between the attacks and the items.
+        val layout = TouchLayoutData(actionBarVisible = true)
 
+        // Both sticks float: each appears under the thumb inside a square pad in its half of the screen.
         // Left Joystick (Move)
-        layout.nodes.add(ControlNode("joy_move", ControlType.JOYSTICK_LEFT, 0.15f, 0.7f))
+        layout.nodes.add(ControlNode("joy_move", ControlType.JOYSTICK_LEFT, 0.205f, 0.617f, floating = true))
 
         // Right Joystick (Face) - hold to charge / aim, tap to Primary Attack;
         // handled in the Joystick implementation.
-        layout.nodes.add(ControlNode("joy_face", ControlType.JOYSTICK_RIGHT, 0.85f, 0.7f))
+        layout.nodes.add(ControlNode("joy_face", ControlType.JOYSTICK_RIGHT, 0.795f, 0.617f, floating = true))
 
-        // Escape - taps the ESC key (opens/closes SK menus). Top-left by default,
-        // clear of the joysticks and the top chrome buttons.
+        // Escape - taps the ESC key (opens/closes SK menus). Top-left, level with the chrome row beside it.
         layout.nodes.add(ControlNode("btn_esc", ControlType.BUTTON, ESC_X, ESC_Y, keyCode = KEY_ESCAPE, label = "ESC"))
 
-        // Strafe (R3) - toggle button offset to the lower right of Movement Circle pad.
-        // Kept above the bottom Ability/Item row (y=0.9) so they don't overlap.
-        layout.nodes.add(ControlNode("btn_strafe", ControlType.BUTTON, 0.28f, 0.72f, buttonCode = GP_BTN_RIGHT_THUMB, isToggle = true, label = "Strafe"))
+        // Strafe (R3) - toggle button above the bottom row's second button, level with Next Weap.
+        layout.nodes.add(ControlNode("btn_strafe", ControlType.BUTTON, 0.3517f, 0.768f, buttonCode = GP_BTN_RIGHT_THUMB, isToggle = true, label = "Strafe"))
 
-        // Defend (LTrig) - hold button offset to lower left of Facing Circle pad.
-        layout.nodes.add(ControlNode("btn_defend", ControlType.BUTTON, 0.72f, 0.72f, buttonCode = AXIS_LTRIGGER, isAxisTrigger = true, label = "Defend"))
+        // Right cluster, outer column (x 0.664): Prev Weap (L1), Attack (RTrig), Defend (LTrig), Next Weap (R1).
+        layout.nodes.add(ControlNode("btn_defend", ControlType.BUTTON, 0.664f, 0.648f, buttonCode = AXIS_LTRIGGER, isAxisTrigger = true, label = "Defend"))
 
         layout.nodes.add(defaultAttackNode())
 
-        // Dodge (L3) - tap button offset above the Facing Circle pad
-        layout.nodes.add(ControlNode("btn_dodge", ControlType.BUTTON, 0.78f, 0.38f, buttonCode = GP_BTN_LEFT_THUMB, label = "Dodge"))
+        // Inner column (x 0.607): ShieldBash (Y) above Dodge (L3); Prev and Next Weap sit in the outer column.
+        layout.nodes.add(ControlNode("btn_dodge", ControlType.BUTTON, 0.607f, 0.648f, buttonCode = GP_BTN_LEFT_THUMB, label = "Dodge"))
+        layout.nodes.add(ControlNode("btn_shieldbash", ControlType.BUTTON, 0.607f, 0.431f, buttonCode = GP_BTN_Y, label = "Bash"))
+        layout.nodes.add(ControlNode("btn_prevweap", ControlType.BUTTON, 0.664f, 0.312f, buttonCode = GP_BTN_LEFT_BUMPER, label = "↑"))
+        layout.nodes.add(ControlNode("btn_nextweap", ControlType.BUTTON, 0.664f, 0.768f, buttonCode = GP_BTN_RIGHT_BUMPER, label = "↓"))
 
-        // ShieldBash (Y) - tap button offset above the Facing Circle pad
-        layout.nodes.add(ControlNode("btn_shieldbash", ControlType.BUTTON, 0.88f, 0.38f, buttonCode = GP_BTN_Y, label = "Bash"))
-
-        // Prev Weap (L1) - Up glyph arrow button offset to the right of the Facing Circle pad
-        layout.nodes.add(ControlNode("btn_prevweap", ControlType.BUTTON, 0.95f, 0.55f, buttonCode = GP_BTN_LEFT_BUMPER, label = "↑"))
-
-        // Next Weap (R1) - Down glyph arrow button offset to the right of the Facing Circle pad
-        layout.nodes.add(ControlNode("btn_nextweap", ControlType.BUTTON, 0.95f, 0.85f, buttonCode = GP_BTN_RIGHT_BUMPER, label = "↓"))
-
-        // Bottom centered buttons in a row from left to right by default.
-        // Keep the 7-button row centered on screen and clear of the move
-        // joystick (right edge ~0.22) and facing joystick (left edge ~0.78).
-        val gap = 0.07f
+        // Bottom row, 1-7: one even pitch, with the attacks (1-3) and the items (4-7) set apart by a wider gap.
+        val pitch = 0.0575f
+        val startX = 0.2942f
         val bottomY = 0.9f
-        // Extra space before button 4, separating attacks from items.
-        val itemGap = 0.03f
-        // Center the whole row around 0.5, itemGap included.
-        val centerStartX = 0.5f - (gap * 6f + itemGap) / 2f
+        val itemsX = 0.6692f - pitch * 3f
 
-        layout.nodes.add(ControlNode("btn_ab1", ControlType.BUTTON, centerStartX + gap * 0, bottomY, buttonCode = GP_BTN_A, label = "1"))
-        layout.nodes.add(ControlNode("btn_ab2", ControlType.BUTTON, centerStartX + gap * 1, bottomY, buttonCode = GP_BTN_B, label = "2"))
-        layout.nodes.add(ControlNode("btn_ab3", ControlType.BUTTON, centerStartX + gap * 2, bottomY, buttonCode = GP_BTN_X, label = "3"))
+        layout.nodes.add(ControlNode("btn_ab1", ControlType.BUTTON, startX, bottomY, buttonCode = GP_BTN_A, label = "1"))
+        layout.nodes.add(ControlNode("btn_ab2", ControlType.BUTTON, startX + pitch, bottomY, buttonCode = GP_BTN_B, label = "2"))
+        layout.nodes.add(ControlNode("btn_ab3", ControlType.BUTTON, startX + pitch * 2, bottomY, buttonCode = GP_BTN_X, label = "3"))
 
-        layout.nodes.add(ControlNode("btn_item1", ControlType.BUTTON, centerStartX + gap * 3 + itemGap, bottomY, buttonCode = GP_BTN_DPAD_UP, label = "4"))
-        layout.nodes.add(ControlNode("btn_item2", ControlType.BUTTON, centerStartX + gap * 4 + itemGap, bottomY, buttonCode = GP_BTN_DPAD_RIGHT, label = "5"))
-        layout.nodes.add(ControlNode("btn_item3", ControlType.BUTTON, centerStartX + gap * 5 + itemGap, bottomY, buttonCode = GP_BTN_DPAD_DOWN, label = "6"))
-        layout.nodes.add(ControlNode("btn_item4", ControlType.BUTTON, centerStartX + gap * 6 + itemGap, bottomY, buttonCode = GP_BTN_DPAD_LEFT, label = "7"))
+        layout.nodes.add(ControlNode("btn_item1", ControlType.BUTTON, itemsX, bottomY, buttonCode = GP_BTN_DPAD_UP, label = "4"))
+        layout.nodes.add(ControlNode("btn_item2", ControlType.BUTTON, itemsX + pitch, bottomY, buttonCode = GP_BTN_DPAD_RIGHT, label = "5"))
+        layout.nodes.add(ControlNode("btn_item3", ControlType.BUTTON, itemsX + pitch * 2, bottomY, buttonCode = GP_BTN_DPAD_DOWN, label = "6"))
+        layout.nodes.add(ControlNode("btn_item4", ControlType.BUTTON, itemsX + pitch * 3, bottomY, buttonCode = GP_BTN_DPAD_LEFT, label = "7"))
 
         return layout
     }

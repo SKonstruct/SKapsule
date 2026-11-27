@@ -609,23 +609,20 @@ open class GameActivity :
     }
 
     /**
-     * Default row: ESC, gear, keyboard, eye, evenly spaced on ESC's line. Every button in
-     * it is one chrome_button_size across, so the step is that plus a gap. Positions are
-     * top-left fractions because that is what [positionChrome] applies, while the control
-     * nodes are placed by their centre.
+     * Default row: ESC, gear, keyboard, eye on one line, at fixed centres (the CHROME_* fractions). Saved
+     * positions are top-left fractions because that is what [positionChrome] applies, while the defaults are
+     * centres, like the control nodes, so they are converted here.
      */
     private fun applyChromePositions() {
         val parent = binding.btnEditLayout.parent as? View ?: return
         if (parent.width == 0 || parent.height == 0) return
 
-        val size = resources.getDimension(R.dimen.chrome_button_size)
-        val step = size + CHROME_GAP_DP * resources.displayMetrics.density
-        val firstX = TouchControlManager.ESC_X * parent.width + step - size / 2f
-        val topY = (TouchControlManager.ESC_Y * parent.height - size / 2f) / parent.height
+        val half = resources.getDimension(R.dimen.chrome_button_size) / 2f
+        val topY = CHROME_Y - half / parent.height
 
-        positionChrome(binding.btnEditLayout, firstX / parent.width, topY)
-        positionChrome(binding.btnKeyboard, (firstX + step) / parent.width, topY)
-        positionChrome(binding.btnToggleButtons, (firstX + 2 * step) / parent.width, topY)
+        positionChrome(binding.btnEditLayout, CHROME_GEAR_X - half / parent.width, topY)
+        positionChrome(binding.btnKeyboard, CHROME_KEYBOARD_X - half / parent.width, topY)
+        positionChrome(binding.btnToggleButtons, CHROME_EYE_X - half / parent.width, topY)
     }
 
     private fun positionChrome(v: View, defaultX: Float, defaultY: Float) {
@@ -1002,10 +999,12 @@ open class GameActivity :
         val cutout = ViewCompat.getRootWindowInsets(binding.root)?.getInsets(WindowInsetsCompat.Type.displayCutout())
         val gap = (3 * resources.displayMetrics.density).toInt()
         val lp = binding.fpsCounter.layoutParams as android.widget.FrameLayout.LayoutParams
-        val left = max(surface.left, cutout?.left ?: 0) + gap
+        // Top centre of the game surface: the gravity centres it between these margins.
+        val left = max(surface.left, cutout?.left ?: 0)
+        val right = max(binding.root.width - surface.right, cutout?.right ?: 0)
         val top = (cutout?.top ?: 0) + gap
-        if (lp.leftMargin != left || lp.topMargin != top) {
-            lp.setMargins(left, top, 0, 0)
+        if (lp.leftMargin != left || lp.rightMargin != right || lp.topMargin != top) {
+            lp.setMargins(left, top, right, 0)
             binding.fpsCounter.layoutParams = lp
         }
     }
@@ -1339,14 +1338,15 @@ open class GameActivity :
         const val URL_CONFIRM_WINDOW_MS = 3000L
 
         // Repositionable chrome-button positions (fractions of the surface),
-        // persisted per button. The defaults are derived in applyChromePositions from
-        // ESC's position, so the row reads ESC, gear, keyboard, eye.
+        // persisted per button. The defaults are fixed centres on ESC's line, so the row reads
+        // ESC, gear, keyboard, eye (the iOS port holds the same numbers, GameViewController.m).
         private const val CHROME_PREFS = "game_chrome_prefs"
         private const val CHROME_LAYOUT_VERSION_KEY = "layout_version"
-        private const val CHROME_LAYOUT_VERSION = 3
-
-        // Gap between adjacent buttons in that row.
-        private const val CHROME_GAP_DP = 8f
+        private const val CHROME_LAYOUT_VERSION = 4
+        private const val CHROME_Y = 0.05f
+        private const val CHROME_GEAR_X = 0.2553f
+        private const val CHROME_KEYBOARD_X = 0.3058f
+        private const val CHROME_EYE_X = 0.3563f
 
         // Movement past this many pixels turns a chrome-button press into a drag
         // rather than a tap.

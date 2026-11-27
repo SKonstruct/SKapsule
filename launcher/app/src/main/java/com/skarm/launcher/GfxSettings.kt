@@ -30,8 +30,8 @@ object GfxSettings {
 
     fun setShowFps(context: Context, show: Boolean) = write(context, KEY_FPS, show.toString())
 
-    /** The game's mouse cursor drawn on screen (off by default): a touch screen has no pointer to see. */
-    fun showCursor(context: Context): Boolean = read(context).getProperty(KEY_CURSOR)?.toBooleanStrictOrNull() ?: false
+    /** The game's mouse cursor drawn on screen (on by default): it shows where a tap will land. */
+    fun showCursor(context: Context): Boolean = read(context).getProperty(KEY_CURSOR)?.toBooleanStrictOrNull() ?: true
 
     fun setShowCursor(context: Context, show: Boolean) = write(context, KEY_CURSOR, show.toString())
 

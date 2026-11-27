@@ -170,7 +170,10 @@ class TouchLayoutShareTest {
     @Test
     fun aFloatingStickTravelsInTheFileAndAFileWithoutItIsNotFloating() {
         val layout = TouchControlManager.createDefaultLayout()
+        // Both sticks float by default; make only the left one float here.
+        assertTrue(layout.nodes.first { it.id == "joy_face" }.floating)
         layout.nodes.first { it.id == "joy_move" }.floating = true
+        layout.nodes.first { it.id == "joy_face" }.floating = false
         val json = TouchLayoutShare.toJson(TouchLayoutShare.capture(layout, "Floaty"))
         val back = TouchLayoutShare.parse(json)
         assertTrue(back.nodes.getValue("joy_move").floating)

@@ -19,10 +19,9 @@ class Box(val left: Float, val top: Float, val right: Float, val bottom: Float) 
 }
 
 /**
- * Where the selected control's small dialog goes: a spot that does not cover the control (the player is
- * dragging it), keeps clear of the tab strip and the Done button, covers as little of the [others] as it
- * can, and is as far from the control as the screen allows. The candidates are the four corners and four
- * edge middles. If nothing is free (a very small screen) the farthest candidate is used anyway.
+ * Where the selected control's small dialog goes: fixed at the top right, [margin] in from the edges, so it is
+ * always in the same place. It is moved down only as far as needed to clear the [reserved] areas up there (the
+ * standalone editor's Done button), and never off the bottom of the screen.
  */
 object DialogDock {
     fun place(
@@ -30,32 +29,17 @@ object DialogDock {
         screenH: Float,
         dialogW: Float,
         dialogH: Float,
-        control: Box,
         reserved: List<Box>,
         margin: Float,
         gap: Float,
-        others: List<Box> = emptyList(),
     ): Pair<Float, Float> {
-        val right = screenW - dialogW - margin
-        val bottom = screenH - dialogH - margin
-        val midX = (screenW - dialogW) / 2f
-        val midY = (screenH - dialogH) / 2f
-        val candidates = listOf(
-            margin to margin, right to margin, margin to bottom, right to bottom,
-            margin to midY, right to midY, midX to margin, midX to bottom,
-        )
-        val keepClear = control.inflated(gap)
-        fun box(c: Pair<Float, Float>) = Box(c.first, c.second, c.first + dialogW, c.second + dialogH)
-        fun distance(c: Pair<Float, Float>): Float {
-            val b = box(c)
-            val dx = b.centerX - control.centerX
-            val dy = b.centerY - control.centerY
-            return dx * dx + dy * dy
+        val x = screenW - dialogW - margin
+        var y = margin
+        // Highest first, so one pass clears a stack of reserved areas.
+        for (r in reserved.sortedBy { it.top }) {
+            val box = Box(x, y, x + dialogW, y + dialogH)
+            if (box.intersects(r)) y = r.bottom + gap
         }
-        val free = candidates.filter { c -> !box(c).intersects(keepClear) && reserved.none { box(c).intersects(it) } }
-        val pool = free.ifEmpty { candidates.filter { c -> !box(c).intersects(keepClear) } }.ifEmpty { candidates }
-        fun covered(c: Pair<Float, Float>) = others.sumOf { box(c).overlapArea(it).toDouble() }
-        return pool.minWithOrNull(compareBy<Pair<Float, Float>> { covered(it) }.thenByDescending { distance(it) })
-            ?: candidates.first()
+        return x to y.coerceIn(0f, maxOf(0f, screenH - dialogH - margin))
     }
 }
