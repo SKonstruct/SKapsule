@@ -47,8 +47,7 @@
         <activity
             android:name=".LauncherActivity"
             android:exported="true"
-            android:configChanges="orientation|screenSize|keyboardHidden"
-            android:screenOrientation="portrait">
+            android:configChanges="keyboardHidden">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -73,8 +72,8 @@
             android:resizeableActivity="false"
             android:hardwareAccelerated="true" />
 
-        <!-- GameActivity for a first Steam sign-in: starts portrait so the QR is shown in the
-             launcher's orientation, then GameActivity turns it landscape. Same process and
+        <!-- GameActivity for a first Steam sign-in: starts portrait so the QR is easy to scan
+             from an upright phone, then GameActivity turns it landscape. Same process and
              attributes otherwise. -->
         <activity
             android:name=".GameSignInActivity"

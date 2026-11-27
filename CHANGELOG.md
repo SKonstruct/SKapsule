@@ -43,10 +43,17 @@ Notable changes per release. Versions are the git tags the APKs are built from
   The tab strip is Edit | Settings: the settings button closes the editor.
 - **A tidier sidebar.** The descriptions under **Send crash reports**, **Sharp HUD** and **Floating right stick** are
   gone, and the settings sidebar runs to the bottom edge of the screen.
-- **Floating thumb sticks.** Turn on **Floating left stick** and/or **Floating right stick** in Settings: the stick
-  appears where your thumb lands on that half of the screen and follows it, leaving a faint ghost where it
-  waits. Buttons still win a touch. The choice is saved in layouts, presets and exported files (older versions
-  ignore it).
+- **Floating thumb sticks.** Turn on **Floating left stick** and/or **Floating right stick** in Settings: each stick
+  gets a square pad in its bottom corner (left stick bottom-left, right stick bottom-right) and appears where your
+  thumb lands inside it, following the thumb but never leaving the pad, with a faint ghost where it waits. A touch
+  outside the pad reaches the game, and buttons over the pad still win it. The pads stay in their corners, so they
+  are not dragged in the editor. The choice is saved in layouts, presets and exported files (older versions ignore it).
+- **An Attack button.** A hold button above **Defend**, the same primary attack as the right stick, for a thumb
+  that would rather not use the stick. Layouts you already have get it at that spot.
+- **Icons on the combat buttons.** Strafe, Defend, Attack, Dodge and Bash show an icon instead of text, in the
+  game's colours: red for Attack, blue for Defend, light blue for Dodge and yellow (the stun colour) for Bash.
+- **The main screen turns sideways.** It is no longer locked to portrait: in landscape the title and news sit on the
+  left and the server, mode and **Launch** on the right.
 - **Graphics settings in the sidebar.** **Show FPS counter**, **Sharpening** and **Sharp HUD** are now also in
   the Settings sidebar, so you can set them without starting the game. They are the same settings as the in-game panel.
 - **The modpack button says what to do.** It reads **Download Modpack**, **Update Modpack** when the modpack
@@ -72,6 +79,7 @@ Notable changes per release. Versions are the git tags the APKs are built from
   in portrait, before the game turns landscape: scan it with the Steam app on your phone, or tap **Open Steam app** if Steam is on the same device, and
   approve. Later launches sign in on their own. SKapsule no longer asks for or handles your Steam
   password or Steam Guard codes. Cancel the dialog to carry on without Steam.
+- **Open Folder goes straight to the Files app**, on the game folder, instead of asking which app to open it with.
 - **The default memory limit for the game is now 1024 MB** (it was 768 MB). It applies if you never changed
   the setting, and it is only a ceiling: the game still starts small and takes what it needs.
 - **The game now runs with two more of KnightLauncher's recommended settings.** Its own requests to run

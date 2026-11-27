@@ -79,6 +79,17 @@ class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(
         style = Paint.Style.FILL
     }
 
+    // The square zone behind a floating stick, and its hairline edge (same as the buttons').
+    private val zonePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = HudPalette.JOY_BG
+        style = Paint.Style.FILL
+    }
+    private val zoneOutlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = HudPalette.BUTTON_OUTLINE
+        style = Paint.Style.STROKE
+        strokeWidth = context.resources.displayMetrics.density
+    }
+
     private var knobX = 0f
     private var knobY = 0f
     private var isDragging = false
@@ -88,29 +99,30 @@ class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(
     val isHeld: Boolean get() = isDragging
 
     /**
-     * Puts the stick's centre at [x],[y] (overlay coordinates), kept fully on screen. Floating only:
-     * the saved position stays where [layout] put it, and the move is a translation on top.
+     * Radius of the stick itself. A floating stick's view is the larger square zone it moves in,
+     * so the overlay says how big the stick inside it is; a fixed stick fills its view.
      */
-    fun floatTo(x: Float, y: Float) {
-        val p = parent as? android.view.View ?: return
-        val r = min(width, height) / 2f
-        val cx = x.coerceIn(r, maxOf(r, p.width - r))
-        val cy = y.coerceIn(r, maxOf(r, p.height - r))
-        translationX = cx - (left + width / 2f)
-        translationY = cy - (top + height / 2f)
-    }
+    var stickRadius = 0f
 
-    /** Moves the base by up to ([dx],[dy]), kept on screen; returns what it actually moved. */
-    private fun shiftBase(dx: Float, dy: Float): Pair<Float, Float> {
-        val p = parent as? android.view.View ?: return Pair(0f, 0f)
-        val r = min(width, height) / 2f
-        val cx = left + width / 2f + translationX
-        val cy = top + height / 2f + translationY
-        val newCx = (cx + dx).coerceIn(r, maxOf(r, p.width - r))
-        val newCy = (cy + dy).coerceIn(r, maxOf(r, p.height - r))
-        translationX += newCx - cx
-        translationY += newCy - cy
-        return Pair(newCx - cx, newCy - cy)
+    private fun radius(): Float =
+        if (node.floating && stickRadius > 0f) stickRadius else min(width, height) / 2f
+
+    // Where the stick's centre sits inside the view: the middle, except a floating stick that
+    // follows the thumb around its zone.
+    private var baseX = 0f
+    private var baseY = 0f
+
+    private val zoneRect = RectF()
+
+    /** Moves the base to [x],[y] (view coordinates), kept inside the zone; returns how far it moved. */
+    private fun placeBase(x: Float, y: Float): Pair<Float, Float> {
+        val r = radius()
+        val newX = x.coerceIn(r, maxOf(r, width - r))
+        val newY = y.coerceIn(r, maxOf(r, height - r))
+        val moved = Pair(newX - baseX, newY - baseY)
+        baseX = newX
+        baseY = newY
+        return moved
     }
 
     // Specific mapping info
@@ -128,8 +140,10 @@ class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(
     }
 
     private fun resetKnob() {
-        knobX = width / 2f
-        knobY = height / 2f
+        baseX = width / 2f
+        baseY = height / 2f
+        knobX = baseX
+        knobY = baseY
         if (node.type == ControlType.JOYSTICK_RIGHT) {
             // Keep the last reported direction for 200ms, then zero it out
             releaseAimTask?.let { removeCallbacks(it) }
@@ -143,14 +157,23 @@ class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(
     }
 
     override fun onDraw(canvas: Canvas) {
-        val radius = min(width, height) / 2f
-        val centerX = width / 2f
-        val centerY = height / 2f
+        val radius = radius()
 
-        if (node.floating && !isDragging && !inEditMode) {
-            canvas.drawCircle(centerX, centerY, radius, ghostPaint)
+        if (node.floating) {
+            // The zone the stick may start in: a rounded square, always shown so the player knows
+            // where to put a thumb. The stick itself only appears under a held thumb.
+            zoneRect.set(0f, 0f, width.toFloat(), height.toFloat())
+            val corner = min(width, height) * 0.12f
+            canvas.drawRoundRect(zoneRect, corner, corner, zonePaint)
+            canvas.drawRoundRect(zoneRect, corner, corner, zoneOutlinePaint)
+            if (isDragging) {
+                canvas.drawCircle(baseX, baseY, radius, bgPaint)
+                canvas.drawCircle(knobX, knobY, radius * 0.4f, knobPaint)
+            } else {
+                canvas.drawCircle(baseX, baseY, radius, ghostPaint)
+            }
         } else {
-            canvas.drawCircle(centerX, centerY, radius, bgPaint)
+            canvas.drawCircle(baseX, baseY, radius, bgPaint)
             canvas.drawCircle(knobX, knobY, radius * 0.4f, knobPaint)
         }
 
@@ -166,9 +189,11 @@ class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(
                 if (!isDragging) {
                     val x = event.getX(pointerIndex)
                     val y = event.getY(pointerIndex)
-                    val radius = min(width, height) / 2f
-                    val dx = x - width / 2f
-                    val dy = y - height / 2f
+                    val radius = radius()
+                    // A floating stick starts anywhere in its zone, under the thumb.
+                    if (node.floating) placeBase(x, y)
+                    val dx = x - baseX
+                    val dy = y - baseY
 
                     if (sqrt((dx * dx + dy * dy).toDouble()) <= radius) {
                         isDragging = true
@@ -214,11 +239,7 @@ class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(
     private fun release() {
         isDragging = false
         pointerId = -1
-        // A floating stick goes back to where it rests.
-        if (node.floating) {
-            translationX = 0f
-            translationY = 0f
-        }
+        // resetKnob also puts a floating stick back at the middle of its zone.
         resetKnob()
 
         if (node.type == ControlType.JOYSTICK_RIGHT) {
@@ -228,26 +249,27 @@ class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(
     }
 
     private fun updateKnob(x: Float, y: Float) {
-        val centerX = width / 2f
-        val centerY = height / 2f
-        val radius = min(width, height) / 2f
+        val radius = radius()
         val maxDist = radius * 0.6f
         if (maxDist <= 0f) return  // degenerate bounds would push NaN into the axis
 
-        var dx = x - centerX
-        var dy = y - centerY
+        var dx = x - baseX
+        var dy = y - baseY
         var dist = sqrt((dx * dx + dy * dy).toDouble()).toFloat()
 
         // A floating stick's base follows a thumb dragged past its range, so it never runs out of
-        // travel. The base moves by the excess, so the thumb ends up at the stick's edge.
+        // travel. The base moves by the excess, so the thumb ends up at the stick's edge. It stays
+        // inside the zone.
         if (node.floating && dist > maxDist) {
             val over = dist - maxDist
-            val (movedX, movedY) = shiftBase(dx / dist * over, dy / dist * over)
+            val (movedX, movedY) = placeBase(baseX + dx / dist * over, baseY + dy / dist * over)
             dx -= movedX
             dy -= movedY
             dist = sqrt((dx * dx + dy * dy).toDouble()).toFloat()
         }
 
+        val centerX = baseX
+        val centerY = baseY
         if (dist <= maxDist) {
             knobX = centerX + dx
             knobY = centerY + dy
@@ -291,6 +313,10 @@ class TouchButtonView(context: Context, node: ControlNode) : BaseTouchControl(co
         strokeWidth = context.resources.displayMetrics.density
     }
 
+    private val glyphPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
+
+    private fun withAlpha(color: Int, alpha: Int): Int = (color and 0x00FFFFFF) or (alpha shl 24)
+
     private var isPressedState = false
     private var isToggledOn = false
 
@@ -308,24 +334,44 @@ class TouchButtonView(context: Context, node: ControlNode) : BaseTouchControl(co
             centerY + size / 2f,
         )
 
-        bgPaint.color = if (isPressedState || isToggledOn) HudPalette.BUTTON_PRESSED else HudPalette.BUTTON_IDLE
+        val lit = isPressedState || isToggledOn
+        bgPaint.color = if (lit) HudPalette.BUTTON_PRESSED else HudPalette.BUTTON_IDLE
 
         // Use a rounded square instead of a circle
         val cornerRadius = size * 0.25f
         canvas.drawRoundRect(buttonRect, cornerRadius, cornerRadius, bgPaint)
 
+        // An icon button is tinted in its colour: a wash over the dark fill, a coloured edge, and the glyph.
+        val glyph = ControlGlyphs.forNode(node.id)
+        if (glyph != null && glyph.color != ControlGlyphs.COLOR_NEUTRAL) {
+            bgPaint.color = withAlpha(glyph.color, if (lit) 0x80 else 0x33)
+            canvas.drawRoundRect(buttonRect, cornerRadius, cornerRadius, bgPaint)
+        }
+
         // Hairline edge, matching the iOS buttons. Inset by half the stroke so it sits
         // inside the fill rather than straddling its edge.
         val half = outlinePaint.strokeWidth / 2f
+        outlinePaint.color = if (glyph != null && glyph.color != ControlGlyphs.COLOR_NEUTRAL) {
+            withAlpha(glyph.color, 0x99)
+        } else {
+            HudPalette.BUTTON_OUTLINE
+        }
         buttonRect.inset(half, half)
         canvas.drawRoundRect(buttonRect, cornerRadius - half, cornerRadius - half, outlinePaint)
         buttonRect.inset(-half, -half)
 
-        // Draw label — scale text with button size, then shrink-to-fit so
-        // multi-character labels ("Dodge", "Strafe") don't run past the edge
-        // on small screens. Inner width is the button minus rounded-corner
-        // padding.
-        if (node.label.isNotEmpty()) {
+        if (glyph != null) {
+            val glyphSize = size * 0.56f
+            val s = glyphSize / ControlGlyphs.GRID
+            glyphPaint.color = glyph.color
+            canvas.save()
+            canvas.translate(centerX - glyphSize / 2f, centerY - glyphSize / 2f)
+            canvas.scale(s, s)
+            canvas.drawPath(glyph.path, glyphPaint)
+            canvas.restore()
+        } else if (node.label.isNotEmpty()) {
+            // Draw label — scale text with button size, then shrink-to-fit so
+            // multi-character labels don't run past the edge on small screens.
             val maxWidth = size * 0.85f
             var ts = size * 0.32f
             textPaint.textSize = ts

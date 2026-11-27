@@ -251,6 +251,24 @@ class LauncherActivity : AppCompatActivity() {
 
     private fun openFolder() {
         val authority = "$packageName.documents"
+        // Straight into the system Files app, on the game folder. Naming its package skips the
+        // "open with" sheet that an unaddressed intent brings up; the document id is the folder's path.
+        val folderUri = android.provider.DocumentsContract.buildDocumentUri(authority, filesDir.absolutePath)
+        for (filesApp in FILES_APPS) {
+            try {
+                startActivity(
+                    Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(folderUri, android.provider.DocumentsContract.Document.MIME_TYPE_DIR)
+                        setPackage(filesApp)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                    },
+                )
+                return
+            } catch (_: android.content.ActivityNotFoundException) {
+                // Not on this device (AOSP and Google builds name it differently); try the next.
+            } catch (_: SecurityException) {
+            }
+        }
         try {
             // Build root URI to open directly in Files app
             val rootUri = android.provider.DocumentsContract.buildRootUri(authority, filesDir.absolutePath)
@@ -729,7 +747,7 @@ class LauncherActivity : AppCompatActivity() {
     }
 
     private fun startGame(mode: LoginMode, login: WebAccountStore.Account?, host: String) {
-        // A first Steam sign-in shows its QR in portrait, like this screen, before the game goes landscape.
+        // A first Steam sign-in shows its QR in portrait, whatever way this screen is turned, before the game goes landscape.
         val signInFirst = mode == LoginMode.Steam && !FrenchpressInstaller.credFile(this).exists()
         startActivity(
             Intent(this, if (signInFirst) GameSignInActivity::class.java else GameActivity::class.java).apply {
@@ -1209,6 +1227,9 @@ class LauncherActivity : AppCompatActivity() {
         private const val LOCAL_NETWORK_PERMISSION = "android.permission.ACCESS_LOCAL_NETWORK"
         /** Process-wide: a recreated screen must not start a second install over the first. */
         @Volatile private var installingRuntime = false
+
+        /** The system Files app, by package: Google's build, then AOSP's. */
+        private val FILES_APPS = arrayOf("com.google.android.documentsui", "com.android.documentsui")
 
         private const val DONATE_URL = "https://buymeacoffee.com/sirdankk"
         private const val CREDIT_URL = "https://dankware.alwaysdata.net/"

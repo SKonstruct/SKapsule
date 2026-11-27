@@ -147,6 +147,7 @@ object TouchControlManager {
                 node.scale = node.scale.coerceIn(MIN_NODE_SCALE, MAX_NODE_SCALE)
                 ACTION_BAR_LABELS[node.id]?.let { node.copy(label = it) } ?: node
             }
+            if (data.nodes.none { it.id == "btn_attack" }) data.nodes.add(defaultAttackNode())
             data
         } catch (e: Exception) {
             Log.e(TAG, "Failed to parse touch layout data", e)
@@ -162,6 +163,15 @@ object TouchControlManager {
             .putString(KEY_LAYOUT_DATA, jsonStr)
             .apply()
     }
+
+    /**
+     * Attack (RTrig) - hold button straight above Defend: the same primary attack as tapping the
+     * right stick, for a thumb that would rather not use the stick. Added to layouts saved before it existed.
+     */
+    private fun defaultAttackNode() = ControlNode(
+        "btn_attack", ControlType.BUTTON, 0.72f, 0.55f,
+        buttonCode = AXIS_RTRIGGER, isAxisTrigger = true, label = "Attack",
+    )
 
     fun createDefaultLayout(): TouchLayoutData {
         val layout = TouchLayoutData()
@@ -184,11 +194,13 @@ object TouchControlManager {
         // Defend (LTrig) - hold button offset to lower left of Facing Circle pad.
         layout.nodes.add(ControlNode("btn_defend", ControlType.BUTTON, 0.72f, 0.72f, buttonCode = AXIS_LTRIGGER, isAxisTrigger = true, label = "Defend"))
 
+        layout.nodes.add(defaultAttackNode())
+
         // Dodge (L3) - tap button offset above the Facing Circle pad
-        layout.nodes.add(ControlNode("btn_dodge", ControlType.BUTTON, 0.78f, 0.45f, buttonCode = GP_BTN_LEFT_THUMB, label = "Dodge"))
+        layout.nodes.add(ControlNode("btn_dodge", ControlType.BUTTON, 0.78f, 0.38f, buttonCode = GP_BTN_LEFT_THUMB, label = "Dodge"))
 
         // ShieldBash (Y) - tap button offset above the Facing Circle pad
-        layout.nodes.add(ControlNode("btn_shieldbash", ControlType.BUTTON, 0.88f, 0.45f, buttonCode = GP_BTN_Y, label = "Bash"))
+        layout.nodes.add(ControlNode("btn_shieldbash", ControlType.BUTTON, 0.88f, 0.38f, buttonCode = GP_BTN_Y, label = "Bash"))
 
         // Prev Weap (L1) - Up glyph arrow button offset to the right of the Facing Circle pad
         layout.nodes.add(ControlNode("btn_prevweap", ControlType.BUTTON, 0.95f, 0.55f, buttonCode = GP_BTN_LEFT_BUMPER, label = "↑"))

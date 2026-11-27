@@ -547,6 +547,18 @@ class TouchControlOverlay @JvmOverloads constructor(
             val node = view.node
             val size = (if (node.type == ControlType.BUTTON) baseBtnSize else baseJoySize) * node.scale
 
+            // A floating stick lives in a square zone in its bottom corner (left stick bottom-left,
+            // right stick bottom-right), not at a saved spot; the stick appears inside it.
+            if (view is TouchJoystickView && node.floating) {
+                val margin = resources.displayMetrics.density * FLOAT_ZONE_MARGIN_DP
+                val zone = minOf(size * FLOAT_ZONE_FACTOR, h * 0.62f, w * 0.36f)
+                val zl = if (node.type == ControlType.JOYSTICK_LEFT) margin else w - margin - zone
+                val zt = h - margin - zone
+                view.stickRadius = minOf(size / 2f, zone / 2f)
+                view.layout(zl.toInt(), zt.toInt(), (zl + zone).toInt(), (zt + zone).toInt())
+                continue
+            }
+
             val cx = w * node.xPercent
             val cy = h * node.yPercent
 
@@ -555,11 +567,6 @@ class TouchControlOverlay @JvmOverloads constructor(
             val r = (cx + size / 2).toInt()
             val b = (cy + size / 2).toInt()
 
-            // A held floating stick sits where the thumb put it; every other control is back at its saved spot.
-            if (!(view is TouchJoystickView && view.isHeld)) {
-                view.translationX = 0f
-                view.translationY = 0f
-            }
             view.layout(l, t, r, b)
         }
 
@@ -624,6 +631,8 @@ class TouchControlOverlay @JvmOverloads constructor(
 
     private fun setFloating(type: ControlType, on: Boolean) {
         layoutData.nodes.filter { it.type == type }.forEach { it.floating = on }
+        // The view changes size between a stick and its zone, so lay it out again.
+        requestLayout()
         controlViews.forEach { it.invalidate() }
     }
 
@@ -745,7 +754,8 @@ class TouchControlOverlay @JvmOverloads constructor(
                 return true
             }
             MotionEvent.ACTION_MOVE -> {
-                selectedView?.let { view ->
+                selectedView?.takeUnless { it is TouchJoystickView && it.node.floating }?.let { view ->
+                    // A floating stick's zone is fixed in its corner, so it is not dragged.
                     // The saved percent is the only position; onLayout places the view from
                     // it. Moving the view as well (view.x = ...) left a translation behind
                     // that the next layout added on top, so a control jumped on the next tap.
@@ -777,15 +787,6 @@ class TouchControlOverlay @JvmOverloads constructor(
         else -> 0
     }
 
-    private fun isFloatingStick(view: BaseTouchControl) = view is TouchJoystickView && view.node.floating
-
-    /** The free floating stick for a touch at [x]: the left stick takes the left half, the right stick the right half. */
-    private fun floatingStickFor(x: Float): TouchJoystickView? =
-        controlViews.filterIsInstance<TouchJoystickView>().firstOrNull {
-            it.node.floating && it.visibility == View.VISIBLE && !it.isHeld &&
-                (if (it.node.type == ControlType.JOYSTICK_LEFT) x < width / 2f else x >= width / 2f)
-        }
-
     private fun isPointInsideView(x: Float, y: Float, view: View): Boolean {
         return x >= view.left && x <= view.right && y >= view.top && y <= view.bottom
     }
@@ -808,11 +809,11 @@ class TouchControlOverlay @JvmOverloads constructor(
                 val x = event.getX(index)
                 val y = event.getY(index)
 
-                // A floating stick has no fixed spot to hit, so it is not found by position: a touch that
-                // lands on nothing else, in its half of the screen, starts it there.
+                // A floating stick's view is its zone, so it is found by position like any control.
+                // Buttons come later in the list, so one lying over the zone wins the touch.
                 val target = controlViews.lastOrNull { view ->
-                    view.visibility == View.VISIBLE && !isFloatingStick(view) && isPointInsideView(x, y, view)
-                } ?: floatingStickFor(x)?.also { it.floatTo(x, y) }
+                    view.visibility == View.VISIBLE && isPointInsideView(x, y, view)
+                }
                 if (target != null && pointerTargets.indexOfValue(target) >= 0) {
                     // A second finger on a control another finger already holds: swallow
                     // it rather than letting it click through into the game world.
@@ -1041,6 +1042,10 @@ class TouchControlOverlay @JvmOverloads constructor(
         // In edit mode, visible controls are shown at least this opaque so they're
         // easy to see and drag, even if the user's global opacity is very low.
         private const val EDIT_MODE_MIN_OPACITY = 0.85f
+
+        /** A floating stick's zone is this many stick-diameters across, and this far (dp) from the screen edges. */
+        private const val FLOAT_ZONE_FACTOR = 1.5f
+        private const val FLOAT_ZONE_MARGIN_DP = 12f
 
         // Hidden controls are shown faintly in edit mode so they can be re-enabled.
         private const val EDIT_HIDDEN_OPACITY = 0.3f
