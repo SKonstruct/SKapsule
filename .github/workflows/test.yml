@@ -34,8 +34,19 @@ jobs:
       - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with: { distribution: zulu, java-version: "25", cache: gradle }
 
-      # The Android plugin resolves the NDK it is configured with even for a test-only run.
+      # The Android plugin resolves the NDK it is configured with even for a test-only run, and
+      # downloading it is most of this job, so it is cached (same key as Build APK).
+      - name: Cache NDK + CMake
+        id: cache-sdk
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            /usr/local/lib/android/sdk/ndk/${{ env.NDK_VERSION }}
+            /usr/local/lib/android/sdk/cmake/${{ env.CMAKE_VERSION }}
+          key: android-sdk-ndk${{ env.NDK_VERSION }}-cmake${{ env.CMAKE_VERSION }}
+
       - name: Install matching NDK + CMake via sdkmanager
+        if: steps.cache-sdk.outputs.cache-hit != 'true'
         run: |
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true

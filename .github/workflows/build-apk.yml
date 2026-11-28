@@ -36,8 +36,14 @@ on:
       KEY_PASSWORD:
         required: false
 
+# A newer manual build replaces an older one still running; a release is never cancelled.
+concurrency:
+  group: build-apk-${{ github.ref }}-${{ inputs.version }}
+  cancel-in-progress: ${{ inputs.version == '' }}
+
 permissions:
   contents: write # creates the release and its tag
+  actions: read # a release checks that the Test run for its commit passed
 
 jobs:
   build:
@@ -48,10 +54,12 @@ jobs:
       # NDK 30 (Clang 20): NDK 27's Clang 18 miscompiles openal-soft's C++20 ranges.
       NDK_VERSION: "30.0.14904198"
       CMAKE_VERSION: "3.22.1"
+      SDK_ROOT: /usr/local/lib/android/sdk
 
     steps:
       # Everything a release needs is checked before the long build: a bad version, a missing
-      # changelog section, an unsigned build or an already-used tag fail in seconds.
+      # changelog section, an unsigned build, an already-used tag or a commit whose tests did not
+      # pass fail in seconds.
       - name: Check release preconditions
         if: env.VERSION != ''
         env:
@@ -70,6 +78,8 @@ jobs:
           ! gh release view "v$VERSION" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || fail "Release v$VERSION already exists."
           ! gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$VERSION" >/dev/null 2>&1 \
             || fail "Tag v$VERSION already exists without a release. Delete it (git push origin :refs/tags/v$VERSION) or pick a new version."
+          passed=$(gh run list -R "$GITHUB_REPOSITORY" --workflow test.yml --commit "$GITHUB_SHA" --status success --limit 1 --json databaseId --jq 'length')
+          [ "$passed" = 1 ] || fail "No passing Test run for $GITHUB_SHA. Wait for it, or run Test on main first."
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -85,54 +95,120 @@ jobs:
           awk -v h="## $VERSION" '$0==h{f=1;next} /^## /{f=0} f' CHANGELOG.md > "$RUNNER_TEMP/release-notes.md"
           grep -q '[^[:space:]]' "$RUNNER_TEMP/release-notes.md" || { echo "::error::CHANGELOG.md has no '## $VERSION' section"; exit 1; }
 
+      # Cache each native component on its own submodule commit and script, so changing one
+      # (or frenchpress, which is rebuilt every time) does not rebuild the others. The
+      # NDK and CMake are cached too: downloading them is most of a cache-hit run.
+      - name: Submodule commits
+        id: shas
+        run: |
+          {
+            echo "gl4es=$(git rev-parse HEAD:external/gl4es)"
+            echo "openal=$(git rev-parse HEAD:external/openal-soft)"
+            echo "lwjgl3=$(git rev-parse HEAD:external/lwjgl3)"
+            echo "cacio=$(git rev-parse HEAD:external/caciocavallo17)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Cache NDK + CMake
+        id: cache-sdk
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ env.SDK_ROOT }}/ndk/${{ env.NDK_VERSION }}
+            ${{ env.SDK_ROOT }}/cmake/${{ env.CMAKE_VERSION }}
+          key: android-sdk-ndk${{ env.NDK_VERSION }}-cmake${{ env.CMAKE_VERSION }}
+
+      - name: Cache gl4es
+        id: cache-gl4es
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: out/gl4es
+          key: native-gl4es-ndk${{ env.NDK_VERSION }}-${{ steps.shas.outputs.gl4es }}-${{ hashFiles('scripts/build-gl4es-android.sh', 'scripts/gl4es-overrides.cmake') }}
+
+      - name: Cache openal-soft
+        id: cache-openal
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: out/openal
+          key: native-openal-ndk${{ env.NDK_VERSION }}-${{ steps.shas.outputs.openal }}-${{ hashFiles('scripts/build-openal-android.sh') }}
+
+      - name: Cache lwjgl3
+        id: cache-lwjgl3
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: out/lwjgl3
+          key: native-lwjgl3-ndk${{ env.NDK_VERSION }}-${{ steps.shas.outputs.lwjgl3 }}-${{ hashFiles('scripts/build-lwjgl3-android.sh') }}
+
+      - name: Cache cacio
+        id: cache-cacio
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: out/cacio
+          key: native-cacio-${{ steps.shas.outputs.cacio }}-${{ hashFiles('scripts/build-cacio-android.sh') }}
+
       # Two JDKs are needed: 8 for LWJGL's Java-8 multi-release layer (rt.jar), and
       # 25 for everything else — Gradle/AGP (Gradle 9 runs on JDK 25), the bootstrap
       # module, and cacio + frenchpress (their poms compile --release 25). setup-java
       # exports JAVA_HOME_<v>_X64 for each.
       - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        if: steps.cache-lwjgl3.outputs.cache-hit != 'true'
         with: { distribution: temurin, java-version: "8" }
       - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
         with: { distribution: zulu, java-version: "25", cache: gradle } # zulu 25 matches the dev box
 
+      # Only what a native build uses: a run that restores every component needs none of it.
       - name: Install native build tools (ant for LWJGL, ninja/zip for the scripts)
+        if: >-
+          steps.cache-gl4es.outputs.cache-hit != 'true' || steps.cache-openal.outputs.cache-hit != 'true' ||
+          steps.cache-lwjgl3.outputs.cache-hit != 'true' || steps.cache-cacio.outputs.cache-hit != 'true'
         run: sudo apt-get update && sudo apt-get install -y ant ninja-build zip
 
       - name: Install matching NDK + CMake via sdkmanager
+        if: steps.cache-sdk.outputs.cache-hit != 'true'
         run: |
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
           yes | "$SDKMANAGER" "ndk;${NDK_VERSION}" "cmake;${CMAKE_VERSION}" >/dev/null
-          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
 
-      # Cache the heavy native outputs, keyed on the submodule commit set + the build
-      # scripts. On a hit we skip the whole native rebuild and just restore out/.
-      - name: Compute submodule cache key
-        id: submods
-        run: echo "sha=$(git submodule status --recursive | awk '{print $1}' | sha256sum | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - name: Point the build at the NDK
+        run: echo "ANDROID_NDK_HOME=$SDK_ROOT/ndk/${NDK_VERSION}" >> "$GITHUB_ENV"
 
-      - name: Cache native build outputs
-        id: cache-out
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: out
-          key: native-${{ runner.os }}-ndk${{ env.NDK_VERSION }}-${{ steps.submods.outputs.sha }}-${{ hashFiles('scripts/build-*.sh') }}
+      - name: Build gl4es
+        if: steps.cache-gl4es.outputs.cache-hit != 'true'
+        run: ./scripts/build-gl4es-android.sh
 
-      - name: Build native submodules (cache miss only)
-        if: steps.cache-out.outputs.cache-hit != 'true'
+      - name: Build openal-soft
+        if: steps.cache-openal.outputs.cache-hit != 'true'
+        run: ./scripts/build-openal-android.sh
+
+      - name: Build lwjgl3
+        if: steps.cache-lwjgl3.outputs.cache-hit != 'true'
         env:
           JAVA8_HOME: ${{ env.JAVA_HOME_8_X64 }}
-          CACIO_JAVA_HOME: ${{ env.JAVA_HOME_25_X64 }}
-          FRENCHPRESS_JAVA_HOME: ${{ env.JAVA_HOME_25_X64 }}
           JAVA_HOME: ${{ env.JAVA_HOME_25_X64 }} # LWJGL ant build runs under 25 (matches dev box)
-        run: |
-          ./scripts/build-gl4es-android.sh
-          ./scripts/build-openal-android.sh
-          ./scripts/build-lwjgl3-android.sh
-          ./scripts/build-cacio-android.sh
-          ./scripts/build-frenchpress-android.sh
+        run: ./scripts/build-lwjgl3-android.sh
+
+      - name: Build cacio
+        if: steps.cache-cacio.outputs.cache-hit != 'true'
+        env:
+          CACIO_JAVA_HOME: ${{ env.JAVA_HOME_25_X64 }}
+        run: ./scripts/build-cacio-android.sh
+
+      # Seconds, and the one component that changes with most releases: never cached.
+      - name: Build frenchpress
+        env:
+          FRENCHPRESS_JAVA_HOME: ${{ env.JAVA_HOME_25_X64 }}
+        run: ./scripts/build-frenchpress-android.sh
 
       - name: Stage assets into the launcher
         run: ./scripts/stage-launcher-assets.sh
+
+      # Needs the LWJGL jars staged above, which is why it runs here and not in the Test workflow.
+      # A separate Gradle run: with the release build in one invocation, Gradle rejects the task order.
+      - name: Bootstrap unit tests
+        working-directory: launcher
+        env:
+          JAVA_HOME: ${{ env.JAVA_HOME_25_X64 }}
+        run: ./gradlew :bootstrap:test
 
       # Decode the keystore from the secret if present; otherwise leave SK_KEYSTORE_FILE
       # empty and the build produces an unsigned APK.

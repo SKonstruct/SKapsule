@@ -16,6 +16,7 @@ concurrency: release
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   release:
@@ -29,3 +30,4 @@ jobs:
       KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
     permissions:
       contents: write
+      actions: read
