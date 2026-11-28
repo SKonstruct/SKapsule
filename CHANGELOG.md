@@ -75,10 +75,13 @@ Notable changes per release. Versions are the git tags the APKs are built from
 
 ### Changed
 
-- **Steam sign-in is now a QR code, with no username or password.** The first Steam launch shows a code
+- **Steam sign-in is a QR code, or your username and password.** The first Steam launch shows a code
   in portrait, before the game turns landscape: scan it with the Steam app on your phone, or tap **Open Steam app** if Steam is on the same device, and
-  approve. Later launches sign in on their own. SKapsule no longer asks for or handles your Steam
-  password or Steam Guard codes. Cancel the dialog to carry on without Steam.
+  approve. With no second device to show the code to, tap **Use username and password** and enter your Steam Guard
+  code when asked. Later launches sign in on their own. The password is only used to sign in; SKapsule keeps just
+  the sign-in token. Cancel the dialog to carry on without Steam.
+- **The events on the home screen slide.** Instead of fading from one to the next, the card slides every 8 seconds
+  and you can swipe between events; dots show how many there are and which one you are on.
 - **A new default touch layout.** The buttons are laid out on a grid (the sticks mirror each other, the right cluster
   is two columns, the bottom row has one even spacing), **Show Buttons** is on, the sticks float, and opacity starts at
   full (it was 40%). Every button, ESC included, is a fifth smaller. **Reset Layout** and new installs get it; layouts

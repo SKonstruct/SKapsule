@@ -210,23 +210,40 @@ object NativeBridge {
         /** Show the QR for [url] (rows of '1'/'0' in [modules]); update in place if already showing. */
         fun onShowSignIn(url: String, modules: String)
 
+        /**
+         * Show a username/password form instead of the QR: [kind] is "credentials", "guard-device" or
+         * "guard-email". [detail] is why the last credentials were refused, or the masked email address;
+         * [retry] is true when the previous Steam Guard code was refused.
+         */
+        fun onShowSignInForm(kind: String, detail: String?, retry: Boolean)
+
         fun onHideSignIn()
     }
 
     private val signInLock = Any()
     private var signInListener: SignInListener? = null
     private var activeSignIn: Pair<String, String>? = null
+    private var activeForm: Triple<String, String?, Boolean>? = null
 
     @Volatile
     private var cancelRequested = false
 
+    // The username/password sign-in: whether the user chose it over the QR, and what they submitted
+    // that the JVM has not taken yet. In memory only; each value is handed over once and dropped.
+    @Volatile
+    private var passwordRequested = false
+    private var pendingCredentials: String? = null
+    private var pendingGuardCode: String? = null
+
     /** A sign-in already showing is replayed to a newly attached listener (activity recreated). */
     fun setSignInListener(listener: SignInListener?) {
-        val replay = synchronized(signInLock) {
+        val (qr, form) = synchronized(signInLock) {
             signInListener = listener
-            activeSignIn
+            activeSignIn to activeForm
         }
-        if (listener != null && replay != null) listener.onShowSignIn(replay.first, replay.second)
+        if (listener == null) return
+        if (form != null) listener.onShowSignInForm(form.first, form.second, form.third)
+        else if (qr != null) listener.onShowSignIn(qr.first, qr.second)
     }
 
     /** Native (login thread) -> show or refresh the sign-in QR. */
@@ -235,9 +252,24 @@ object NativeBridge {
         val listener = synchronized(signInLock) {
             if (activeSignIn == null) cancelRequested = false
             activeSignIn = url to modules
+            activeForm = null
             signInListener
         }
         listener?.onShowSignIn(url, modules)
+    }
+
+    /** Native (login thread) -> a username/password form; anything typed for the last one is dropped. */
+    @JvmStatic
+    fun showSignInForm(kind: String, detail: String, retry: Boolean) {
+        val shown = detail.ifEmpty { null }
+        val listener = synchronized(signInLock) {
+            if (activeSignIn == null && activeForm == null) cancelRequested = false
+            pendingCredentials = null
+            pendingGuardCode = null
+            activeForm = Triple(kind, shown, retry)
+            signInListener
+        }
+        listener?.onShowSignInForm(kind, shown, retry)
     }
 
     /** Native (login thread) -> the sign-in ended (approved, cancelled, timed out or failed). */
@@ -245,9 +277,48 @@ object NativeBridge {
     fun hideSignIn() {
         val listener = synchronized(signInLock) {
             activeSignIn = null
+            activeForm = null
+            passwordRequested = false
+            pendingCredentials = null
+            pendingGuardCode = null
             signInListener
         }
         listener?.onHideSignIn()
+    }
+
+    /** Native (login thread) -> does the user want a username and password rather than the QR? */
+    @JvmStatic
+    fun signInPasswordRequested(): Boolean = passwordRequested
+
+    /** Native (login thread) -> `"username\npassword"` once after the form was submitted, else null. */
+    @JvmStatic
+    fun takeSignInCredentials(): String? = synchronized(signInLock) {
+        pendingCredentials.also { pendingCredentials = null }
+    }
+
+    /** Native (login thread) -> the Steam Guard code once after it was submitted, else null. */
+    @JvmStatic
+    fun takeSignInGuardCode(): String? = synchronized(signInLock) {
+        pendingGuardCode.also { pendingGuardCode = null }
+    }
+
+    /** UI thread -> the user chose the form (true) or went back to the QR code (false). Not a cancel. */
+    fun setPasswordSignInRequested(requested: Boolean) {
+        synchronized(signInLock) {
+            passwordRequested = requested
+            pendingCredentials = null
+            pendingGuardCode = null
+        }
+    }
+
+    /** UI thread -> the credentials form was submitted. */
+    fun submitSignInCredentials(username: String, password: String) {
+        synchronized(signInLock) { pendingCredentials = "$username\n$password" }
+    }
+
+    /** UI thread -> the Steam Guard code was submitted. */
+    fun submitSignInGuardCode(code: String) {
+        synchronized(signInLock) { pendingGuardCode = code }
     }
 
     /** Native (login thread) -> has the user pressed Cancel? */

@@ -16,6 +16,7 @@ import android.os.Process
 import android.os.SystemClock
 import android.system.Os
 import android.util.Log
+import android.text.InputType
 import android.view.Gravity
 import android.view.InputDevice
 import android.view.KeyEvent
@@ -26,6 +27,8 @@ import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.View
 import android.view.WindowManager
+import android.view.inputmethod.EditorInfo
+import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -76,6 +79,18 @@ open class GameActivity :
     private var signInDialog: AlertDialog? = null
     private var signInImage: ImageView? = null
     private var signInUrl: String = ""
+
+    /** The username/password form that takes the QR dialog's place; [kind] says which one it is. */
+    private class SignInForm(
+        val kind: String,
+        val message: TextView,
+        val username: EditText?,
+        val password: EditText?,
+        val code: EditText?,
+    )
+
+    private var signInForm: SignInForm? = null
+    private var signInUsernameText = ""
 
     // Boot failure handling. The overlay is dismissed only by SK's first frame, so a game that
     // never starts used to leave it on the last status forever ("Starting Java runtime",
@@ -1152,6 +1167,7 @@ open class GameActivity :
         signInDialog?.dismiss()
         signInDialog = null
         signInImage = null
+        signInForm = null
         super.onDestroy()
     }
 
@@ -1201,11 +1217,16 @@ open class GameActivity :
         runOnUiThread { showSignInDialog(url, modules) }
     }
 
+    override fun onShowSignInForm(kind: String, detail: String?, retry: Boolean) {
+        runOnUiThread { showSignInFormDialog(kind, detail, retry) }
+    }
+
     override fun onHideSignIn() {
         runOnUiThread {
             signInDialog?.dismiss()
             signInDialog = null
             signInImage = null
+            signInForm = null
             endPortraitPhase()
         }
     }
@@ -1241,6 +1262,14 @@ open class GameActivity :
             return
         }
         signInUrl = url
+        if (signInForm != null) {
+            // A rotated code arrives while the user is at the form: leave it be. If they went back
+            // to the QR code, this is the new one.
+            if (NativeBridge.signInPasswordRequested()) return
+            signInDialog?.dismiss()
+            signInDialog = null
+            signInForm = null
+        }
         val metrics = resources.displayMetrics
         // Landscape leaves little height once the title, message and buttons are counted.
         val qrDp = minOf(SIGN_IN_QR_DP, (metrics.heightPixels / metrics.density - SIGN_IN_CHROME_DP).toInt())
@@ -1276,14 +1305,16 @@ open class GameActivity :
             .setView(ScrollView(this).apply { addView(content) })
             .setCancelable(true)
             .setPositiveButton(R.string.steam_signin_open_app, null)
+            .setNeutralButton(R.string.steam_signin_use_password, null)
             .setNegativeButton(android.R.string.cancel) { _, _ -> endSignIn() }
             .setOnCancelListener { endSignIn() }
             .create()
             .also { dialog ->
                 dialog.setCanceledOnTouchOutside(false)
                 dialog.show()
-                // Set after show() so the button does not dismiss the QR the user still has to scan.
+                // Set after show() so the buttons do not dismiss the QR the user still has to scan.
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { openSteamApp() }
+                dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener { usePasswordSignIn() }
             }
     }
 
@@ -1291,6 +1322,143 @@ open class GameActivity :
         NativeBridge.cancelSignIn()
         signInDialog = null
         signInImage = null
+        signInForm = null
+    }
+
+    // --- Username and password sign-in, for someone with no second device to show the QR to ---
+
+    private fun usePasswordSignIn() {
+        NativeBridge.setPasswordSignInRequested(true)
+        showSignInFormDialog("credentials", null, false)
+    }
+
+    private fun useQrSignIn() {
+        NativeBridge.setPasswordSignInRequested(false)
+        signInDialog?.dismiss()
+        signInDialog = null
+        signInForm = null
+        // frenchpress shows a new code in a moment; the old one belonged to a sign-in it dropped.
+    }
+
+    private fun signInFormMessage(kind: String, detail: String?, retry: Boolean): String {
+        if (kind.startsWith("guard")) {
+            val ask = when {
+                kind != "guard-email" -> getString(R.string.steam_signin_guard_device)
+                detail != null -> getString(R.string.steam_signin_guard_email, detail)
+                else -> getString(R.string.steam_signin_guard_email_unknown)
+            }
+            return if (retry) getString(R.string.steam_signin_code_rejected, ask) else ask
+        }
+        return when (detail) {
+            null -> getString(R.string.steam_signin_credentials_message)
+            "password" -> getString(R.string.steam_signin_wrong_password)
+            "RateLimitExceeded", "AccountLoginDeniedThrottle" -> getString(R.string.steam_signin_throttled)
+            else -> getString(R.string.steam_signin_refused)
+        }
+    }
+
+    /**
+     * The JVM asks for credentials (detail is why the last ones were refused) or a Steam Guard code.
+     * Nothing typed is kept: the password is cleared once handed over, and only the account name is
+     * remembered, to save retyping it after a refusal.
+     */
+    private fun showSignInFormDialog(kind: String, detail: String?, retry: Boolean) {
+        if (NativeBridge.signInCancelled()) return
+        val shown = signInForm
+        // The user's own tap already put the form up; the JVM's answer to it must not wipe what they typed.
+        if (shown != null && shown.kind == kind && detail == null && !retry &&
+            signInDialog?.isShowing == true && (shown.code ?: shown.password)?.isEnabled == true
+        ) return
+        shown?.username?.text?.toString()?.let { signInUsernameText = it }
+        signInDialog?.dismiss()
+        signInDialog = null
+        signInImage = null
+
+        val guard = kind.startsWith("guard")
+        val pad = (SIGN_IN_PADDING_DP * resources.displayMetrics.density).toInt()
+        fun field(hint: Int, type: Int, action: Int) = EditText(this).apply {
+            setHint(hint)
+            inputType = type
+            imeOptions = action or EditorInfo.IME_FLAG_NO_EXTRACT_UI
+            maxLines = 1
+        }
+        val username = if (guard) null else field(
+            R.string.steam_signin_username,
+            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS,
+            EditorInfo.IME_ACTION_NEXT,
+        ).apply {
+            setAutofillHints(View.AUTOFILL_HINT_USERNAME)
+            setText(signInUsernameText)
+        }
+        val password = if (guard) null else field(
+            R.string.steam_signin_password,
+            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD,
+            EditorInfo.IME_ACTION_GO,
+        ).apply { setAutofillHints(View.AUTOFILL_HINT_PASSWORD) }
+        val code = if (!guard) null else field(
+            R.string.steam_signin_code_hint,
+            InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS,
+            EditorInfo.IME_ACTION_GO,
+        )
+        val message = TextView(this).apply {
+            text = signInFormMessage(kind, detail, retry)
+            setPadding(0, 0, 0, pad / 2)
+        }
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(pad, pad, pad, 0)
+            addView(message)
+            username?.let(::addView)
+            password?.let(::addView)
+            code?.let(::addView)
+        }
+        val form = SignInForm(kind, message, username, password, code)
+        signInForm = form
+        signInDialog = AlertDialog.Builder(this)
+            .setTitle(R.string.steam_signin_title)
+            .setView(ScrollView(this).apply { addView(content) })
+            .setCancelable(true)
+            .setPositiveButton(if (guard) R.string.steam_signin_continue else R.string.steam_signin_submit, null)
+            .setNeutralButton(R.string.steam_signin_use_qr, null)
+            .setNegativeButton(android.R.string.cancel) { _, _ -> endSignIn() }
+            .setOnCancelListener { endSignIn() }
+            .create()
+            .also { dialog ->
+                dialog.setCanceledOnTouchOutside(false)
+                dialog.show()
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener { submitSignInForm(form, dialog) }
+                dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener { useQrSignIn() }
+                val go = TextView.OnEditorActionListener { _, _, _ ->
+                    submitSignInForm(form, dialog)
+                    true
+                }
+                password?.setOnEditorActionListener(go)
+                code?.setOnEditorActionListener(go)
+                (code ?: if (signInUsernameText.isEmpty()) username else password)?.requestFocus()
+            }
+    }
+
+    private fun submitSignInForm(form: SignInForm, dialog: AlertDialog) {
+        if (form.code != null) {
+            val code = form.code.text.toString().trim()
+            if (code.isEmpty()) return
+            NativeBridge.submitSignInGuardCode(code)
+            form.message.setText(R.string.steam_signin_checking_code)
+        } else {
+            val username = form.username?.text?.toString()?.trim().orEmpty()
+            val password = form.password?.text?.toString().orEmpty()
+            if (username.isEmpty() || password.isEmpty()) {
+                form.message.setText(R.string.steam_signin_enter_both)
+                return
+            }
+            signInUsernameText = username
+            NativeBridge.submitSignInCredentials(username, password)
+            // Not kept past the hand-over: a refused attempt asks for it again.
+            form.password?.text?.clear()
+            form.message.setText(R.string.steam_signin_signing_in)
+        }
+        listOfNotNull(form.username, form.password, form.code).forEach { it.isEnabled = false }
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
     }
 
     private fun openSteamApp() {

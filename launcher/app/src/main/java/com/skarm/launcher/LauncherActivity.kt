@@ -34,6 +34,13 @@ import kotlinx.coroutines.delay
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.Lifecycle
 import android.graphics.Bitmap
+import android.graphics.drawable.GradientDrawable
+import android.view.ViewGroup
+import androidx.recyclerview.widget.RecyclerView
+import androidx.viewpager2.widget.ViewPager2
+import com.skarm.launcher.databinding.ItemNewsBinding
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.withTimeoutOrNull
 import com.google.android.material.progressindicator.CircularProgressIndicatorSpec
 import com.google.android.material.progressindicator.IndeterminateDrawable
 import com.skarm.launcher.databinding.ActivityLauncherBinding
@@ -895,11 +902,13 @@ class LauncherActivity : AppCompatActivity() {
 
 
     /**
-     * Fills the home-screen card from the feed and, when it carries more than one
-     * event, rotates through them as KnightLauncher does: a random first event, then
-     * the next every [NewsFeed.ROTATE_INTERVAL_MS]. The card stays gone when there is
-     * nothing to show, so a quiet week or an unreachable service leaves the screen as
-     * it was. Rotation only runs while the screen is started.
+     * Fills the home-screen card from the feed as a swipeable carousel. With more than one event it
+     * starts on a random one and slides to the next every [NewsFeed.ROTATE_INTERVAL_MS], as
+     * KnightLauncher rotates, and the user can swipe between them. The first event is repeated after
+     * the last so the slide from the end wraps forward instead of rewinding; the repeat is swapped for
+     * the real first page once the slide settles. The card stays gone when there is nothing to show, so
+     * a quiet week or an unreachable service leaves the screen as it was. Sliding only runs while the
+     * screen is started.
      */
     private fun fetchNews() {
         lifecycleScope.launch {
@@ -907,79 +916,118 @@ class LauncherActivity : AppCompatActivity() {
             if (events.isEmpty()) return@launch
             binding.newsCard.visibility = View.VISIBLE
 
-            // Each banner is requested once per feed load, in this scope rather than the
-            // rotation's so a stop/start does not abandon it, and a failing one is not
-            // retried every rotation. Text never waits on it.
-            val scope = this
-            val width = binding.newsCard.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
-            val loaded = HashMap<String, Bitmap?>()
-            val requested = HashSet<String>()
-            var current: NewsFeed.Event? = null
-            fun request(url: String) {
-                if (!requested.add(url)) return
-                scope.launch {
-                    loaded[url] = NewsFeed.image(this@LauncherActivity, url, width)
-                    if (current?.imageUrl == url) binding.newsImage.setImageBitmap(loaded[url])
+            val adapter = NewsAdapter(events)
+            val pager = binding.newsPager
+            pager.adapter = adapter
+            pager.isUserInputEnabled = events.size > 1
+            val start = Random.nextInt(events.size)
+            pager.setCurrentItem(start, false)
+            showNewsDots(events.size, start)
+
+            // A drag, and the settle after it, restart the wait for the next slide.
+            val restart = Channel<Unit>(Channel.CONFLATED)
+            var dragged = false
+            pager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
+                override fun onPageSelected(position: Int) = showNewsDots(events.size, position % events.size)
+
+                override fun onPageScrollStateChanged(state: Int) {
+                    when (state) {
+                        ViewPager2.SCROLL_STATE_DRAGGING -> {
+                            dragged = true
+                            restart.trySend(Unit)
+                        }
+                        ViewPager2.SCROLL_STATE_IDLE -> {
+                            if (events.size > 1 && pager.currentItem == events.size) pager.setCurrentItem(0, false)
+                            if (dragged) restart.trySend(Unit)
+                            dragged = false
+                        }
+                    }
                 }
+            })
+
+            // Each banner is requested once per feed load, in this scope rather than the slide
+            // loop's so a stop/start does not abandon it, and a failing one is not retried every
+            // slide. Text never waits on it.
+            val width = binding.newsCard.width.takeIf { it > 0 } ?: resources.displayMetrics.widthPixels
+            for (url in events.mapNotNull { it.imageUrl }.toSet()) {
+                launch { adapter.setBitmap(url, NewsFeed.image(this@LauncherActivity, url, width)) }
             }
+            if (events.size == 1) return@launch
 
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                var index = Random.nextInt(events.size)
-                var first = true
                 while (true) {
-                    val event = events[index]
-                    current = event
-                    // Read the banner when it is applied, not now: one finishing mid-fade
-                    // would otherwise be replaced by a stale null.
-                    val bitmap = { event.imageUrl?.let { loaded[it] } }
-                    if (first) {
-                        // A restart can land mid-fade; drop it so it cannot apply an old event.
-                        binding.newsCard.animate().cancel()
-                        binding.newsCard.alpha = 1f
-                        showNews(event, bitmap())
-                    } else {
-                        crossfadeNews(event, bitmap)
+                    // Null when the interval ran out; a signal instead means a drag restarted it.
+                    val timedOut = withTimeoutOrNull(NewsFeed.ROTATE_INTERVAL_MS) { restart.receive() } == null
+                    if (timedOut && pager.scrollState == ViewPager2.SCROLL_STATE_IDLE) {
+                        pager.setCurrentItem(pager.currentItem + 1, true)
                     }
-                    event.imageUrl?.let(::request)
-                    first = false
-                    if (events.size == 1) break
-                    index = (index + 1) % events.size
-                    // Have the next banner ready by the time we rotate to it.
-                    events[index].imageUrl?.let(::request)
-                    delay(NewsFeed.ROTATE_INTERVAL_MS)
                 }
             }
         }
     }
 
-    private fun crossfadeNews(event: NewsFeed.Event, bitmap: () -> Bitmap?) {
-        val card = binding.newsCard
-        card.animate().cancel()
-        card.animate().alpha(0f).setDuration(NEWS_FADE_MS).withEndAction {
-            showNews(event, bitmap())
-            card.animate().alpha(1f).setDuration(NEWS_FADE_MS).start()
-        }.start()
+    /** One dot per event, the current one white. Hidden for a single event. */
+    private fun showNewsDots(count: Int, selected: Int) {
+        val dots = binding.newsDots
+        dots.visibility = if (count > 1) View.VISIBLE else View.GONE
+        if (dots.childCount != count) {
+            dots.removeAllViews()
+            val size = (6 * resources.displayMetrics.density).toInt()
+            val gap = (3 * resources.displayMetrics.density).toInt()
+            repeat(count) {
+                dots.addView(View(this), LinearLayout.LayoutParams(size, size).apply {
+                    marginStart = gap
+                    marginEnd = gap
+                })
+            }
+        }
+        for (i in 0 until dots.childCount) {
+            dots.getChildAt(i).background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(if (i == selected) NEWS_DOT_ON else NEWS_DOT_OFF)
+            }
+        }
     }
 
-    private fun showNews(event: NewsFeed.Event, bitmap: Bitmap?) {
-        val status = NewsFeed.statusLabel(this, event.startsAt, event.endsAt)
-        // Evergreen events carry no window; drop the chip rather than inventing a countdown.
-        binding.newsEndsIn.visibility = if (status != null) View.VISIBLE else View.GONE
-        binding.newsEndsIn.text = status
-        val endingSoon = event.isEndingSoon()
-        binding.newsEndsIn.backgroundTintList =
-            if (endingSoon) ColorStateList.valueOf(NEWS_ENDING_SOON_COLOR) else null
-        binding.newsEndsIn.setTextColor(if (endingSoon) NEWS_ENDING_SOON_TEXT else Color.WHITE)
-        binding.newsTitle.text = event.title
-        binding.newsBody.text = event.body
-        binding.newsBody.visibility = if (event.body.isEmpty()) View.GONE else View.VISIBLE
-        binding.newsImage.setImageBitmap(bitmap)
-        val link = event.link
-        if (link != null) {
-            binding.newsCard.setOnClickListener { openUrl(link) }
-        } else {
-            binding.newsCard.setOnClickListener(null)
-            binding.newsCard.isClickable = false
+    /** One page per event, plus a repeat of the first when there is more than one (see [fetchNews]). */
+    private inner class NewsAdapter(private val events: List<NewsFeed.Event>) :
+        RecyclerView.Adapter<NewsAdapter.Page>() {
+        private val bitmaps = HashMap<String, Bitmap?>()
+
+        inner class Page(val views: ItemNewsBinding) : RecyclerView.ViewHolder(views.root)
+
+        override fun getItemCount() = if (events.size > 1) events.size + 1 else events.size
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) =
+            Page(ItemNewsBinding.inflate(layoutInflater, parent, false))
+
+        override fun onBindViewHolder(holder: Page, position: Int) {
+            val event = events[position % events.size]
+            val views = holder.views
+            val status = NewsFeed.statusLabel(this@LauncherActivity, event.startsAt, event.endsAt)
+            // Evergreen events carry no window; drop the chip rather than inventing a countdown.
+            views.newsEndsIn.visibility = if (status != null) View.VISIBLE else View.GONE
+            views.newsEndsIn.text = status
+            val endingSoon = event.isEndingSoon()
+            views.newsEndsIn.backgroundTintList =
+                if (endingSoon) ColorStateList.valueOf(NEWS_ENDING_SOON_COLOR) else null
+            views.newsEndsIn.setTextColor(if (endingSoon) NEWS_ENDING_SOON_TEXT else Color.WHITE)
+            views.newsTitle.text = event.title
+            views.newsBody.text = event.body
+            views.newsBody.visibility = if (event.body.isEmpty()) View.GONE else View.VISIBLE
+            views.newsImage.setImageBitmap(event.imageUrl?.let { bitmaps[it] })
+            val link = event.link
+            if (link != null) {
+                views.root.setOnClickListener { openUrl(link) }
+            } else {
+                views.root.setOnClickListener(null)
+                views.root.isClickable = false
+            }
+        }
+
+        fun setBitmap(url: String, bitmap: Bitmap?) {
+            bitmaps[url] = bitmap
+            notifyDataSetChanged()
         }
     }
 
@@ -1233,7 +1281,8 @@ class LauncherActivity : AppCompatActivity() {
 
         private const val DONATE_URL = "https://buymeacoffee.com/sirdankk"
         private const val CREDIT_URL = "https://dankware.alwaysdata.net/"
-        private const val NEWS_FADE_MS = 180L
+        private const val NEWS_DOT_ON = 0xFFFFFFFF.toInt()
+        private const val NEWS_DOT_OFF = 0x59FFFFFF
         // KnightLauncher's CustomColors.WARNING, with dark text as on its badge.
         private const val NEWS_ENDING_SOON_COLOR = 0xFFFBC65B.toInt()
         private const val NEWS_ENDING_SOON_TEXT = 0xFF202020.toInt()

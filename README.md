@@ -16,7 +16,7 @@ game itself is bundled in this repository.
 
 | | |
 | --- | --- |
-| **Play** | The real desktop client on your device. Gamepad-first, with on-screen touch controls, and a keyboard and mouse when you have them. Sign in with **Web**, or with **Steam** by QR code: there is no Steam password to type. |
+| **Play** | The real desktop client on your device. Gamepad-first, with on-screen touch controls, and a keyboard and mouse when you have them. Sign in with **Web**, or with **Steam** by QR code or your username and password. |
 | **Controls** | **Edit Controls** in the launcher moves, resizes and hides every control, with opacity and resolution. Keep named presets, or export and import a layout as a file that also works on [SKapsule for iOS](https://github.com/SKonstruct/SKapsule-iOS). |
 | **Servers** | Official or your own private servers, saved in one picker. |
 | **Mods** | Download the maintained modpack from the options sidebar; mods apply by themselves when the folder changes, and **Reset Game Files** puts the game's own files back; the button says **Update Modpack** when the pack changed. Mods apply in an automatic order, the broadest first, so a small mod wins over a big one. There is nothing to sort by hand. |
@@ -65,7 +65,8 @@ stick made every button unpressable).
    while and needs a network connection.
 4. Pick **Web** or **Steam**, tap **Launch** and sign in with your own account. Steam shows a QR code on the
    first launch, in portrait before the game turns landscape: scan it with the Steam app, or tap **Open Steam app** if Steam is on this device, and
-   approve. There is no Steam password to type.
+   approve. With no second device, tap **Use username and password** instead and enter your Steam Guard code when
+   asked; the password is only used to sign in and is never saved.
 
 Later releases install themselves: when a newer version is published the launcher shows an
 **Update available** banner, and tapping it downloads the APK and hands it to the system
@@ -181,7 +182,7 @@ client expects on a platform Android lacks:
 | **openal-soft**  | audio                                                     | [`openal-soft`](https://github.com/SKonstruct/openal-soft) submodule       |
 | **LWJGL 3.4.1**  | windowing / GL / input bindings (Android-native build)    | [`lwjgl3`](https://github.com/SKonstruct/lwjgl3) submodule                 |
 | **caciocavallo** | headless AWT bridge (the game uses AWT/Swing for some UI) | [`caciocavallo17`](https://github.com/SKonstruct/caciocavallo17) submodule |
-| **frenchpress**  | Steam sign-in (QR code / Steam app)                       | [`frenchpress`](https://github.com/SKonstruct/frenchpress) submodule       |
+| **frenchpress**  | Steam sign-in (QR code / Steam app / username and password) | [`frenchpress`](https://github.com/SKonstruct/frenchpress) submodule       |
 | **skgfx**        | FPS counter, sharpening, Sharp HUD (shared with iOS)      | [`skgfx`](https://github.com/SKonstruct/skgfx) submodule (MIT)             |
 | **getdown**      | downloads, verifies, and patches the game                 | bundled `getdown-pro.jar`                                                  |
 
@@ -251,7 +252,8 @@ reachable. All four can be dragged while the editor is open.
 The home screen shows the current in-game events — the same feed the desktop
 [KnightLauncher](https://github.com/lucasluqui/KnightLauncher) renders, chosen the same way:
 running and upcoming events, or the default event when none are left. With more than one,
-the card rotates through them every 8 seconds, starting at a random one; a chip counts down
+the card slides through them every 8 seconds, starting at a random one, and you can swipe
+between them (dots show where you are); a chip counts down
 to the start or end, and turns amber in an event's last two days. Tapping the card opens the
 event's page. If there is nothing to show, or the service is unreachable, the card is hidden.
 

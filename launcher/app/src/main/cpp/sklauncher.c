@@ -721,6 +721,10 @@ static jmethodID g_nb_keep_alive;     // steamKeepAlive(Z)V
 static jmethodID g_nb_show_sign_in;   // showSignIn(Ljava/lang/String;Ljava/lang/String;)V
 static jmethodID g_nb_hide_sign_in;   // hideSignIn()V
 static jmethodID g_nb_sign_in_cancelled; // signInCancelled()Z
+static jmethodID g_nb_show_sign_in_form; // showSignInForm(Ljava/lang/String;Ljava/lang/String;Z)V
+static jmethodID g_nb_sign_in_password_requested; // signInPasswordRequested()Z
+static jmethodID g_nb_take_credentials;  // takeSignInCredentials()Ljava/lang/String;
+static jmethodID g_nb_take_guard_code;   // takeSignInGuardCode()Ljava/lang/String;
 static jmethodID g_nb_cursor_image;   // onCursorImage(II[BII)V
 
 JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
@@ -742,6 +746,13 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
                                                        "(Ljava/lang/String;Ljava/lang/String;)V");
         g_nb_hide_sign_in  = (*env)->GetStaticMethodID(env, cls, "hideSignIn", "()V");
         g_nb_sign_in_cancelled = (*env)->GetStaticMethodID(env, cls, "signInCancelled", "()Z");
+        g_nb_show_sign_in_form = (*env)->GetStaticMethodID(env, cls, "showSignInForm",
+                                                           "(Ljava/lang/String;Ljava/lang/String;Z)V");
+        g_nb_sign_in_password_requested = (*env)->GetStaticMethodID(env, cls, "signInPasswordRequested", "()Z");
+        g_nb_take_credentials = (*env)->GetStaticMethodID(env, cls, "takeSignInCredentials",
+                                                          "()Ljava/lang/String;");
+        g_nb_take_guard_code  = (*env)->GetStaticMethodID(env, cls, "takeSignInGuardCode",
+                                                          "()Ljava/lang/String;");
         g_nb_cursor_image  = (*env)->GetStaticMethodID(env, cls, "onCursorImage", "(II[BII)V");
         (*env)->DeleteLocalRef(env, cls);
         LOGI("JNI_OnLoad: cached NativeBridge boot-overlay + Steam sign-in callbacks");
@@ -882,6 +893,56 @@ static jboolean JNICALL sk_native_sign_in_cancelled(JNIEnv *env, jclass thiz) {
     jboolean r = (*art)->CallStaticBooleanMethod(art, g_nb_cls, g_nb_sign_in_cancelled);
     if ((*art)->ExceptionCheck(art)) { (*art)->ExceptionClear(art); return JNI_FALSE; }
     return r;
+}
+
+// The username/password sign-in, behind SkBootstrap.nativeShowSignInForm / nativeSignInPasswordRequested /
+// nativeTakeSignInCredentials / nativeTakeSignInGuardCode. Same shape as the QR natives above: none of
+// them blocks, and an ART-side failure reads as "nothing" so the QR code still works.
+static void JNICALL sk_native_show_sign_in_form(JNIEnv *env, jclass thiz, jstring kind, jstring detail,
+                                                jboolean retry) {
+    (void)thiz;
+    JNIEnv *art = art_env();
+    if (!art || !g_nb_cls || !g_nb_show_sign_in_form) return;
+    jstring art_kind = art_string_from_hs(env, art, kind);
+    // A null detail arrives as "", which the Kotlin side treats the same.
+    jstring art_detail = art_string_from_hs(env, art, detail);
+    (*art)->CallStaticVoidMethod(art, g_nb_cls, g_nb_show_sign_in_form, art_kind, art_detail, retry);
+    if ((*art)->ExceptionCheck(art)) (*art)->ExceptionClear(art);
+    (*art)->DeleteLocalRef(art, art_kind);
+    (*art)->DeleteLocalRef(art, art_detail);
+}
+
+static jboolean JNICALL sk_native_sign_in_password_requested(JNIEnv *env, jclass thiz) {
+    (void)env; (void)thiz;
+    JNIEnv *art = art_env();
+    if (!art || !g_nb_cls || !g_nb_sign_in_password_requested) return JNI_FALSE;
+    jboolean r = (*art)->CallStaticBooleanMethod(art, g_nb_cls, g_nb_sign_in_password_requested);
+    if ((*art)->ExceptionCheck(art)) { (*art)->ExceptionClear(art); return JNI_FALSE; }
+    return r;
+}
+
+// Calls a no-arg ART static that returns String and hands the text to HotSpot, or NULL for none.
+static jstring take_art_string(JNIEnv *hs_env, jmethodID method) {
+    JNIEnv *art = art_env();
+    if (!art || !g_nb_cls || !method) return NULL;
+    jstring art_str = (jstring)(*art)->CallStaticObjectMethod(art, g_nb_cls, method);
+    if ((*art)->ExceptionCheck(art)) { (*art)->ExceptionClear(art); return NULL; }
+    if (!art_str) return NULL;
+    const char *c = (*art)->GetStringUTFChars(art, art_str, NULL);
+    jstring out = c ? (*hs_env)->NewStringUTF(hs_env, c) : NULL;
+    if (c) (*art)->ReleaseStringUTFChars(art, art_str, c);
+    (*art)->DeleteLocalRef(art, art_str);
+    return out;
+}
+
+static jstring JNICALL sk_native_take_sign_in_credentials(JNIEnv *env, jclass thiz) {
+    (void)thiz;
+    return take_art_string(env, g_nb_take_credentials);
+}
+
+static jstring JNICALL sk_native_take_sign_in_guard_code(JNIEnv *env, jclass thiz) {
+    (void)thiz;
+    return take_art_string(env, g_nb_take_guard_code);
 }
 
 static void *jvm_thread_main(void *arg) {
@@ -1187,6 +1248,14 @@ static void *jvm_thread_main(void *arg) {
                   (void *)sk_native_hide_sign_in },
                 { "nativeSignInCancelled", "()Z",
                   (void *)sk_native_sign_in_cancelled },
+                { "nativeShowSignInForm", "(Ljava/lang/String;Ljava/lang/String;Z)V",
+                  (void *)sk_native_show_sign_in_form },
+                { "nativeSignInPasswordRequested", "()Z",
+                  (void *)sk_native_sign_in_password_requested },
+                { "nativeTakeSignInCredentials", "()Ljava/lang/String;",
+                  (void *)sk_native_take_sign_in_credentials },
+                { "nativeTakeSignInGuardCode", "()Ljava/lang/String;",
+                  (void *)sk_native_take_sign_in_guard_code },
             };
             jint rrc = (*env)->RegisterNatives(env, skBoot, m,
                                                sizeof(m) / sizeof(m[0]));
