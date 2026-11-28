@@ -4,4 +4,12 @@
     <color name="sk_pink">#AB4A81</color>
     <color name="sk_pink_stroke">#33AB4A81</color>
     <color name="sk_pink_chip">#CCAB4A81</color>
+
+    <!-- SKonstruct/brand tokens/colors.json, copied at a750940. Only the tokens the sign-in dialogs use. -->
+    <color name="brand_surface_elevated">#1E1E1E</color>
+    <color name="brand_text">#FFFFFF</color>
+    <color name="brand_text_secondary">#A6A6A6</color>
+    <color name="brand_pink">#AB4A81</color>
+    <color name="brand_pink_text">#E08BBB</color>
+    <color name="brand_error">#FF7B72</color>
 </resources>

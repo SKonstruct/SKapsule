@@ -198,8 +198,6 @@
     <string name="sidebar_mods_current">حزمة التعديلات محدثة</string>
     <string name="editor_tab_edit">تعديل</string>
     <string name="editor_tab_settings">الإعدادات</string>
-    <string name="touch_floating_left">عصا يسرى عائمة</string>
-    <string name="touch_floating_right">عصا يمنى عائمة</string>
     <string name="sidebar_reset_game">Reset Game Files</string>
     <string name="mod_remove_title">Resetting Game Files</string>
     <string name="remove_failed">Reset Failed</string>

@@ -22,4 +22,19 @@
         <item name="cornerSizeTopRight">24dp</item>
         <item name="cornerSizeBottomRight">24dp</item>
     </style>
+
+    <!-- The Steam sign-in dialogs in the brand's dark surface, whatever the system theme: elevated surface,
+         white and secondary text, and pinkText for the buttons and the focused field. -->
+    <style name="ThemeOverlay.SKapsule.SignIn" parent="">
+        <item name="colorSurfaceContainerHigh">@color/brand_surface_elevated</item>
+        <item name="colorSurface">@color/brand_surface_elevated</item>
+        <item name="colorOnSurface">@color/brand_text</item>
+        <item name="colorOnSurfaceVariant">@color/brand_text_secondary</item>
+        <item name="colorPrimary">@color/brand_pink_text</item>
+        <item name="colorControlActivated">@color/brand_pink_text</item>
+        <item name="colorControlNormal">@color/brand_text_secondary</item>
+        <item name="android:textColorPrimary">@color/brand_text</item>
+        <item name="android:textColorSecondary">@color/brand_text_secondary</item>
+        <item name="android:textColorHint">@color/brand_text_secondary</item>
+    </style>
 </resources>

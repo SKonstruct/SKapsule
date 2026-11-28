@@ -198,8 +198,6 @@
     <string name="sidebar_mods_current">Modpack aktuell</string>
     <string name="editor_tab_edit">Bearbeiten</string>
     <string name="editor_tab_settings">Einstellungen</string>
-    <string name="touch_floating_left">Schwebender linker Stick</string>
-    <string name="touch_floating_right">Schwebender rechter Stick</string>
     <string name="sidebar_reset_game">Reset Game Files</string>
     <string name="mod_remove_title">Resetting Game Files</string>
     <string name="remove_failed">Reset Failed</string>

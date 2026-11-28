@@ -198,8 +198,6 @@
     <string name="sidebar_mods_current">Modpack atualizado</string>
     <string name="editor_tab_edit">Editar</string>
     <string name="editor_tab_settings">Configurações</string>
-    <string name="touch_floating_left">Analógico esquerdo flutuante</string>
-    <string name="touch_floating_right">Analógico direito flutuante</string>
     <string name="sidebar_reset_game">Reset Game Files</string>
     <string name="mod_remove_title">Resetting Game Files</string>
     <string name="remove_failed">Reset Failed</string>

@@ -198,8 +198,6 @@
     <string name="sidebar_mods_current">Modpack à jour</string>
     <string name="editor_tab_edit">Modifier</string>
     <string name="editor_tab_settings">Paramètres</string>
-    <string name="touch_floating_left">Stick gauche flottant</string>
-    <string name="touch_floating_right">Stick droit flottant</string>
     <string name="sidebar_reset_game">Reset Game Files</string>
     <string name="mod_remove_title">Resetting Game Files</string>
     <string name="remove_failed">Reset Failed</string>

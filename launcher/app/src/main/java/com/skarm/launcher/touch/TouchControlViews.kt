@@ -56,9 +56,10 @@ object HudPalette {
     const val BUTTON_OUTLINE: Int = 0x47FFFFFF // touch button hairline edge, matches iOS
     const val JOY_BG: Int = 0x66202020.toInt() // joystick base (more transparent)
     const val JOY_KNOB: Int = 0xCC808080.toInt() // joystick knob
+    const val NEW_MARK: Int = 0xFF963F6E.toInt() // brand pinkPressed (4.8:1 on the light button): the "new default" mark on Reset Layout
 }
 
-/** How visible an idle floating stick's resting spot is (0..255). */
+/** How visible an idle stick's resting spot is (0..255). */
 private const val GHOST_ALPHA = 0x30
 
 class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(context, node) {
@@ -72,14 +73,14 @@ class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(
         style = Paint.Style.FILL
     }
 
-    // What a floating stick shows while nobody holds it: a faint base where it would start from.
+    // What a stick shows while nobody holds it: a faint base where it would start from.
     private val ghostPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = HudPalette.JOY_BG
         alpha = GHOST_ALPHA
         style = Paint.Style.FILL
     }
 
-    // The square zone behind a floating stick, and its hairline edge (same as the buttons').
+    // The square zone behind a stick, and its hairline edge (same as the buttons').
     private val zonePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = HudPalette.JOY_BG
         style = Paint.Style.FILL
@@ -95,20 +96,20 @@ class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(
     private var isDragging = false
     private var pointerId = -1
 
-    /** True while a finger holds this stick; a held floating stick must not be put back by a layout pass. */
+    /** True while a finger holds this stick; a held stick must not be put back by a layout pass. */
     val isHeld: Boolean get() = isDragging
 
     /**
-     * Radius of the stick itself. A floating stick's view is the larger square zone it moves in,
-     * so the overlay says how big the stick inside it is; a fixed stick fills its view.
+     * Radius of the stick itself. The view is the larger square zone the stick moves in, so the
+     * overlay says how big the stick inside it is.
      */
     var stickRadius = 0f
 
     private fun radius(): Float =
-        if (node.floating && stickRadius > 0f) stickRadius else min(width, height) / 2f
+        if (stickRadius > 0f) stickRadius else min(width, height) / 2f
 
-    // Where the stick's centre sits inside the view: the middle, except a floating stick that
-    // follows the thumb around its zone.
+    // Where the stick's centre sits inside the view: the middle at rest, then wherever the thumb
+    // lands in its zone.
     private var baseX = 0f
     private var baseY = 0f
 
@@ -159,22 +160,17 @@ class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(
     override fun onDraw(canvas: Canvas) {
         val radius = radius()
 
-        if (node.floating) {
-            // The zone the stick may start in: a rounded square, always shown so the player knows
-            // where to put a thumb. The stick itself only appears under a held thumb.
-            zoneRect.set(0f, 0f, width.toFloat(), height.toFloat())
-            val corner = min(width, height) * 0.12f
-            canvas.drawRoundRect(zoneRect, corner, corner, zonePaint)
-            canvas.drawRoundRect(zoneRect, corner, corner, zoneOutlinePaint)
-            if (isDragging) {
-                canvas.drawCircle(baseX, baseY, radius, bgPaint)
-                canvas.drawCircle(knobX, knobY, radius * 0.4f, knobPaint)
-            } else {
-                canvas.drawCircle(baseX, baseY, radius, ghostPaint)
-            }
-        } else {
+        // The zone the stick may start in: a rounded square, always shown so the player knows
+        // where to put a thumb. The stick itself only appears under a held thumb.
+        zoneRect.set(0f, 0f, width.toFloat(), height.toFloat())
+        val corner = min(width, height) * 0.12f
+        canvas.drawRoundRect(zoneRect, corner, corner, zonePaint)
+        canvas.drawRoundRect(zoneRect, corner, corner, zoneOutlinePaint)
+        if (isDragging) {
             canvas.drawCircle(baseX, baseY, radius, bgPaint)
             canvas.drawCircle(knobX, knobY, radius * 0.4f, knobPaint)
+        } else {
+            canvas.drawCircle(baseX, baseY, radius, ghostPaint)
         }
 
         super.onDraw(canvas)
@@ -190,8 +186,8 @@ class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(
                     val x = event.getX(pointerIndex)
                     val y = event.getY(pointerIndex)
                     val radius = radius()
-                    // A floating stick starts anywhere in its zone, under the thumb.
-                    if (node.floating) placeBase(x, y)
+                    // The stick starts anywhere in its zone, under the thumb.
+                    placeBase(x, y)
                     val dx = x - baseX
                     val dy = y - baseY
 
@@ -239,7 +235,7 @@ class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(
     private fun release() {
         isDragging = false
         pointerId = -1
-        // resetKnob also puts a floating stick back at the middle of its zone.
+        // resetKnob also puts the stick back at the middle of its zone.
         resetKnob()
 
         if (node.type == ControlType.JOYSTICK_RIGHT) {
@@ -257,10 +253,10 @@ class TouchJoystickView(context: Context, node: ControlNode) : BaseTouchControl(
         var dy = y - baseY
         var dist = sqrt((dx * dx + dy * dy).toDouble()).toFloat()
 
-        // A floating stick's base follows a thumb dragged past its range, so it never runs out of
+        // The base follows a thumb dragged past its range, so it never runs out of
         // travel. The base moves by the excess, so the thumb ends up at the stick's edge. It stays
         // inside the zone.
-        if (node.floating && dist > maxDist) {
+        if (dist > maxDist) {
             val over = dist - maxDist
             val (movedX, movedY) = placeBase(baseX + dx / dist * over, baseY + dy / dist * over)
             dx -= movedX

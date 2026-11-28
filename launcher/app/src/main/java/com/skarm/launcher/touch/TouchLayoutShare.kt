@@ -24,8 +24,6 @@ class SharedLayout(
         val yPercent: Float,
         val scale: Float,
         val visible: Boolean,
-        /** Optional in a file (absent means false); only a joystick can take it. */
-        val floating: Boolean = false,
     )
 }
 
@@ -63,7 +61,7 @@ object TouchLayoutShare {
         globalOpacity = layout.globalOpacity,
         actionBarVisible = layout.actionBarVisible,
         nodes = layout.nodes.associate {
-            it.id to SharedLayout.NodeState(it.xPercent, it.yPercent, it.scale, it.visible, it.floating)
+            it.id to SharedLayout.NodeState(it.xPercent, it.yPercent, it.scale, it.visible)
         },
     )
 
@@ -84,7 +82,6 @@ object TouchLayoutShare {
                             put("yPercent", n.yPercent.toDouble())
                             put("scale", n.scale.toDouble())
                             put("visible", n.visible)
-                            if (n.floating) put("floating", true)
                         },
                     )
                 }
@@ -117,8 +114,6 @@ object TouchLayoutShare {
                     scale = o.finite("scale").toFloat()
                         .coerceIn(TouchControlManager.MIN_NODE_SCALE, TouchControlManager.MAX_NODE_SCALE),
                     visible = o.opt("visible") as? Boolean ?: throw invalid("node $i has no visibility"),
-                    // Optional, so a file from before floating sticks still parses; present, it must be a boolean.
-                    floating = if (o.has("floating")) o.opt("floating") as? Boolean ?: throw invalid("node $i floating is not a boolean") else false,
                 )
                 // An id this build doesn't have (a newer control) is skipped, but a repeat of a
                 // known one means the file is inconsistent, so it is refused.
@@ -140,7 +135,7 @@ object TouchLayoutShare {
     }
 
     /**
-     * [base] with this arrangement laid over it: opacity, "Show Buttons" and each known node's
+     * [base] with this arrangement laid over it: opacity and each known node's
      * position, size and visibility. `controlsEnabled` and `renderScale` stay [base]'s, and a
      * node the file doesn't mention keeps its default position.
      */
@@ -152,14 +147,14 @@ object TouchLayoutShare {
                 yPercent = s.yPercent,
                 scale = s.scale,
                 visible = s.visible,
-                // Only a joystick floats: a file cannot make a button do it.
-                floating = s.floating && canonical.type != ControlType.BUTTON,
             )
         }.toMutableList()
         return TouchLayoutData(
             globalOpacity = shared.globalOpacity,
             controlsEnabled = base.controlsEnabled,
-            actionBarVisible = shared.actionBarVisible,
+            // "Show Buttons" is per session, so a file cannot turn it on; it stays as it is.
+            actionBarVisible = base.actionBarVisible,
+            defaultVersion = TouchControlManager.DEFAULT_LAYOUT_VERSION,
             renderScale = base.renderScale,
             nodes = nodes,
         )

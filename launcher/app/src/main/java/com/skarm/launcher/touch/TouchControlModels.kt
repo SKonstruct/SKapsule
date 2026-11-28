@@ -38,8 +38,6 @@ data class ControlNode(
     val label: String = "",
     /** GLFW keycode this button taps (e.g. 256 = ESC); -1 = not a key button */
     val keyCode: Int = -1,
-    /** A joystick that appears where the thumb lands instead of sitting at its saved spot. */
-    var floating: Boolean = false,
 ) {
     /** Part of the bottom action row (attacks + items), which has its own show/hide
      *  switch. Derived from the id rather than persisted, so layouts saved by older
@@ -51,7 +49,17 @@ data class ControlNode(
 data class TouchLayoutData(
     var globalOpacity: Float = TouchControlManager.DEFAULT_OPACITY,
     var controlsEnabled: Boolean = true,
-    var actionBarVisible: Boolean = false,
+    /**
+     * "Show Buttons". Not saved: every start of the app begins with the buttons hidden (only ESC and the
+     * sticks show), and the eye button or the switch brings them back for that session.
+     */
+    @Transient var actionBarVisible: Boolean = false,
+    /**
+     * [TouchControlManager.DEFAULT_LAYOUT_VERSION] of the default this layout was last reset to or made from.
+     * 0 (a layout saved before it existed) is older than any default, which is what lights the
+     * "new default" mark on Reset Layout.
+     */
+    var defaultVersion: Int = 0,
     /** Render-scale multiplier for the game framebuffer, 0.5..1.0. Lower = the
      *  game renders fewer pixels and the display upscales, so the HUD/UI grows.
      *  Defaults to the minimum so the HUD starts at its largest / most touchable. */
@@ -87,7 +95,14 @@ object TouchControlManager {
     const val ESC_Y = 0.05f
 
     const val MIN_OPACITY = 0.2f
-    const val DEFAULT_OPACITY = 1.0f
+    /** Half way along the opacity slider (MIN_OPACITY to 1). */
+    const val DEFAULT_OPACITY = 0.6f
+
+    /**
+     * Bumped whenever the default layout changes in a way worth trying. A saved layout made from an
+     * older default gets a mark on Reset Layout, so the new controls are one tap away.
+     */
+    const val DEFAULT_LAYOUT_VERSION = 2
 
     const val MIN_RENDER_SCALE = 0.6f
     const val MAX_RENDER_SCALE = 1.0f
@@ -177,15 +192,15 @@ object TouchControlManager {
         // Positions are the author's hand-tuned layout, snapped to a grid (the iOS port holds the same numbers,
         // SKTouchControls.m): the sticks mirror each other, the right cluster is two columns by four rows, and
         // the bottom row is one even pitch with a wider gap between the attacks and the items.
-        val layout = TouchLayoutData(actionBarVisible = true)
+        val layout = TouchLayoutData(defaultVersion = DEFAULT_LAYOUT_VERSION)
 
         // Both sticks float: each appears under the thumb inside a square pad in its half of the screen.
         // Left Joystick (Move)
-        layout.nodes.add(ControlNode("joy_move", ControlType.JOYSTICK_LEFT, 0.205f, 0.617f, floating = true))
+        layout.nodes.add(ControlNode("joy_move", ControlType.JOYSTICK_LEFT, 0.205f, 0.617f))
 
         // Right Joystick (Face) - hold to charge / aim, tap to Primary Attack;
         // handled in the Joystick implementation.
-        layout.nodes.add(ControlNode("joy_face", ControlType.JOYSTICK_RIGHT, 0.795f, 0.617f, floating = true))
+        layout.nodes.add(ControlNode("joy_face", ControlType.JOYSTICK_RIGHT, 0.795f, 0.617f))
 
         // Escape - taps the ESC key (opens/closes SK menus). Top-left, level with the chrome row beside it.
         layout.nodes.add(ControlNode("btn_esc", ControlType.BUTTON, ESC_X, ESC_Y, keyCode = KEY_ESCAPE, label = "ESC"))

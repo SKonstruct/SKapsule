@@ -3,6 +3,7 @@ package com.skarm.launcher
 import com.skarm.launcher.touch.LayoutFormatException
 import com.skarm.launcher.touch.LayoutFormatException.Reason
 import com.skarm.launcher.touch.TouchControlManager
+import com.skarm.launcher.touch.TouchLayoutData
 import com.skarm.launcher.touch.TouchLayoutShare
 import org.json.JSONArray
 import org.json.JSONObject
@@ -168,42 +169,40 @@ class TouchLayoutShareTest {
     }
 
     @Test
-    fun aFloatingStickTravelsInTheFileAndAFileWithoutItIsNotFloating() {
-        val layout = TouchControlManager.createDefaultLayout()
-        // Both sticks float by default; make only the left one float here.
-        assertTrue(layout.nodes.first { it.id == "joy_face" }.floating)
-        layout.nodes.first { it.id == "joy_move" }.floating = true
-        layout.nodes.first { it.id == "joy_face" }.floating = false
-        val json = TouchLayoutShare.toJson(TouchLayoutShare.capture(layout, "Floaty"))
-        val back = TouchLayoutShare.parse(json)
-        assertTrue(back.nodes.getValue("joy_move").floating)
-        assertFalse(back.nodes.getValue("joy_face").floating)
-        // Written only when on, so a file from before floating sticks reads as not floating.
-        assertFalse(json.contains("\"floating\": false"))
-        assertFalse(TouchLayoutShare.parse(fixture("controls-android-export.json")).nodes.getValue("joy_move").floating)
-    }
-
-    @Test
-    fun floatingMustBeABoolean() {
-        val bad = valid().put(
-            "nodes",
-            JSONArray("""[{"id":"joy_move","xPercent":0.1,"yPercent":0.2,"scale":1,"visible":true,"floating":"yes"}]"""),
-        )
-        assertEquals(Reason.INVALID, reason(bad.toString()))
-    }
-
-    @Test
-    fun onlyAJoystickCanFloat() {
+    fun aFileFromBeforeFloatingWasRemovedStillImports() {
+        // Both sticks always float now; an older file may still carry the flag, with any value, and it is ignored.
         val text = valid().put(
             "nodes",
             JSONArray(
-                """[{"id":"joy_move","xPercent":0.1,"yPercent":0.2,"scale":1,"visible":true,"floating":true},
-                    {"id":"btn_esc","xPercent":0.1,"yPercent":0.2,"scale":1,"visible":true,"floating":true}]""",
+                """[{"id":"joy_move","xPercent":0.1,"yPercent":0.2,"scale":1,"visible":true,"floating":false},
+                    {"id":"joy_face","xPercent":0.9,"yPercent":0.2,"scale":1,"visible":true,"floating":"yes"}]""",
             ),
         ).toString()
         val applied = TouchLayoutShare.applyTo(TouchLayoutShare.parse(text), TouchControlManager.createDefaultLayout())
-        assertTrue(applied.nodes.first { it.id == "joy_move" }.floating)
-        assertFalse("a file cannot make a button float", applied.nodes.first { it.id == "btn_esc" }.floating)
+        assertEquals(0.1f, applied.nodes.first { it.id == "joy_move" }.xPercent, 1e-6f)
+        assertFalse("floating is no longer written", TouchLayoutShare.toJson(TouchLayoutShare.capture(applied, "x")).contains("floating"))
+    }
+
+    @Test
+    fun showButtonsIsPerSessionAndAFileCannotTurnItOn() {
+        val on = valid().put("actionBarVisible", true).toString()
+        val base = TouchControlManager.createDefaultLayout()
+        assertFalse("Show Buttons starts off", base.actionBarVisible)
+        assertFalse(TouchLayoutShare.applyTo(TouchLayoutShare.parse(on), base).actionBarVisible)
+        base.actionBarVisible = true
+        assertTrue("an import keeps the session's own choice", TouchLayoutShare.applyTo(TouchLayoutShare.parse(on), base).actionBarVisible)
+    }
+
+    @Test
+    fun theDefaultsAreHalfOpacityAndTheCurrentLayoutVersion() {
+        val layout = TouchControlManager.createDefaultLayout()
+        val half = TouchControlManager.MIN_OPACITY + 0.5f * (1f - TouchControlManager.MIN_OPACITY)
+        assertEquals(half, layout.globalOpacity, 1e-6f)
+        assertEquals(TouchControlManager.DEFAULT_LAYOUT_VERSION, layout.defaultVersion)
+        // A layout that came from a file counts as current, so an import does not light the reset mark.
+        val applied = TouchLayoutShare.applyTo(TouchLayoutShare.parse(valid().toString()), layout)
+        assertEquals(TouchControlManager.DEFAULT_LAYOUT_VERSION, applied.defaultVersion)
+        assertTrue("a layout saved before the version existed is older", TouchLayoutData().defaultVersion < TouchControlManager.DEFAULT_LAYOUT_VERSION)
     }
 
     @Test

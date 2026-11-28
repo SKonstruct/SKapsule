@@ -1314,7 +1314,7 @@ class LauncherActivity : AppCompatActivity() {
             getString(R.string.ram_free, RamSettings.availableMb(this), RamSettings.totalMb(this))
     }
 
-    /** "Download Modpack", "Update Modpack" when the modpack changed, "Modpack up to date" when it matches. */
+    /** "Get SirDank's Modpack", "Update Modpack" when the modpack changed, "Modpack up to date" when it matches. */
     private fun refreshModpackButton() {
         binding.sidebarBtnDownloadMods.setText(
             when (ModsDownloader.lastStatus?.state) {

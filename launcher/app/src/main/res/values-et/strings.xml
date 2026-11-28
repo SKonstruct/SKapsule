@@ -198,8 +198,6 @@
     <string name="sidebar_mods_current">Modipakk on ajakohane</string>
     <string name="editor_tab_edit">Muuda</string>
     <string name="editor_tab_settings">Seaded</string>
-    <string name="touch_floating_left">Ujuv vasak kang</string>
-    <string name="touch_floating_right">Ujuv parem kang</string>
     <string name="sidebar_reset_game">Reset Game Files</string>
     <string name="mod_remove_title">Resetting Game Files</string>
     <string name="remove_failed">Reset Failed</string>

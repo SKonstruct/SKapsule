@@ -176,7 +176,7 @@
     <string name="ram_value">%1$d MB</string>
     <string name="ram_free">%1$d MB free of %2$d MB</string>
     <string name="subtitle_android">Spiral Knights for Android</string>
-    <string name="sidebar_download_mods">Download Modpack</string>
+    <string name="sidebar_download_mods">Get SirDank\'s Modpack</string>
     <string name="mod_sync_title">Downloading Mods</string>
     <string name="mod_apply_title">Applying Mods</string>
     <string name="mod_completed">Operation completed successfully.</string>
@@ -212,8 +212,6 @@
     <string name="sidebar_mods_current">Modpack up to date</string>
     <string name="editor_tab_edit">Edit</string>
     <string name="editor_tab_settings">Settings</string>
-    <string name="touch_floating_left">Floating left stick</string>
-    <string name="touch_floating_right">Floating right stick</string>
     <string name="sidebar_reset_game">Reset Game Files</string>
     <string name="mod_remove_title">Resetting Game Files</string>
     <string name="remove_failed">Reset Failed</string>

@@ -17,6 +17,7 @@ import android.os.SystemClock
 import android.system.Os
 import android.util.Log
 import android.text.InputType
+import android.view.ContextThemeWrapper
 import android.view.Gravity
 import android.view.InputDevice
 import android.view.KeyEvent
@@ -90,6 +91,9 @@ open class GameActivity :
     )
 
     private var signInForm: SignInForm? = null
+
+    /** The brand dark look of the sign-in dialogs (themes.xml), the same whatever the system theme. */
+    private val signInTheme by lazy { ContextThemeWrapper(this, R.style.ThemeOverlay_SKapsule_SignIn) }
     private var signInUsernameText = ""
 
     // Boot failure handling. The overlay is dismissed only by SK's first frame, so a game that
@@ -1283,16 +1287,16 @@ open class GameActivity :
         }
 
         val pad = (SIGN_IN_PADDING_DP * resources.displayMetrics.density).toInt()
-        val image = ImageView(this).apply {
+        val image = ImageView(signInTheme).apply {
             setImageBitmap(bitmap)
             layoutParams = LinearLayout.LayoutParams(side, side)
         }
-        val message = TextView(this).apply {
+        val message = TextView(signInTheme).apply {
             setText(R.string.steam_signin_message)
             gravity = Gravity.CENTER
             setPadding(0, pad / 2, 0, 0)
         }
-        val content = LinearLayout(this).apply {
+        val content = LinearLayout(signInTheme).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
             setPadding(pad, pad, pad, 0)
@@ -1300,9 +1304,9 @@ open class GameActivity :
             addView(message)
         }
         signInImage = image
-        signInDialog = AlertDialog.Builder(this)
+        signInDialog = AlertDialog.Builder(signInTheme)
             .setTitle(R.string.steam_signin_title)
-            .setView(ScrollView(this).apply { addView(content) })
+            .setView(ScrollView(signInTheme).apply { addView(content) })
             .setCancelable(true)
             .setPositiveButton(R.string.steam_signin_open_app, null)
             .setNeutralButton(R.string.steam_signin_use_password, null)
@@ -1376,7 +1380,7 @@ open class GameActivity :
 
         val guard = kind.startsWith("guard")
         val pad = (SIGN_IN_PADDING_DP * resources.displayMetrics.density).toInt()
-        fun field(hint: Int, type: Int, action: Int) = EditText(this).apply {
+        fun field(hint: Int, type: Int, action: Int) = EditText(signInTheme).apply {
             setHint(hint)
             inputType = type
             imeOptions = action or EditorInfo.IME_FLAG_NO_EXTRACT_UI
@@ -1400,11 +1404,13 @@ open class GameActivity :
             InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS,
             EditorInfo.IME_ACTION_GO,
         )
-        val message = TextView(this).apply {
+        val refused = retry || (!guard && detail != null)
+        val message = TextView(signInTheme).apply {
             text = signInFormMessage(kind, detail, retry)
+            if (refused) setTextColor(getColor(R.color.brand_error))
             setPadding(0, 0, 0, pad / 2)
         }
-        val content = LinearLayout(this).apply {
+        val content = LinearLayout(signInTheme).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(pad, pad, pad, 0)
             addView(message)
@@ -1414,9 +1420,9 @@ open class GameActivity :
         }
         val form = SignInForm(kind, message, username, password, code)
         signInForm = form
-        signInDialog = AlertDialog.Builder(this)
+        signInDialog = AlertDialog.Builder(signInTheme)
             .setTitle(R.string.steam_signin_title)
-            .setView(ScrollView(this).apply { addView(content) })
+            .setView(ScrollView(signInTheme).apply { addView(content) })
             .setCancelable(true)
             .setPositiveButton(if (guard) R.string.steam_signin_continue else R.string.steam_signin_submit, null)
             .setNeutralButton(R.string.steam_signin_use_qr, null)
@@ -1457,6 +1463,7 @@ open class GameActivity :
             form.password?.text?.clear()
             form.message.setText(R.string.steam_signin_signing_in)
         }
+        form.message.setTextColor(getColor(R.color.brand_text_secondary))
         listOfNotNull(form.username, form.password, form.code).forEach { it.isEnabled = false }
         dialog.getButton(AlertDialog.BUTTON_POSITIVE).isEnabled = false
     }

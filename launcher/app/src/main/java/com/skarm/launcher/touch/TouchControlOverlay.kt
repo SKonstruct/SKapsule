@@ -78,10 +78,11 @@ class TouchControlOverlay @JvmOverloads constructor(
     private var cachedScaleSlider: SeekBar? = null
 
     // Reset Layout double-tap gate
+    private lateinit var resetDefaultColor: android.content.res.ColorStateList
     private var resetArmed = false
     private val resetDisarm = Runnable {
         resetArmed = false
-        editorPanel.findViewWithTag<Button>("resetButton")?.text = RESET_LABEL
+        updateResetButton()
     }
 
     init {
@@ -269,17 +270,6 @@ class TouchControlOverlay @JvmOverloads constructor(
             addView(sharpHudSwitch)
             updateGfxEnabled(panel)
 
-            // Floating sticks: a stick that appears where the thumb lands and follows it.
-            fun floatingSwitch(label: Int, name: String, type: ControlType) = Switch(context).apply {
-                text = context.getString(label)
-                setTextColor(Color.WHITE)
-                tag = name
-                isChecked = layoutData.nodes.any { it.type == type && it.floating }
-                setOnCheckedChangeListener { _, on -> setFloating(type, on) }
-            }.also { addView(it) }
-            floatingSwitch(R.string.touch_floating_left, "floatLeftSwitch", ControlType.JOYSTICK_LEFT)
-            floatingSwitch(R.string.touch_floating_right, "floatRightSwitch", ControlType.JOYSTICK_RIGHT)
-
             // Layout library: presets, export, import. The host Activity provides it (it needs
             // the file pickers of an Activity), so the button stays hidden until a host sets one.
             val layoutsButton = Button(context).apply {
@@ -292,8 +282,11 @@ class TouchControlOverlay @JvmOverloads constructor(
 
             // Reset Layout (double-tap gated so a stray tap doesn't wipe work)
             val resetButton = Button(context).apply {
-                text = RESET_LABEL
                 tag = "resetButton"
+                resetDefaultColor = textColors
+                // Not updateResetButton(): editorPanel is still being built.
+                text = resetLabel()
+                if (defaultIsNewer()) setTextColor(HudPalette.NEW_MARK)
                 setOnClickListener { handleResetTap(this) }
             }
             addView(resetButton)
@@ -552,9 +545,9 @@ class TouchControlOverlay @JvmOverloads constructor(
             val base = if (node.type == ControlType.BUTTON) baseBtnSize * BUTTON_SIZE_FACTOR else baseJoySize
             val size = base * node.scale
 
-            // A floating stick lives in a square zone around its saved spot (kept on screen); the stick
+            // A stick lives in a square zone around its saved spot (kept on screen); the stick
             // appears inside it, under the thumb.
-            if (view is TouchJoystickView && node.floating) {
+            if (view is TouchJoystickView) {
                 val zone = minOf(size * FLOAT_ZONE_FACTOR, h * 0.62f, w * 0.36f)
                 val zl = (w * node.xPercent - zone / 2f).coerceIn(0f, maxOf(0f, w - zone))
                 val zt = (h * node.yPercent - zone / 2f).coerceIn(0f, maxOf(0f, h - zone))
@@ -633,18 +626,10 @@ class TouchControlOverlay @JvmOverloads constructor(
         tabStrip.bringToFront()
     }
 
-    private fun setFloating(type: ControlType, on: Boolean) {
-        layoutData.nodes.filter { it.type == type }.forEach { it.floating = on }
-        // The view changes size between a stick and its zone, so lay it out again.
-        requestLayout()
-        controlViews.forEach { it.invalidate() }
-    }
-
     private fun handleResetTap(button: Button) {
         if (resetArmed) {
             removeCallbacks(resetDisarm)
             resetArmed = false
-            button.text = RESET_LABEL
             resetLayout()
         } else {
             // First tap: arm and wait for a confirming second tap.
@@ -657,6 +642,20 @@ class TouchControlOverlay @JvmOverloads constructor(
 
     private fun resetLayout() = applyLayout(TouchControlManager.createDefaultLayout())
 
+    /** True while this layout was made from an older default than the app now ships. */
+    private fun defaultIsNewer() = layoutData.defaultVersion < TouchControlManager.DEFAULT_LAYOUT_VERSION
+
+    /** Reset Layout's label, marked when the default has changed since this layout was made or reset. */
+    private fun resetLabel() = if (defaultIsNewer()) RESET_LABEL_NEW else RESET_LABEL
+
+    private fun updateResetButton() {
+        if (resetArmed) return
+        editorPanel.findViewWithTag<Button>("resetButton")?.let {
+            it.text = resetLabel()
+            if (defaultIsNewer()) it.setTextColor(HudPalette.NEW_MARK) else it.setTextColor(resetDefaultColor)
+        }
+    }
+
     /** A copy of the live layout, safe to keep or edit without touching the controls on screen. */
     fun currentLayoutSnapshot(): TouchLayoutData =
         layoutData.copy(nodes = layoutData.nodes.map { it.copy() }.toMutableList())
@@ -664,6 +663,8 @@ class TouchControlOverlay @JvmOverloads constructor(
     /** Replaces the layout wholesale (Reset, or a preset/import from the layout library). */
     fun applyLayout(data: TouchLayoutData) {
         val previousRenderScale = layoutData.renderScale
+        // "Show Buttons" belongs to the session: a reset, preset or import does not flip it.
+        data.actionBarVisible = layoutData.actionBarVisible
         layoutData = data
         selectView(null)
         buildControls()
@@ -686,10 +687,7 @@ class TouchControlOverlay @JvmOverloads constructor(
             renderScaleChangeListener?.invoke(layoutData.renderScale)
         }
 
-        editorPanel.findViewWithTag<Switch>("floatLeftSwitch")?.isChecked =
-            layoutData.nodes.any { it.type == ControlType.JOYSTICK_LEFT && it.floating }
-        editorPanel.findViewWithTag<Switch>("floatRightSwitch")?.isChecked =
-            layoutData.nodes.any { it.type == ControlType.JOYSTICK_RIGHT && it.floating }
+        updateResetButton()
 
         bringChromeToFront()
     }
@@ -812,7 +810,7 @@ class TouchControlOverlay @JvmOverloads constructor(
                 val x = event.getX(index)
                 val y = event.getY(index)
 
-                // A floating stick's view is its zone, so it is found by position like any control.
+                // A stick's view is its zone, so it is found by position like any control.
                 // Buttons come later in the list, so one lying over the zone wins the touch.
                 val target = controlViews.lastOrNull { view ->
                     view.visibility == View.VISIBLE && isPointInsideView(x, y, view)
@@ -912,7 +910,7 @@ class TouchControlOverlay @JvmOverloads constructor(
             event.downTime,
             event.eventTime,
             action,
-            // A floating stick is translated away from where it was laid out; every other control has none.
+            // A stick is translated away from where it was laid out; every other control has none.
             event.getX(pointerIndex) - view.left - view.translationX,
             event.getY(pointerIndex) - view.top - view.translationY,
             event.metaState,
@@ -1033,6 +1031,7 @@ class TouchControlOverlay @JvmOverloads constructor(
     companion object {
         private const val NODE_PANEL_DP = 240
         private const val RESET_LABEL = "Reset Layout"
+        private const val RESET_LABEL_NEW = "Reset Layout  ● New default"
         private const val RESET_CONFIRM_LABEL = "Tap again to confirm"
         private const val RESET_CONFIRM_WINDOW_MS = 2500L
 
@@ -1040,7 +1039,7 @@ class TouchControlOverlay @JvmOverloads constructor(
         // easy to see and drag, even if the user's global opacity is very low.
         private const val EDIT_MODE_MIN_OPACITY = 0.85f
 
-        /** A floating stick's zone is this many stick-diameters across. */
+        /** A stick's zone is this many stick-diameters across. */
         private const val FLOAT_ZONE_FACTOR = 1.5f
 
         /** Every button, ESC included, is drawn at this fraction of the chrome button size (times its own scale). */

@@ -235,14 +235,14 @@ landscape play area, so what you arrange is what you get.
 
 **Layouts…** in the editor panel keeps named presets, and exports or imports a layout as a `.json` file
 (also usable on SKapsule for iOS). Only the arrangement is shared: position, size and visibility of each control,
-plus opacity and **Show Buttons**; **Resolution** and **Show Controls** stay yours. Importing never overwrites a
+plus opacity; **Resolution** and **Show Controls** stay yours. Importing never overwrites a
 preset: it is saved under a new name, and applying it asks first.
 
 If the game is still running in the background it keeps its own copy of the layout and will
 overwrite whatever you change here when it closes, so exit the game first.
 
 In game, a row of buttons sits top-left: **ESC, Settings, Keyboard, Eye**. The eye is a
-shortcut for **Show Buttons**, which is off by default and hides every button except ESC,
+shortcut for **Show Buttons**, which is off at every start of the app (it is not saved) and hides every button except ESC,
 leaving the joysticks and this row. **Show Controls** turns the touch controls off entirely,
 taking the keyboard and eye buttons with them; Settings stays so the editor is still
 reachable. All four can be dragged while the editor is open.
